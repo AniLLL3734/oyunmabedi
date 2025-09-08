@@ -1,0 +1,54 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TTMTAL Games</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'space-black': '#0B0A0E',
+              'dark-gray': '#1E1E24',
+              'cyber-gray': '#8A8A9E',
+              'ghost-white': '#F0F0F8',
+              'electric-purple': '#9F70FD',
+            },
+            fontFamily: {
+              heading: ['Orbitron', 'sans-serif'],
+              sans: ['Titillium Web', 'sans-serif'],
+            },
+            boxShadow: {
+              'neon-purple': '0 0 15px #9F70FD, 0 0 5px #9F70FD',
+            }
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Titillium+Web:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Ruffle script for Flash emulation -->
+    <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+<script type="importmap">
+{
+  "imports": {
+    "lucide-react": "https://esm.sh/lucide-react@^0.525.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.7.0",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.6",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
