@@ -244,4 +244,17 @@ Su Kız: W, A, D Tuşları`,
     tags: 'HTML5, Beceri, Sonsuz Koşu, 3D, Refleks',
     controls: 'Ok Tuşları / A, D: Topu yönlendir.',
   },
+    {
+    id: 'moto-x3m-1',
+    title: 'Moto X3M',
+    description: `Zamana ve yerçekimine karşı yarışırken akrobatik hareketlerle dolu, adrenalin patlaması yaşatan bir motor oyunu. Engelleri aşın, taklalar atın ve bitiş çizgisine en hızlı siz ulaşın!\n\nDengeniz hiç bozulmasın.\n-FaTaLRhymeR37`,
+    type: GameType.SWF,
+    url: 'https://ttmtaldosyalar.netlify.app/moto-x3m.swf',
+    thumbnail: 'https://res.cloudinary.com/dcr4ser2n/image/upload/f_auto,q_auto/v1757454401/A_ocelsw.jpg',
+    category: 'Motor',
+    tags: 'Motor, Yarış, Beceri, Fizik, Platform',
+    controls: `Yukarı Ok: Hızlanma
+Aşağı Ok: Fren
+Sağ/Sol Oklar: Motoru havada dengele`,
+  },
 ];
