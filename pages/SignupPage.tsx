@@ -76,7 +76,7 @@ const SignupPage: React.FC = () => {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center items-center py-12">
             <div className="w-full max-w-md p-8 space-y-6 bg-dark-gray rounded-lg border border-cyber-gray/50">
-                <h1 className="text-3xl font-bold text-center text-ghost-white font-heading">Yeni Sinyal Oluştur</h1>
+                <h1 className="text-3xl font-bold text-center text-ghost-white font-heading">Yeni Hesap Oluştur</h1>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                     <div>
                         <label className="text-sm font-bold text-cyber-gray block mb-2">Kullanıcı Adı</label>

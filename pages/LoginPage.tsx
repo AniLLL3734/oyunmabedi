@@ -51,7 +51,7 @@ const LoginPage: React.FC = () => {
         </form>
         <p className="text-center text-cyber-gray">
           Hesabın yok mu?{' '}
-          <Link to="/signup" className="font-bold text-electric-purple hover:underline">Yeni Sinyal Oluştur</Link>
+          <Link to="/signup" className="font-bold text-electric-purple hover:underline">Yeni Hesap Oluştur</Link>
         </p>
       </div>
     </motion.div>
