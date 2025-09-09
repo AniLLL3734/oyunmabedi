@@ -70,7 +70,7 @@ const CreatorPage: React.FC = () => {
           >
             <img 
               src="https://picsum.photos/seed/anil/300/300" 
-              alt="Mimar Anıl"
+              alt="Mimar FaTaLRhymeR"
               className="w-48 h-48 rounded-full border-4 border-electric-purple shadow-neon-purple object-cover"
             />
             <h1 className="text-4xl font-heading font-bold mt-4">ANIL</h1>
@@ -83,7 +83,7 @@ const CreatorPage: React.FC = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
           >
-            <h3 className="text-2xl font-heading border-b-2 border-cyber-gray pb-2 mb-4">GİRİŞ: MİMAR ANIL</h3>
+            <h3 className="text-2xl font-heading border-b-2 border-cyber-gray pb-2 mb-4">GİRİŞ: MİMAR FaTaLRhymeR</h3>
             <p className="text-ghost-white mb-4">
               Her kod bir büyüdür ve her satır bir dua. Bu sığınağı, teneffüslerin sıkıcı boşluğunda kaybolan ruhlar için piksellerden ve hayallerden inşa ettim.
             </p>
