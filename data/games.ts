@@ -257,4 +257,16 @@ Su Kız: W, A, D Tuşları`,
 Aşağı Ok: Fren
 Sağ/Sol Oklar: Motoru havada dengele`,
   },
+    {
+    id: 'bubble-trouble',
+    title: 'Bubble Trouble',
+    description: `Ekranı ele geçiren zıplayan balonlara karşı zamana karşı bir mücadele! Zıpkınınla onları vurup küçült ve hepsi bitmeden yakalanma. Bir arkadaşınla oynayınca eğlencesi ikiye katlanan bir klasik.\n\nZıpkınınız keskin olsun.\n-FaTaLRhymeR37`,
+    type: GameType.SWF,
+    url: 'https://ttmtaldosyalar.netlify.app/bubble_trouble.swf',
+    thumbnail: 'https://res.cloudinary.com/dcr4ser2n/image/upload/f_auto,q_auto/v1757480909/indir_iraw9o.jpg',
+    category: '2 Kişilik',
+    tags: '2 Kişilik, Beceri, Klasik, Balon, Arcade',
+    controls: `1. Oyuncu: Sağ/Sol Ok Tuşları, Ateş: Boşluk
+2. Oyuncu: X, C Tuşları, Ateş: F Tuşu`,
+  },
 ];
