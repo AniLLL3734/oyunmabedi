@@ -267,4 +267,27 @@ Sağ/Sol Oklar: Motoru havada dengele`,
     controls: `1. Oyuncu: Sağ/Sol Ok Tuşları, Ateş: Boşluk
 2. Oyuncu: X, C Tuşları, Ateş: F Tuşu`,
   },
+    {
+    id: 'slither-io',
+    title: 'Slither.io',
+    description: `Modern klasik geri döndü! Küçük bir yılan olarak başla, parlayan yemleri topla ve diğer yılanlardan kaçınarak devasa bir yaratığa dönüş. Arenanın hakimi sen olabilir misin?\n\nBüyüklük senin kaderin.\n-FaTaLRhymeR37`,
+    type: GameType.HTML5,
+    url: 'https://verdant-muffin-beb075.netlify.app/',
+    thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(14).jpeg',
+    category: 'Beceri',
+    tags: 'HTML5, .io, Yılan, Çok Oyunculu, Büyüme, Arena',
+    controls: `Fare: Yılanı yönlendirmek için hareket ettir.
+SPACE: Hızlanmak için basılı tut.`,
+  },
+    {
+    id: 'flappy-bird',
+    title: 'Flappy Bird',
+    description: `Tek bir dokunuş, piksellerden bir kader... Boruların arasından süzülerek en yüksek skoru yapmaya çalışın. Basitliğin ne kadar acımasız olabileceğinin kanıtı.\n\nSabrınız kanatlarınız olsun.\n-FaTaLRhymeR37`,
+    type: GameType.HTML5,
+    url: 'https://relaxed-crostata-36c897.netlify.app/',
+    thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(15).jpeg',
+    category: 'Beceri',
+    tags: 'HTML5, Beceri, Arcade, Zor, Tek Tuş, Klasik',
+    controls: `Fare Sol Tık / Boşluk Tuşu / Dokunma: Kuşu zıplat.`,
+  },
 ];
