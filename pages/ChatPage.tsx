@@ -102,7 +102,7 @@ const ChatPage: React.FC = () => {
         const COOLDOWN_SECONDS = 2;
         if (now - lastMessageTimestamp.current < COOLDOWN_SECONDS * 1000) {
             const timeLeft = ((COOLDOWN_SECONDS * 1000 - (now - lastMessageTimestamp.current)) / 1000).toFixed(1);
-            setChatError(`Frekans çok hızlı, ${timeLeft} saniye sonra tekrar dene.`);
+            setChatError(`SPAM Yasaktır, ${timeLeft} saniye sonra tekrar dene.`);
             setTimeout(() => setChatError(null), 3000);
             return;
         }
