@@ -1,54 +1,78 @@
-// DOSYA: pages/SignupPage.tsx
-
-import React from 'react';
+import React, { useState } from 'react'; // useState import edildi
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { grantAchievement } from '../src/utils/grantAchievement.tsx';
+import { grantAchievement } from '../src/utils/grantAchievement';
 import { defaultAvatarUrl } from '../data/avatars';
-// HATA BURADAYDI, gereksiz 'adminTitle' import'u kaldırıldı.
-import { achievementsList } from '../data/achievements'; 
+import { achievementsList } from '../data/achievements';
 
 const SignupPage: React.FC = () => {
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
     const navigate = useNavigate();
-    const [firebaseError, setFirebaseError] = React.useState<string | null>(null);
+    const [firebaseError, setFirebaseError] = useState<string | null>(null);
+
+    // --- YENİ YARDIMCI FONKSİYON: Kullanıcı adını e-posta için temizler ---
+    const sanitizeUsernameForEmail = (username: string): string => {
+        return username
+            .toLowerCase() // Her şeyi küçük harfe çevir
+            .replace(/ı/g, 'i') // Türkçe karakterleri dönüştür
+            .replace(/ğ/g, 'g')
+            .replace(/ü/g, 'u')
+            .replace(/ş/g, 's')
+            .replace(/ö/g, 'o')
+            .replace(/ç/g, 'c')
+            .replace(/\s+/g, '') // Boşlukları kaldır
+            .replace(/[^a-z0-9_]/g, ''); // Geriye sadece harf, rakam ve _ bırak
+    };
 
     const onSubmit = async (data: any) => {
-        const username = data.username.trim();
-        const email = `${username.toLowerCase()}@ttmtal.com`;
+        // Kullanıcının girdiği orijinal ismi (displayName) alıyoruz
+        const displayName = data.username.trim();
+        
+        // Bu orijinal ismi e-posta formatına uygun hale getiriyoruz
+        const sanitizedUsername = sanitizeUsernameForEmail(displayName);
+        
+        // Temizlenmiş isimle sahte e-postayı oluşturuyoruz
+        const email = `${sanitizedUsername}@ttmtal.com`;
+        
+        // Temizlenmiş isim boş kalırsa (örn: "şşş" gibi bir isim girilirse) hata ver
+        if (!sanitizedUsername) {
+            setFirebaseError("Lütfen geçerli karakterler içeren bir kullanıcı adı girin.");
+            return;
+        }
 
-        if (username.toLowerCase() === 'admin' || (username.toLowerCase().includes('admin') && username !== 'FaTaLRhymeR37')) {
+        // Admin ismi kontrolleri
+        if (sanitizedUsername.includes('admin') && sanitizedUsername !== 'fatalrhymer37') {
              setFirebaseError('Bu kullanıcı adını seçemezsin.');
              return;
         }
 
         try {
             setFirebaseError(null);
+            
+            // Firebase Auth'u "temiz" e-posta ile oluştur
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const user = userCredential.user;
-            await updateProfile(user, { displayName: username });
 
-            const role = username === 'FaTaLRhymeR37' ? 'admin' : 'user';
+            // Auth profiline ve Firestore'a kullanıcının girdiği "orijinal" ismi kaydet
+            await updateProfile(user, { displayName: displayName });
+
+            const role = displayName === 'FaTaLRhymeR37' ? 'admin' : 'user';
             const isAdmin = role === 'admin';
             
-            // DÜZELTME: 'adminTitle.id' artık olmadığı için mantık güncellendi.
-            const initialAchievements = isAdmin
-                ? achievementsList.map(ach => ach.id)
-                : [];
+            const initialAchievements = isAdmin ? achievementsList.map(ach => ach.id) : [];
             
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
-                displayName: username,
-                email: email,
+                displayName: displayName, // Firestore'a güzel isim
+                email: email, // Firestore'a "temiz" e-posta
                 role: role,
                 score: isAdmin ? 99999 : 0,
                 messageCount: 0,
                 achievements: initialAchievements,
-                // DÜZELTME: Seçili başlık ilk başta null olsun, sonra profilden seçilsin.
                 selectedTitle: null, 
                 avatarUrl: defaultAvatarUrl,
                 unreadChats: [],
@@ -62,13 +86,12 @@ const SignupPage: React.FC = () => {
             navigate('/');
 
         } catch (error: any) {
-            console.error("Kayıt hatası:", error);
             if (error.code === 'auth/email-already-in-use') { 
-                setFirebaseError('Bu kullanıcı adı zaten alınmış. Başka bir tane dene.'); 
+                setFirebaseError('Bu kullanıcı adı veya benzeri zaten alınmış. Başka bir tane dene.'); 
             } else if (error.code === 'auth/weak-password') { 
                 setFirebaseError('Şifre çok zayıf. En az 6 karakter olmalı.'); 
             } else { 
-                setFirebaseError('Bir hata oluştu veya bu kullanıcı adı geçersiz karakterler içeriyor.'); 
+                setFirebaseError('Bilinmeyen bir hata oluştu, lütfen daha sonra tekrar deneyin.'); 
             }
         }
     };
@@ -79,10 +102,12 @@ const SignupPage: React.FC = () => {
                 <h1 className="text-3xl font-bold text-center text-ghost-white font-heading">Yeni Hesap Oluştur</h1>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                     <div>
-                        <label className="text-sm font-bold text-cyber-gray block mb-2">Kullanıcı Adı</label>
+                        <label className="text-sm font-bold text-cyber-gray block mb-2">Görünür Adın</label>
+                        {/* Kural (pattern) kısmını kaldırdık, çünkü artık her şeyi kabul ediyoruz! */}
                         <input type="text" {...register('username', { 
-                            required: 'Kullanıcı adı zorunludur',
-                            pattern: { value: /^[a-zA-Z0-9_]+$/, message: 'Kullanıcı adı sadece harf, sayı ve _ içerebilir.' }
+                            required: 'Bir kullanıcı adı seçmelisin',
+                            minLength: { value: 3, message: 'Kullanıcı adı en az 3 karakter olmalı' },
+                            maxLength: { value: 20, message: 'Kullanıcı adı en fazla 20 karakter olmalı' }
                          })} 
                          className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
                         {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username.message as string}</p>}

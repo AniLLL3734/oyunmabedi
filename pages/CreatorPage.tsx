@@ -1,21 +1,16 @@
-// DOSYA: pages/CreatorPage.tsx
-
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Terminal from '../components/Terminal';
 import useMatrixRain from '../hooks/useMatrixRain';
-import { Code, Cpu, Database, Brush } from 'lucide-react';
+import { Code, Cpu, Database, Brush, Instagram, Mail } from 'lucide-react';
 import { useAuth } from '../src/contexts/AuthContext';
-
-// === BU SATIR DÜZELTİLDİ ===
-import { grantAchievement } from '../src/utils/grantAchievement.tsx';
+import { grantAchievement } from '../src/utils/grantAchievement';
 
 const pageVariants = {
   initial: { opacity: 0 },
   in: { opacity: 1 },
   out: { opacity: 0 },
 };
-
 const pageTransition = {
   duration: 0.5,
 };
@@ -45,7 +40,6 @@ const CreatorPage: React.FC = () => {
     }
   }, [user, showTerminal]);
 
-
   if (showTerminal) {
     return <Terminal />;
   }
@@ -57,7 +51,7 @@ const CreatorPage: React.FC = () => {
       exit="out"
       variants={pageVariants}
       transition={pageTransition}
-      className="relative min-h-[80vh] flex items-center justify-center"
+      className="relative min-h-[80vh] flex items-center justify-center p-4"
     >
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full opacity-10 -z-10"></canvas>
       <div className="bg-dark-gray/80 backdrop-blur-sm p-8 rounded-lg border border-cyber-gray/50 max-w-4xl w-full">
@@ -69,7 +63,7 @@ const CreatorPage: React.FC = () => {
             transition={{ duration: 0.8, ease: 'easeOut' }}
           >
             <img 
-              src="https://picsum.photos/seed/anil/300/300" 
+              src="https://ttmtaldosyalar.netlify.app/thumbnails/indir_13_yzcypj.jpg"
               alt="Mimar FaTaLRhymeR"
               className="w-48 h-48 rounded-full border-4 border-electric-purple shadow-neon-purple object-cover"
             />
@@ -83,13 +77,23 @@ const CreatorPage: React.FC = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
           >
-            <h3 className="text-2xl font-heading border-b-2 border-cyber-gray pb-2 mb-4">GİRİŞ: MİMAR FaTaLRhymeR</h3>
-            <p className="text-ghost-white mb-4">
+            <h3 className="text-2xl font-heading border-b-2 border-cyber-gray pb-2 mb-4">GİRİŞ: FaTaLRhymeR37</h3>
+            <p className="text-ghost-white mb-6">
               Her kod bir büyüdür ve her satır bir dua. Bu sığınağı, teneffüslerin sıkıcı boşluğunda kaybolan ruhlar için piksellerden ve hayallerden inşa ettim.
             </p>
-            <p className="text-cyber-gray">
-              Eğer bu satırları okuyorsan, sen de bu evrenin bir parçasısın demektir. Unutma, en büyük macera <code>main()</code> fonksiyonunu çağırmakla başlar. Soruların veya fikirlerin varsa, sinyallerimi takip et.
+            <p className="text-cyber-gray mb-6">
+              Eğer bu satırları okuyorsan, sen de bu evrenin bir parçasısın demektir. Unutma, en büyük macera <code>main()</code> fonksiyonunu çağırmakla başlar.
             </p>
+            
+            {/* --- GÜNCELLENMİŞ İLETİŞİM BÖLÜMÜ (LİNK KALDIRILDI) --- */}
+            <div className="mt-6 border-t border-cyber-gray/30 pt-4">
+              <p className="text-sm text-cyber-gray mb-2">Sinyallerimi buradan takip et:</p>
+              <div className="flex items-center gap-3 bg-space-black p-3 rounded-lg w-fit">
+                <Instagram size={20} className="text-pink-400" />
+                <span className="font-mono text-ghost-white tracking-wider">anil_37k</span>
+              </div>
+            </div>
+
           </motion.div>
         </div>
 
@@ -114,7 +118,6 @@ const CreatorPage: React.FC = () => {
                 ))}
             </div>
         </div>
-
       </div>
     </motion.div>
   );

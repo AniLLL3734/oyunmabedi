@@ -1,158 +1,168 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+// import { motion } from 'framer-motion'; // PERFORMANS İÇİN KALDIRILDI
 import { games } from '../data/games';
-import RufflePlayer from '../components/RufflePlayer';
 import { Game, GameType } from '../types';
 import { ArrowLeft, Gamepad2, Fullscreen, Info, Play, LoaderCircle } from 'lucide-react';
 import { db } from '../src/firebase';
 import { doc, setDoc, increment } from 'firebase/firestore';
-import CommentSection from '../components/CommentSection';
 
-// Framer Motion için sayfa geçiş animasyonları
-const pageVariants = {
-    initial: { opacity: 0, scale: 0.9 },
-    in: { opacity: 1, scale: 1 },
-    out: { opacity: 0, scale: 0.9 },
-};
-const pageTransition = {
-    type: 'spring',
-    stiffness: 260,
-    damping: 20,
-} as const;
+// ================================================================================================
+// LAZY LOADING
+// ================================================================================================
+const RufflePlayer = lazy(() => import('../components/RufflePlayer'));
+const CommentSection = lazy(() => import('../components/CommentSection'));
 
-// Oyun sayfası bileşeni
+// ================================================================================================
+// SABİTLER
+// ================================================================================================
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY = 2000;
+const CONNECTION_TIMEOUT = 15000;
+
+// Yükleyici bileşeni
+const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
+    <div className="flex flex-col items-center justify-center text-center p-8 text-cyber-gray h-full">
+        <LoaderCircle size={32} className="animate-spin text-electric-purple" />
+        <p className="mt-4">{message}</p>
+    </div>
+);
+
+// ================================================================================================
+// ANA BİLEŞEN: GamePage
+// ================================================================================================
 const GamePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const game: Game | undefined = games.find((g) => g.id === id);
+    const game = useMemo(() => games.find((g) => g.id === id), [id]);
+
     const gameContainerRef = useRef<HTMLDivElement>(null);
     const playCountTracked = useRef(false);
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const retryCountRef = useRef(0);
+    const preloadStarted = useRef(false);
 
-    // Akıllı ön yükleme için gerekli state'ler
+    // State Management
     const [gameStarted, setGameStarted] = useState(false);
     const [isPreloading, setIsPreloading] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
+    const [loadedKB, setLoadedKB] = useState(0);
+    const [isTotalSizeKnown, setIsTotalSizeKnown] = useState(true);
     const [blobUrl, setBlobUrl] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    // Akıllı Önden Yükleme Effect'i: Sayfa açıldığında oyunu arka planda indirmeye başlar.
-    useEffect(() => {
-        // Eğer oyun bulunamazsa veya SWF değilse işlem yapma.
-        if (!game || game.type !== GameType.SWF) {
-            setIsPreloading(false);
-            return;
-        }
+    // Preload Fonksiyonu
+    const preloadGame = useCallback(async () => {
+        if (!game || game.type !== GameType.SWF || preloadStarted.current || blobUrl) return;
+        
+        preloadStarted.current = true;
+        setIsPreloading(true);
+        setLoadingProgress(0);
+        setLoadedKB(0);
+        setError(null);
+        retryCountRef.current = 0;
 
-        const controller = new AbortController();
-        const signal = controller.signal;
-
-        const preloadGame = async () => {
-            setIsPreloading(true);
-            setLoadingProgress(0);
-            setError(null);
-            console.log(`[Preload] ${game.title} indirmesi başlatıldı.`);
-
+        const tryPreload = async () => {
+            abortControllerRef.current = new AbortController();
+            const signal = abortControllerRef.current.signal;
             try {
                 const response = await fetch(game.url, { signal });
-                if (!response.ok) {
-                    throw new Error(`Dosya sunucudan yüklenemedi (status: ${response.status})`);
-                }
+                if (!response.ok) throw new Error(`Sunucu Hatası: ${response.status}`);
                 
-                const total = Number(response.headers.get('content-length'));
-                if (!total) {
-                  console.warn('[Preload] Content-Length başlığı bulunamadı, ilerleme çubuğu gösterilemeyecek.');
-                }
-                let loaded = 0;
+                const contentLength = Number(response.headers.get('content-length'));
+                setIsTotalSizeKnown(!!contentLength && contentLength > 0);
 
                 const reader = response.body?.getReader();
-                if (!reader) throw new Error("Sunucu yanıtının gövdesi okunamıyor.");
+                if (!reader) throw new Error("Dosya akışı okunamıyor.");
+                
+                const chunks: Uint8Array[] = [];
+                let loaded = 0;
 
-                // Veriyi akış olarak oku ve indirme ilerlemesini anlık güncelle
-                const stream = new ReadableStream({
-                    async start(controller) {
-                        while (true) {
-                            const { done, value } = await reader.read();
-                            if (done) break;
-                            loaded += value.length;
-                            if (total > 0) {
-                                setLoadingProgress(Math.round((loaded / total) * 100));
-                            }
-                            controller.enqueue(value);
-                        }
-                        controller.close();
-                    },
-                });
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                // Akışı bir Blob nesnesine dönüştür (hafızada tutulan dosya)
-                const blob = await new Response(stream).blob();
+                    chunks.push(value);
+                    loaded += value.length;
+                    
+                    if (contentLength > 0) {
+                        setLoadingProgress(Math.round((loaded / contentLength) * 100));
+                    } else {
+                        setLoadedKB(Math.round(loaded / 1024));
+                    }
+                }
+                
+                const blob = new Blob(chunks, { type: 'application/x-shockwave-flash' });
                 setBlobUrl(URL.createObjectURL(blob));
                 setIsPreloading(false);
-                console.log(`[Preload] ${game.title} başarıyla indirildi ve hafızaya alındı.`);
-
             } catch (err: any) {
                 if (err.name !== 'AbortError') {
-                    console.error("[Preload] Hata:", err);
-                    setError("Oyun indirilirken bir hata oluştu. İnternet bağlantınızı kontrol edip sayfayı yenileyin.");
-                    setIsPreloading(false);
+                    if (retryCountRef.current < RETRY_ATTEMPTS) {
+                        retryCountRef.current++;
+                        setTimeout(tryPreload, RETRY_DELAY * retryCountRef.current);
+                    } else {
+                        setError("Oyun yüklenemedi. Sayfayı yenileyin.");
+                        setIsPreloading(false);
+                        preloadStarted.current = false;
+                    }
+                } else {
+                     setIsPreloading(false);
+                     preloadStarted.current = false;
                 }
             }
         };
 
-        preloadGame();
+        tryPreload();
+    }, [game, blobUrl]);
 
-        return () => {
-            // Kullanıcı sayfadan ayrılırsa, devam eden indirmeyi iptal et
-            controller.abort();
-            console.log(`[Preload] ${game?.title} indirmesi iptal edildi.`);
-            // Hafızada oluşturulan geçici Blob URL'yi temizle
-            if (blobUrl) URL.revokeObjectURL(blobUrl);
+    // Cleanup Effect
+    useEffect(() => {
+        let currentBlobUrl = blobUrl;
+        return () => { 
+            abortControllerRef.current?.abort();
+            if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
         };
-    }, [id, game]); // id veya game değişirse effect'i yeniden çalıştır
-
-    // "Tam Ekran" butonunun fonksiyonu
-    const handleFullScreen = () => {
-        if (gameContainerRef.current && gameStarted) {
-            gameContainerRef.current.requestFullscreen().catch(err => {
-              console.error(`Tam ekran modu hatası: ${err.message} (${err.name})`);
-            });
-        }
-    };
+    }, [blobUrl]);
     
-    // "Oyna" butonuna tıklandığında oyunu başlatır
-    const handleStartGame = () => {
+    // Oyun Başlatma
+    const handleStartGame = useCallback(() => {
         if (isPreloading || error) return;
-        
-        setGameStarted(true);
 
-        if (!playCountTracked.current && id) {
-            playCountTracked.current = true;
-            const gameRef = doc(db, 'games', id);
-            setDoc(gameRef, { playCount: increment(1) }, { merge: true });
+        if (blobUrl) {
+            setGameStarted(true);
+            if (!playCountTracked.current && id) {
+                playCountTracked.current = true;
+                requestIdleCallback(() => {
+                    setDoc(doc(db, 'games', id), { playCount: increment(1) }, { merge: true }).catch(console.error);
+                });
+            }
+        } else if (game?.type === GameType.SWF) {
+            preloadGame();
+        } else {
+            setGameStarted(true);
         }
-    };
-    
-    // Eğer URL'deki id ile eşleşen bir oyun bulunamazsa 404 sayfası gösterilir
-    if (!game) {
-        return (
-          <div className="text-center py-20">
-            <h1 className="text-4xl font-heading">404 - Sinyal Kayboldu</h1>
-            <p className="mt-4 text-cyber-gray">Aradığınız simülasyon bu evrende bulunamadı.</p>
-            <Link to="/" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">
-              Ana Üsse Dön
-            </Link>
-          </div>
-        );
-    }
-    
-    // İndirme durumuna göre "Oyna" butonunun içeriğini dinamik olarak oluşturan fonksiyon
-    const getButtonContent = () => {
-        if (error) return <span className='text-red-400 font-semibold px-4'>{error}</span>;
-        if (isPreloading) return (
-            <>
-                <LoaderCircle size={48} className="text-white animate-spin" />
-                <span className="text-white text-xl font-bold font-heading tracking-widest">{loadingProgress}%</span>
-            </>
-        );
+    }, [isPreloading, error, id, blobUrl, preloadGame, game]);
+
+    // Tam Ekran
+    const handleFullScreen = useCallback(() => {
+        if (gameContainerRef.current?.requestFullscreen) {
+            gameContainerRef.current.requestFullscreen().catch(console.error);
+        }
+    }, []);
+
+    // Memoized Buton İçeriği
+    const buttonContent = useMemo(() => {
+        if (error) return <span className='text-red-400 font-semibold px-4 text-center'>{error}</span>;
+        if (isPreloading) {
+            const progressText = isTotalSizeKnown
+                ? `${loadingProgress}%`
+                : (loadedKB > 0 ? `${loadedKB} KB` : 'Yükleniyor...');
+            return (
+                <>
+                    <LoaderCircle size={48} className="text-white animate-spin" />
+                    <span className="text-white text-xl font-bold font-heading tracking-widest">{progressText}</span>
+                </>
+            );
+        }
         return (
             <>
                 <div className="p-4 bg-black/50 rounded-full group-hover:scale-110 group-hover:bg-electric-purple transition-transform">
@@ -161,17 +171,23 @@ const GamePage: React.FC = () => {
                 <span className="text-white text-2xl font-bold font-heading tracking-widest">OYNA</span>
             </>
         );
-    };
-
+    }, [error, isPreloading, loadingProgress, loadedKB, isTotalSizeKnown]);
+    
+    // 404 Sayfası
+    if (!game) {
+        return (
+            <div className="text-center py-20">
+                <h1 className="text-4xl font-heading">404 - Sinyal Kayboldu</h1>
+                <p className="mt-4 text-cyber-gray">Aradığınız simülasyon bu evrende bulunamadı.</p>
+                <Link to="/" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">
+                    Ana Üsse Dön
+                </Link>
+            </div>
+        );
+    }
+    
     return (
-        <motion.div
-            initial="initial"
-            animate="in"
-            exit="out"
-            variants={pageVariants}
-            transition={pageTransition}
-            className="max-w-7xl mx-auto px-4" // Sayfaya genel bir padding ekleyelim
-        >
+        <div className="max-w-7xl mx-auto px-4">
             <Link to="/" className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple my-6 transition-colors">
                 <ArrowLeft size={20} />
                 <span>Diğer Simülasyonlara Dön</span>
@@ -188,24 +204,37 @@ const GamePage: React.FC = () => {
                 
                 <div ref={gameContainerRef} className="w-full aspect-video bg-space-black rounded-md overflow-hidden border border-cyber-gray/50 mb-6 relative">
                     {!gameStarted ? (
-                        <div className={`w-full h-full flex items-center justify-center group ${!isPreloading && !error ? 'cursor-pointer' : 'cursor-default'}`} onClick={handleStartGame}>
-                            <img src={game.thumbnail} alt={`${game.title} kapak resmi`} className="w-full h-full object-cover brightness-50 group-hover:brightness-75 transition-all" />
-                            <div className="absolute flex flex-col items-center justify-center gap-4 text-center">
-                               {getButtonContent()}
+                        <div 
+                            className={`w-full h-full flex items-center justify-center group ${!isPreloading && !error ? 'cursor-pointer' : 'cursor-default'}`} 
+                            onClick={handleStartGame}
+                            onMouseEnter={preloadGame}
+                        >
+                            <img 
+                                src={game.thumbnail} 
+                                alt={`${game.title} kapak resmi`} 
+                                className="w-full h-full object-cover brightness-50 group-hover:brightness-75 transition-all"
+                                loading="lazy"
+                                decoding="async"
+                            />
+                            <div className="absolute flex flex-col items-center justify-center gap-4 text-center p-4">
+                                {buttonContent}
                             </div>
                         </div>
                     ) : (
-                        game.type === GameType.SWF ? (
-                            <RufflePlayer swfUrl={blobUrl!} />
-                        ) : (
-                            <iframe
-                                src={game.url}
-                                className="w-full h-full border-0"
-                                sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms"
-                                title={game.title}
-                                allowFullScreen
-                            ></iframe>
-                        )
+                        <Suspense fallback={<GenericLoader message="Oyun motoru başlatılıyor..." />}>
+                            {game.type === GameType.SWF ? (
+                                <RufflePlayer swfUrl={blobUrl!} />
+                            ) : (
+                                <iframe
+                                    src={game.url}
+                                    className="w-full h-full border-0"
+                                    sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms"
+                                    title={game.title}
+                                    allowFullScreen
+                                    loading="lazy"
+                                />
+                            )}
+                        </Suspense>
                     )}
                 </div>
 
@@ -220,11 +249,12 @@ const GamePage: React.FC = () => {
                     </div>
                 </div>
                 
-                <CommentSection gameId={game.id} />
-
+                <Suspense fallback={<GenericLoader message="Yorumlar yükleniyor..." />}>
+                    <CommentSection gameId={game.id} />
+                </Suspense>
             </div>
-        </motion.div>
+        </div>
     );
 };
 
-export default GamePage;
+export default React.memo(GamePage);

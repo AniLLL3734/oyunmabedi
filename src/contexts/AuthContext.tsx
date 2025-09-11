@@ -1,5 +1,3 @@
-// DOSYA: src/contexts/AuthContext.tsx
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
@@ -14,70 +12,73 @@ export interface UserProfileData {
     bio?: string;
     avatarUrl?: string;
     achievements?: string[];
-    [key: string]: any; 
+    [key:string]: any; 
 }
 
 interface AuthContextType {
-  user: User | null;
-  userProfile: UserProfileData | null;
-  setUserProfile: React.Dispatch<React.SetStateAction<UserProfileData | null>> | null;
+  user: User | null; // Orijinal 'User' tipini koruyoruz
+  userProfile: UserProfileData | null; // 'userProfile'ı ayrı tutuyoruz
   isAdmin: boolean;
   loading: boolean;
+  // setUserProfile'ı kaldırdık çünkü artık buna gerek yok, otomatik güncellenecek.
 }
 
-// === HATA BURADAYDI VE DÜZELTİLDİ ===
-// 'Auth-type' yerine doğru olan 'AuthContextType' yazıldı.
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// undefined yerine doğru başlangıç değerlerini veriyoruz.
+const AuthContext = createContext<AuthContextType>({ user: null, userProfile: null, isAdmin: false, loading: true });
 
+// Bu hook aynı kalıyor, sadece tipi düzelttik
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Auth durumundaki değişiklikleri dinle (giriş/çıkış)
+    // Auth durumu değiştiğinde dinleyici çalışır
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      setUser(currentUser); // Auth kullanıcısını ayarla
       
       if (currentUser) {
+        // Kullanıcı giriş yaptıysa, gidip Firestore'daki profilini dinlemeye başla
         const userDocRef = doc(db, 'users', currentUser.uid);
-
-        // Giriş yapan kullanıcının Firestore'daki profil verilerini gerçek zamanlı olarak dinle
+        
         const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
             if(docSnap.exists()){
                 const profileData = docSnap.data() as UserProfileData;
-                setUserProfile(profileData);
-                setIsAdmin(profileData.role === 'admin');
+                setUserProfile(profileData); // Firestore profilini AYRI BİR state'e ayarla
+            } else {
+                setUserProfile(null);
             }
             setLoading(false);
-        }, (error) => {
-             console.error("Firestore profil dinleme hatası:", error);
-             setLoading(false);
         });
 
-        // Bu return, kullanıcı çıkış yaptığında Firestore dinleyicisini temizler.
+        // Kullanıcı çıkış yaptığında Firestore dinleyicisini iptal et
         return () => unsubscribeProfile();
         
       } else {
-        // Kullanıcı çıkış yaptıysa tüm verileri sıfırla.
+        // Kullanıcı çıkış yaptıysa, tüm verileri sıfırla
         setUserProfile(null);
-        setIsAdmin(false);
         setLoading(false);
       }
     });
     
-    // Bu return, ana component kaldırıldığında Auth dinleyicisini temizler.
     return () => unsubscribeAuth();
   }, []);
 
-  const value = { user, userProfile, setUserProfile, isAdmin, loading };
+  // isAdmin'i, AYRI olan userProfile state'inden türetiyoruz. EN KRİTİK DÜZELTME BURADA!
+  const isAdmin = userProfile?.role === 'admin';
+  const value = { user, userProfile, isAdmin, loading };
 
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
 };

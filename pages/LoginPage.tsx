@@ -1,6 +1,4 @@
-// DOSYA: pages/LoginPage.tsx
-
-import React from 'react';
+import React, { useState } from 'react'; // useState import edildi
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -10,21 +8,40 @@ import { motion } from 'framer-motion';
 const LoginPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
-  const [firebaseError, setFirebaseError] = React.useState<string | null>(null);
+  const [firebaseError, setFirebaseError] = useState<string | null>(null);
+
+  // --- SIGNUP SAYFASINDAN KOPYALANAN AYNI TEMİZLEME FONKSİYONU ---
+  // Bu, her iki sayfanın da aynı dili konuşmasını sağlar.
+  const sanitizeUsernameForEmail = (username: string): string => {
+      return username
+          .toLowerCase()
+          .replace(/ı/g, 'i')
+          .replace(/ğ/g, 'g')
+          .replace(/ü/g, 'u')
+          .replace(/ş/g, 's')
+          .replace(/ö/g, 'o')
+          .replace(/ç/g, 'c')
+          .replace(/\s+/g, '')
+          .replace(/[^a-z0-9_]/g, '');
+  };
 
   const onSubmit = async (data: any) => {
     const username = data.username.trim();
-    const email = `${username.toLowerCase()}@ttmtal.com`; // Sahte e-postayı oluştur
+    // E-postayı oluştururken, kullanıcının girdiği ismi temizleme fonksiyonundan geçiriyoruz
+    const email = `${sanitizeUsernameForEmail(username)}@ttmtal.com`; 
 
     try {
       setFirebaseError(null);
-      // Firebase'e kullanıcı adı ile değil, bizim oluşturduğumuz e-posta ile giriş yap
+      // Firebase'e, artık her zaman doğru formatta olan bu e-posta ile giriş yap
       await signInWithEmailAndPassword(auth, email, data.password);
       
       console.log('Giriş başarılı!');
       navigate('/'); 
     } catch (error: any) {
       console.error("Giriş hatası:", error);
+      // Genel bir hata mesajı vermek en iyisidir,
+      // çünkü "kullanıcı bulunamadı" veya "şifre yanlış" gibi spesifik mesajlar
+      // kötü niyetli kişilere ipucu verebilir.
       setFirebaseError("Kullanıcı adı veya şifre hatalı.");
     }
   };
@@ -36,16 +53,29 @@ const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div>
             <label className="text-sm font-bold text-cyber-gray block mb-2">Kullanıcı Adı</label>
-            <input type="text" {...register('username', { required: 'Kullanıcı adı zorunludur' })} className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
+            {/* Formda herhangi bir kısıtlama olmasına gerek yok, kullanıcı istediğini yazabilir. */}
+            <input 
+              type="text" 
+              {...register('username', { required: 'Kullanıcı adı zorunludur' })} 
+              className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
+            />
             {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username.message as string}</p>}
           </div>
           <div>
             <label className="text-sm font-bold text-cyber-gray block mb-2">Şifre</label>
-            <input type="password" {...register('password', { required: 'Şifre zorunludur' })} className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
+            <input 
+              type="password" 
+              {...register('password', { required: 'Şifre zorunludur' })} 
+              className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
+            />
             {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message as string}</p>}
           </div>
           {firebaseError && <p className="text-red-500 text-center">{firebaseError}</p>}
-          <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
+          <button 
+            type="submit" 
+            disabled={isSubmitting} 
+            className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray"
+          >
              {isSubmitting ? 'Giriş Yapılıyor...' : 'Sisteme Sız'}
             </button>
         </form>
