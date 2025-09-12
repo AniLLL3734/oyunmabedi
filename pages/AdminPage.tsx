@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, Edit, MessageSquare, Eye, EyeOff } from 'lucide-react';
+import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, Edit, MessageSquare, Eye, EyeOff, MicOff } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 // Firestore'dan gelen veriler için tipler
@@ -12,6 +12,7 @@ interface UserData {
     displayName: string;
     email: string;
     role: 'admin' | 'user';
+    mutedUntil?: Timestamp; // Bu alan susturma bilgisini tutacak
 }
 interface FeedbackData {
     id: string;
@@ -28,6 +29,70 @@ interface GameData {
     playCount?: number;
 }
 
+// Susturma Modal Bileşeni
+const MuteModal: React.FC<{
+    user: UserData;
+    onClose: () => void;
+    onMute: (uid: string, duration: number) => void;
+}> = ({ user, onClose, onMute }) => {
+    
+    const durations = [
+        { label: '5 Dakika', value: 5 * 60 * 1000 },
+        { label: '1 Saat', value: 60 * 60 * 1000 },
+        { label: '1 Gün', value: 24 * 60 * 60 * 1000 },
+        { label: 'Kalıcı', value: 365 * 24 * 60 * 60 * 1000 * 100 }, // ~100 yıl
+    ];
+
+    const isCurrentlyMuted = user.mutedUntil && user.mutedUntil.toDate() > new Date();
+
+    return (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-md"
+                onClick={e => e.stopPropagation()}
+            >
+                <h3 className="text-2xl font-heading mb-4 text-center">
+                    Sustur: <span className="text-electric-purple">{user.displayName}</span>
+                </h3>
+                
+                {isCurrentlyMuted && (
+                    <div className="mb-4 text-center p-3 bg-yellow-900/50 border border-yellow-700/50 rounded-md">
+                        <p className="text-yellow-300 text-sm">Bu kullanıcı şu an susturulmuş.</p>
+                        <p className="text-xs text-yellow-500">
+                           Bitiş: {user.mutedUntil?.toDate().toLocaleString('tr-TR')}
+                        </p>
+                    </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                    {durations.map(d => (
+                         <button 
+                            key={d.value}
+                            onClick={() => onMute(user.uid, d.value)}
+                            className="w-full p-3 bg-dark-gray hover:bg-electric-purple/80 rounded-md transition-colors font-semibold"
+                        >
+                            {d.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="mt-4 border-t border-cyber-gray/30 pt-4">
+                     <button
+                        onClick={() => onMute(user.uid, 0)} // 0 süresi susturmayı kaldırmak için
+                        className="w-full p-3 bg-red-800 hover:bg-red-700 rounded-md transition-colors font-semibold disabled:bg-gray-600 disabled:cursor-not-allowed"
+                        disabled={!isCurrentlyMuted}
+                    >
+                       Susturmayı Kaldır
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
+
 const AdminPage: React.FC = () => {
     const { user, isAdmin, loading: authLoading } = useAuth();
     const [view, setView] = useState<'users' | 'games' | 'feedback'>('users');
@@ -35,6 +100,9 @@ const AdminPage: React.FC = () => {
     const [games, setGames] = useState<GameData[]>([]);
     const [feedback, setFeedback] = useState<FeedbackData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    const [isMuteModalOpen, setIsMuteModalOpen] = useState(false);
+    const [selectedUserForMute, setSelectedUserForMute] = useState<UserData | null>(null);
 
     useEffect(() => {
         if (!isAdmin) {
@@ -68,12 +136,41 @@ const AdminPage: React.FC = () => {
         fetchData();
     }, [view, isAdmin]);
 
+    const handleMuteUser = async (uid: string, durationMs: number) => {
+        const userRef = doc(db, 'users', uid);
+        try {
+            if (durationMs > 0) {
+                const expiryDate = new Date(Date.now() + durationMs);
+                await updateDoc(userRef, { mutedUntil: Timestamp.fromDate(expiryDate) });
+                setUsers(users.map(u => u.uid === uid ? { ...u, mutedUntil: Timestamp.fromDate(expiryDate) } : u));
+            } else {
+                await updateDoc(userRef, { mutedUntil: null });
+                setUsers(users.map(u => u.uid === uid ? { ...u, mutedUntil: undefined } : u));
+            }
+            alert("Kullanıcının susturma durumu güncellendi.");
+        } catch (error) {
+            console.error("Kullanıcı susturulurken hata:", error);
+            alert("Kullanıcı susturulurken bir hata oluştu.");
+        } finally {
+            closeMuteModal();
+        }
+    };
+    
+    const openMuteModal = (userToMute: UserData) => {
+        setSelectedUserForMute(userToMute);
+        setIsMuteModalOpen(true);
+    };
+
+    const closeMuteModal = () => {
+        setSelectedUserForMute(null);
+        setIsMuteModalOpen(false);
+    };
+
     const handleDeleteUser = async (userToDelete: UserData) => {
         if (user && userToDelete.uid === user.uid) {
             alert("Güvenlik nedeniyle kendi hesabınızı panelden silemezsiniz.");
             return;
         }
-
         if (window.confirm(`'${userToDelete.displayName}' adlı kullanıcıyı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz!`)) {
             try {
                 await deleteDoc(doc(db, 'users', userToDelete.uid));
@@ -125,6 +222,10 @@ const AdminPage: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {isMuteModalOpen && selectedUserForMute && (
+                <MuteModal user={selectedUserForMute} onClose={closeMuteModal} onMute={handleMuteUser} />
+            )}
+
             <h1 className="text-5xl font-heading mb-8 flex items-center gap-4">
                 <Shield size={48} className="text-electric-purple" /> Yönetim Paneli
             </h1>
@@ -162,24 +263,33 @@ const AdminPage: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map(u => (
-                                    <tr key={u.uid} className="border-b border-cyber-gray/50 last:border-0 hover:bg-space-black">
-                                        <td className="p-4">{u.displayName}</td>
-                                        <td className="p-4 text-cyber-gray">{u.email}</td>
-                                        <td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td>
-                                        <td className="p-4">
-                                             <button onClick={() => handleDeleteUser(u)} disabled={u.role === 'admin'} className="text-red-500 hover:text-red-400 disabled:text-gray-600 disabled:cursor-not-allowed" title="Kullanıcıyı Sil">
-                                                <Trash2 size={18} />
-                                             </button>
-                                        </td>
-                                    </tr>
-                                ))}
+                                {users.map(u => {
+                                    const isMuted = u.mutedUntil && u.mutedUntil.toDate() > new Date();
+                                    return (
+                                        <tr key={u.uid} className={`border-b border-cyber-gray/50 last:border-0 hover:bg-space-black transition-colors ${isMuted ? 'bg-red-900/30' : ''}`}>
+                                            <td className="p-4 flex items-center gap-2">
+                                                {u.displayName}
+                                                {isMuted && <MicOff size={14} className="text-red-400" title="Susturuldu"/>}
+                                            </td>
+                                            <td className="p-4 text-cyber-gray">{u.email}</td>
+                                            <td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td>
+                                            <td className="p-4 flex gap-4">
+                                                <button onClick={() => openMuteModal(u)} disabled={u.uid === user?.uid} className="text-yellow-500 hover:text-yellow-400 disabled:text-gray-600 disabled:cursor-not-allowed" title="Kullanıcıyı Sustur">
+                                                    <MicOff size={18} />
+                                                </button>
+                                                <button onClick={() => handleDeleteUser(u)} disabled={u.role === 'admin' || u.uid === user?.uid} className="text-red-500 hover:text-red-400 disabled:text-gray-600 disabled:cursor-not-allowed" title="Kullanıcıyı Sil">
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
                 </div>
             )}
-             {view === 'games' && (
+            {view === 'games' && (
                 <div>
                      <h2 className="text-3xl font-heading mb-4">Oyun İstatistikleri</h2>
                       <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">

@@ -2,12 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, getDocs, limit, startAfter, QueryDocumentSnapshot, DocumentData, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, getDocs, limit, startAfter, QueryDocumentSnapshot, DocumentData, deleteDoc, Timestamp, setDoc } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Send, Trash2, LoaderCircle, ShieldAlert } from 'lucide-react';
+// HATA DÜZELTMESİ: Thumbtack yerine 'Pin' ikonu kullanılıyor
+import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X } from 'lucide-react';
 import { grantAchievement } from '../src/utils/grantAchievement';
 import AdminTag from '../components/AdminTag';
 import { containsProfanity } from '../src/utils/profanityFilter';
+
+interface ReplyInfo {
+    uid: string;
+    displayName: string;
+    text: string;
+}
 
 interface Message {
     id: string;
@@ -15,7 +22,35 @@ interface Message {
     displayName: string;
     text: string;
     createdAt: any;
+    replyingTo?: ReplyInfo;
 }
+
+interface PinnedMessage extends Message {
+    pinnedBy: string;
+}
+
+interface UserProfile {
+    mutedUntil?: Timestamp;
+}
+const MAX_CHAR_LIMIT = 300;
+
+const formatRemainingTime = (endDate: Date) => {
+    const totalSeconds = Math.floor((endDate.getTime() - new Date().getTime()) / 1000);
+    if (totalSeconds <= 0) return "0 saniye";
+
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    
+    let result = '';
+    if (days > 0) result += `${days} gün `;
+    if (hours > 0) result += `${hours} saat `;
+    if (minutes > 0) result += `${minutes} dakika `;
+    if (seconds > 0 && days === 0 && hours === 0) result += `${seconds} saniye`;
+    
+    return result.trim();
+};
 
 const ChatPage: React.FC = () => {
     const { user, isAdmin, loading: authLoading } = useAuth();
@@ -24,16 +59,15 @@ const ChatPage: React.FC = () => {
     const [newMessage, setNewMessage] = useState('');
     const dummy = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
-
+    const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+    const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-
     const [isSending, setIsSending] = useState(false);
     const lastMessageTimestamp = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
 
-    // Tüm kullanıcı bilgilerini bir kez çek
     useEffect(() => {
         const fetchUsers = async () => {
             const usersSnap = await getDocs(collection(db, 'users'));
@@ -42,13 +76,24 @@ const ChatPage: React.FC = () => {
             setAllUsers(usersMap);
         };
         fetchUsers();
+
+        const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
+        const unsubscribePinned = onSnapshot(pinnedMessageRef, (doc) => {
+            if (doc.exists()) {
+                setPinnedMessage(doc.data() as PinnedMessage);
+            } else {
+                setPinnedMessage(null);
+            }
+        });
+
+        return () => {
+            unsubscribePinned();
+        };
     }, []);
 
-    // Mesajları dinleyen ve scroll'u yöneten ana useEffect
     useEffect(() => {
         if (!user) return;
         grantAchievement(user.uid, 'chat_initiate').catch(console.error);
-
         const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(50));
         
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -64,16 +109,12 @@ const ChatPage: React.FC = () => {
         return () => unsubscribe();
     }, [user]);
 
-    // *** SCROLL DÜZELTMESİ BURADA ***
-    // 'messages' dizisi her güncellendiğinde, bu effect çalışarak en alta kaydırır.
-    // 'setTimeout' ile React'in DOM'u tamamen çizmesini bekleyerek en garantili sonucu alırız.
     useEffect(() => {
         setTimeout(() => {
             dummy.current?.scrollIntoView({ behavior: 'auto' });
         }, 0);
     }, [messages]);
     
-
     const loadMoreMessages = async () => {
         if (loadingMore || !hasMore || !lastVisible) return;
         setLoadingMore(true);
@@ -94,10 +135,59 @@ const ChatPage: React.FC = () => {
         }
         setLoadingMore(false);
     };
+
+    const handleStartReply = (message: Message) => {
+        setReplyingToMessage(message);
+    };
+
+    const handleCancelReply = () => {
+        setReplyingToMessage(null);
+    };
+
+    const handlePinMessage = async (message: Message) => {
+        if (!isAdmin || !user) return;
+        const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
+        const pinData: PinnedMessage = { ...message, pinnedBy: user.displayName || 'Admin' };
+        try {
+            await setDoc(pinnedMessageRef, pinData);
+        } catch (error) {
+            console.error("Mesaj sabitlenirken hata:", error);
+        }
+    };
+    
+    const handleUnpinMessage = async () => {
+        if (!isAdmin) return;
+        const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
+        try {
+            await deleteDoc(pinnedMessageRef);
+        } catch (error) {
+            console.error("Sabitlenmiş mesaj kaldırılırken hata:", error);
+        }
+    };
     
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (newMessage.trim() === '' || !user || isSending) return;
+        
+        if (newMessage.trim() === '' || !user || isSending || newMessage.length > MAX_CHAR_LIMIT) return;
+
+        try {
+            const userRef = doc(db, 'users', user.uid);
+            const userSnap = await getDoc(userRef);
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as UserProfile;
+                const mutedUntil = userData.mutedUntil;
+
+                if (mutedUntil && mutedUntil.toDate() > new Date()) {
+                    const remainingTime = formatRemainingTime(mutedUntil.toDate());
+                    setChatError(`Sohbette susturuldun. Kalan süre: ${remainingTime}.`);
+                    setTimeout(() => setChatError(null), 5000);
+                    return; 
+                }
+            }
+        } catch (error) {
+            console.error("Kullanıcı susturma durumu kontrol edilirken hata:", error);
+        }
+
         const now = Date.now();
         const COOLDOWN_SECONDS = 2;
         if (now - lastMessageTimestamp.current < COOLDOWN_SECONDS * 1000) {
@@ -106,10 +196,27 @@ const ChatPage: React.FC = () => {
             setTimeout(() => setChatError(null), 3000);
             return;
         }
+
         setIsSending(true);
+        const newMessageData: any = {
+            text: newMessage,
+            uid: user.uid,
+            displayName: user.displayName,
+            createdAt: serverTimestamp()
+        };
+        
+        if (replyingToMessage) {
+            newMessageData.replyingTo = {
+                uid: replyingToMessage.uid,
+                displayName: replyingToMessage.displayName,
+                text: replyingToMessage.text
+            };
+        }
+
         try {
-            await addDoc(collection(db, 'messages'), { text: newMessage, uid: user.uid, displayName: user.displayName, createdAt: serverTimestamp() });
+            await addDoc(collection(db, 'messages'), newMessageData);
             lastMessageTimestamp.current = now;
+            
             if (containsProfanity(newMessage)) {
                 const wisdomQuotes = ["Evren, kelimelerimizin yankılarını saklar...", "En güçlü ses...","Bazı kelimeler köprü kurar...","Kelimelerin de bir ağırlığı vardır..."];
                 const randomQuote = wisdomQuotes[Math.floor(Math.random() * wisdomQuotes.length)];
@@ -122,7 +229,9 @@ const ChatPage: React.FC = () => {
             const messageCount = userSnap.data()?.messageCount || 0;
             if (messageCount >= 100) await grantAchievement(user.uid, 'frequency_echo');
             if (messageCount >= 1000) await grantAchievement(user.uid, 'void_caller');
+            
             setNewMessage('');
+            handleCancelReply();
         } catch(error) { 
             console.error("Mesaj gönderilemedi:", error);
             setChatError("Mesaj gönderilirken bir frekans hatası oluştu.");
@@ -140,11 +249,33 @@ const ChatPage: React.FC = () => {
         } catch (error) { console.error("Mesaj silinirken hata:", error); }
     };
     
+    const getCharCountColor = () => {
+        if (newMessage.length >= MAX_CHAR_LIMIT) return 'text-red-500';
+        if (newMessage.length > MAX_CHAR_LIMIT * 0.9) return 'text-yellow-400';
+        return 'text-cyber-gray';
+    };
+    
     if (authLoading) return <div className="flex justify-center items-center h-full py-20"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>;
     if (!user) return <div className="text-center py-20"><h1 className="text-4xl font-heading">Erişim Reddedildi</h1><p className="mt-4 text-cyber-gray">Sohbet frekansına bağlanmak için sisteme giriş yapmalısın.</p><Link to="/login" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">Giriş Yap</Link></div>;
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[calc(100vh-150px)] max-w-4xl mx-auto">
+            {pinnedMessage && (
+                <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-yellow-900/50 border border-yellow-700/50 rounded-lg flex items-start gap-3 text-sm">
+                    {/* HATA DÜZELTMESİ: Pin ikonu kullanılıyor */}
+                    <Pin className="text-yellow-400 mt-1 flex-shrink-0" size={18}/>
+                    <div className="flex-1">
+                        <p className="font-bold text-yellow-300">Sabitlenmiş Mesaj</p>
+                        <p className="text-yellow-200">"{pinnedMessage.text}" - <span className="font-semibold">{pinnedMessage.displayName}</span></p>
+                    </div>
+                    {isAdmin && (
+                        <button onClick={handleUnpinMessage} className="p-1 rounded-full hover:bg-yellow-700/50">
+                            <X className="text-yellow-400" size={16}/>
+                        </button>
+                    )}
+                </motion.div>
+            )}
+
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50">
                 {hasMore && (
                     <div className="text-center my-4">
@@ -165,29 +296,71 @@ const ChatPage: React.FC = () => {
                                     <AdminTag name={msg.displayName} className="text-sm mb-1" /> :
                                     <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 mb-1 hover:underline">{msg.displayName}</Link>
                                 )}
+                                
+                                {msg.replyingTo && (
+                                    <div className="mb-2 p-2 border-l-2 border-cyber-gray/50 bg-black/20 rounded-md text-xs opacity-80">
+                                        <p className="font-bold">{msg.replyingTo.displayName}</p>
+                                        <p className="truncate">{msg.replyingTo.text}</p>
+                                    </div>
+                                )}
+
                                 <p className="text-ghost-white">{msg.text}</p>
                             </div>
-                            {isAdmin && (<button onClick={() => deleteMessage(msg.id)} title="Mesajı Sil" className={`absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-red-500 transition-opacity ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}><Trash2 size={14} /></button>)}
+                            <div className={`flex gap-2 items-center absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}>
+                                <button onClick={() => handleStartReply(msg)} title="Yanıtla" className="text-cyber-gray hover:text-white"><CornerDownLeft size={16}/></button>
+                                {/* HATA DÜZELTMESİ: Pin ikonu kullanılıyor */}
+                                {isAdmin && <button onClick={() => handlePinMessage(msg)} title="Sabitle" className="text-yellow-400 hover:text-yellow-300"><Pin size={16} /></button>}
+                                {isAdmin && <button onClick={() => deleteMessage(msg.id)} title="Mesajı Sil" className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>}
+                            </div>
                         </div>
                     );
                 })}
                  <div ref={dummy}></div>
             </div>
             <div className="p-4 bg-dark-gray rounded-b-lg border border-t-0 border-cyber-gray/50">
+                 {replyingToMessage && (
+                     <motion.div initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-2 mb-3 bg-space-black border-l-4 border-electric-purple rounded-md text-sm flex justify-between items-center">
+                        <div>
+                             <p className="text-cyber-gray">Yanıtlanıyor: <span className="text-ghost-white font-bold">{replyingToMessage.displayName}</span></p>
+                             <p className="text-cyber-gray/80 truncate">"{replyingToMessage.text}"</p>
+                        </div>
+                        <button onClick={handleCancelReply} className="p-1 rounded-full hover:bg-cyber-gray/20"><X size={16}/></button>
+                     </motion.div>
+                 )}
+
                 {chatError && (
                     <motion.div 
                         initial={{ opacity: 0, y: 10 }} 
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-2 p-3 mb-4 text-yellow-300 bg-yellow-900/50 rounded-md text-sm border border-yellow-700/50"
+                        className={`flex items-center gap-2 p-3 mb-4 rounded-md text-sm border ${
+                            chatError.includes("susturuldun") 
+                            ? 'text-red-300 bg-red-900/50 border-red-700/50' 
+                            : 'text-yellow-300 bg-yellow-900/50 border-yellow-700/50'
+                        }`}
                     >
                         <ShieldAlert size={18} />
                         <span>{chatError}</span>
                     </motion.div>
                 )}
-                <form onSubmit={sendMessage} className="flex gap-4">
-                    <input value={newMessage} onChange={(e) => setNewMessage(e.target.value)} placeholder="Bir mesaj gönder..." className="flex-1 p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
-                    <button type="submit" disabled={!newMessage.trim() || isSending} className="p-3 bg-electric-purple text-white rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray/50 disabled:cursor-not-allowed"><Send /></button>
+                <form onSubmit={sendMessage} className="flex gap-4 items-start">
+                    <input 
+                        value={newMessage} 
+                        onChange={(e) => setNewMessage(e.target.value)} 
+                        placeholder="Bir mesaj gönder..." 
+                        maxLength={MAX_CHAR_LIMIT}
+                        className="flex-1 p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
+                    />
+                    <button 
+                        type="submit" 
+                        disabled={!newMessage.trim() || isSending || newMessage.length > MAX_CHAR_LIMIT} 
+                        className="p-3 bg-electric-purple text-white rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray/50 disabled:cursor-not-allowed"
+                    >
+                        <Send />
+                    </button>
                 </form>
+                <p className={`text-xs text-right mt-2 font-mono transition-colors ${getCharCountColor()}`}>
+                    {newMessage.length} / {MAX_CHAR_LIMIT}
+                </p>
             </div>
         </motion.div>
     );

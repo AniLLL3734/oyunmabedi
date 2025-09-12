@@ -8,7 +8,8 @@ import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp } f
 import { db } from '../src/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Link } from 'react-router-dom';
-import { SendHorizonal, MessageSquare, CheckCircle, Gamepad2, TrendingUp, Compass } from 'lucide-react';
+// YENİ EKLENEN OYUNLAR İÇİN KULLANACAĞIMIZ İKONU BURADA İÇERİ ALIYORUZ
+import { SendHorizonal, MessageSquare, CheckCircle, Gamepad2, TrendingUp, Compass, Sparkles } from 'lucide-react';
 
 // DÜZELTME 1: Diziyi karıştırmak için bir yardımcı fonksiyon oluşturuyoruz.
 // Bu fonksiyon Fisher-Yates (aka Knuth) Shuffle algoritmasını kullanır, en verimli ve doğru karıştırma yöntemidir.
@@ -25,6 +26,8 @@ const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [mostPlayed, setMostPlayed] = useState<Game[]>([]);
+  // YENİ EKLEME 1: En son eklenen oyunları tutmak için yeni bir state oluşturuyoruz.
+  const [newlyAdded, setNewlyAdded] = useState<Game[]>([]);
   
   // DÜZELTME 2: Oyun listesini state'te tutuyoruz ve başlangıçta bir kere karıştırıyoruz.
   const [shuffledGames, setShuffledGames] = useState<Game[]>([]);
@@ -37,6 +40,12 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     // Oyun listesini sayfa ilk yüklendiğinde bir kere karıştır ve state'e ata
     setShuffledGames(shuffleArray(games));
+
+    // YENİ EKLEME 2: En son eklenen oyunları alıp state'e atıyoruz.
+    // games.ts'den son 4 oyunu alıp ters çevirerek en yeniyi başa getiriyoruz.
+    const lastFourGames = games.slice(-4).reverse();
+    setNewlyAdded(lastFourGames);
+
 
     const fetchMostPlayed = async () => {
       try {
@@ -121,6 +130,26 @@ const HomePage: React.FC = () => {
             {mostPlayed.map((game, index) => (
               <motion.div
                 key={`most-played-${game.id}`}
+                initial={{ opacity: 0, y: 50 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+              >
+                <GameCard game={game} />
+              </motion.div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* YENİ EKLEME 3: "EN SON EKLENENLER" BÖLÜMÜ */}
+      {newlyAdded.length > 0 && (
+        <section className="mb-16">
+          <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Sparkles /> En Son Eklenenler</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {newlyAdded.map((game, index) => (
+              <motion.div
+                key={`newly-added-${game.id}`}
                 initial={{ opacity: 0, y: 50 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
