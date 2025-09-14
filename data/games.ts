@@ -316,5 +316,33 @@ SPACE: Hızlanmak için basılı tut.`,
     category: 'Savunma',
     tags: 'HTML5, Arcade, Savunma, Shooter, Yükseltme, Sonsuz Dalga, Strateji',
     controls: `Fare: Nişan al Ve Basılıt tutarak ateş et.`,
-  },
+  },{
+  id: 'basketball-random',
+  title: 'BASKETBALL RANDOM',
+  description: `Basketbol burada en eğlenceli ve rastgele haliyle karşınızda. Basketball Random'da tek tuşla iki farklı ragdoll basketbolcuyu kontrol ederek sayı atmaya çalışın. Her basket farklı bir sahaya geçmenizi sağlar! Değişen toplar, değişen oyuncular ve değişen sahalar sizi şaşırtmasın!`,
+  type: 'HTML5', // Assuming GameType.HTML5 corresponds to a 'HTML5' string
+  url: 'https://eclectic-manatee-1572d9.netlify.app/',
+
+  // GÜNCELLENDİ: Thumbnail URL'si isteğiniz üzerine bu formatta oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/resim1.jpg', 
+  
+  category: 'Spor',
+  tags: 'HTML5, Arcade, Spor, 2 Kişilik, Basketbol, Ragdoll, Fizik',
+  controls: `1. Oyuncu: "W" / 2. Oyuncu: "YUKARI YÖN TUŞU"`,
+},
+{
+  id: 'klasik-yilan',
+  title: 'KLASİK YILAN OYUNU',
+  description: 'Nostaljik atari klasiği artık tarayıcınızda. Yemleri toplayarak yılanı büyütün, duvarlara veya kendinize çarpmadan en yüksek puanı elde etmeye çalışın!',
+  type: 'HTML5', // Assuming GameType.HTML5 corresponds to a 'HTML5' string
+  url: 'https://delightful-squirrel-433f90.netlify.app/',
+  
+  // GÜNCELLENDİ: Thumbnail URL'si isteğiniz üzerine bu formatta oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20225521.png', 
+  
+  category: 'Klasik',
+  tags: 'HTML5, Arcade, Klasik, Yılan, Beceri, Sonsuz',
+  controls: `Yön Tuşları: Yılanı hareket ettir.`,
+},
+
 ];
