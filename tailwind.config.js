@@ -1,3 +1,4 @@
+// DOSYA: tailwind.config.js (Bu genelde aynı kalır)
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [

@@ -290,4 +290,31 @@ SPACE: Hızlanmak için basılı tut.`,
     tags: 'HTML5, Beceri, Arcade, Zor, Tek Tuş, Klasik',
     controls: `Fare Sol Tık / Boşluk Tuşu / Dokunma: Kuşu zıplat.`,
   },
+    {
+    id: 'ttmtalcatcher',
+    title: 'TTMTAL ORB CATCHER',
+    description: `GELEN TOPLARA KARŞI KOY.\n\nSabrınız kanatlarınız olsun.\n-FaTaLRhmasdsadymeR37`,
+    type: GameType.HTML5,
+    url: 'https://cozy-frangollo-4766f8.netlify.app/',
+    thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20193653.png',
+    category: 'Beceri',
+    tags: 'HTML5, Beceri, Arcade, Zor, Tek Tuş, Klasik',
+    controls: `Fare: Karakteri sağa ve sola hareket ettir.`,
+  },
+    {
+    id: 'ttmtal-son-siper',
+    title: 'TTMTAL: SON SİPER',
+    description: `Dalga dalga gelen düşmanlara karşı son savunma hattını koru.\n\nYükseltmeleri akıllıca seç ve en uzun süre hayatta kal.\n-FaTaLRhymeR37`,
+    type: GameType.HTML5,
+
+    // BURAYI DEĞİŞTİR: dist klasörünü Netlify'a yükledikten sonra sana verilen linki buraya yapıştır.
+    url: 'https://splendorous-cascaron-2fdffb.netlify.app/', 
+
+    // BURAYI DEĞİŞTİR: Oyunun güzel bir ekran görüntüsünü alıp yükle ve linkini buraya yapıştır.
+    thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20221936.png', 
+
+    category: 'Savunma',
+    tags: 'HTML5, Arcade, Savunma, Shooter, Yükseltme, Sonsuz Dalga, Strateji',
+    controls: `Fare: Nişan al Ve Basılıt tutarak ateş et.`,
+  },
 ];
