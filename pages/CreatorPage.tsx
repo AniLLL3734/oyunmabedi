@@ -67,7 +67,7 @@ const CreatorPage: React.FC = () => {
               alt="Mimar FaTaLRhymeR"
               className="w-48 h-48 rounded-full border-4 border-electric-purple shadow-neon-purple object-cover"
             />
-            <h1 className="text-4xl font-heading font-bold mt-4">ANIL</h1>
+            <h1 className="text-4xl font-heading font-bold mt-4">FaTaLRhymeR37</h1>
             <h2 className="text-lg text-electric-purple">Bu Dijital Evrenin Mimarı</h2>
           </motion.div>
 
@@ -90,7 +90,7 @@ const CreatorPage: React.FC = () => {
               <p className="text-sm text-cyber-gray mb-2">Sinyallerimi buradan takip et:</p>
               <div className="flex items-center gap-3 bg-space-black p-3 rounded-lg w-fit">
                 <Instagram size={20} className="text-pink-400" />
-                <span className="font-mono text-ghost-white tracking-wider">anil_37k</span>
+                <span className="font-mono text-ghost-white tracking-wider">anil_12833</span>
               </div>
             </div>
 

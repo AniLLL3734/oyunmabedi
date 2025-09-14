@@ -5,7 +5,7 @@ const commands = [
   { text: '> connect_to_source.sh', delay: 1000 },
   { text: '> Authenticating...', delay: 1000 },
   { text: '> Access Granted.', delay: 500 },
-  { text: '> load --profile ANIL', delay: 1500 },
+  { text: '> load --profile FaTaLRhymeR37', delay: 1500 },
   { text: 'Use code with caution.', delay: 200 },
 ];
 
