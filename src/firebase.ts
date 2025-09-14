@@ -1,4 +1,4 @@
-// DOSYA: src/firebase.ts
+// DOSYA: src/firebase.ts (Sinyal Mekanizması İçin Sadeleştirilmiş Hali)
 
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
@@ -12,16 +12,13 @@ const firebaseConfig = {
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  // Yeni eklenen Realtime Database URL'sini de buradan oku
+  // databaseURL'ye artık ihtiyacımız yok, silebilirsin veya kalabilir, zararı yok.
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL, 
 };
 
-// Firebase uygulamasını bu yapılandırma bilgileriyle başlat
+// Firebase uygulamasını başlat
 const app = initializeApp(firebaseConfig);
 
-// Gerekli servisleri dışa aktararak diğer dosyalarda kullanılabilir yap
+// Gerekli servisleri dışa aktar
 export const auth = getAuth(app);
-export const db = getFirestore(app);
-
-// getDatabase() fonksiyonunu doğrudan usePresence.ts içinde çağırarak,
-// sadece ihtiyaç duyulduğunda bu servisi başlatmış olacağız. Bu daha modern bir yöntemdir.
+export const db = getFirestore(app); // Sadece Firestore kullanacağız.

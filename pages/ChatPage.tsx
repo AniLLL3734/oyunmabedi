@@ -1,15 +1,30 @@
-import React, { useState, useEffect, useRef } from 'react';
+// ===================================================================================
+//
+//              CHATPAGE.TSX - SİNYAL MEKANİZMASI VERSİYONU (BÜTÇE DOSTU)
+//               ----------------------------------------------------
+// Bu bileşen SADECE FIRESTORE kullanarak çalışır.
+// - Sürekli onSnapshot maliyetinden kaçınmak için tek bir belgeyi dinler ("sinyal").
+// - Yeni mesaj, silme gibi olaylarda "sinyal" alıp veriyi bir kereliğine çeker.
+// - Blaze planı veya Cloud Functions GEREKTİRMEZ. %100 ÜCRETSİZ PLAN UYUMLU.
+//
+// ===================================================================================
+
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, updateDoc, increment, getDocs, limit, startAfter, QueryDocumentSnapshot, DocumentData, deleteDoc, Timestamp, setDoc } from 'firebase/firestore';
+import {
+    collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc,
+    updateDoc, increment, getDocs, limit, startAfter, QueryDocumentSnapshot,
+    DocumentData, deleteDoc, Timestamp, setDoc
+} from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-// HATA DÜZELTMESİ: Thumbtack yerine 'Pin' ikonu kullanılıyor
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X } from 'lucide-react';
 import { grantAchievement } from '../src/utils/grantAchievement';
 import AdminTag from '../components/AdminTag';
 import { containsProfanity } from '../src/utils/profanityFilter';
 
+// --- ARAYÜZ TANIMLARI ---
 interface ReplyInfo {
     uid: string;
     displayName: string;
@@ -21,7 +36,7 @@ interface Message {
     uid: string;
     displayName: string;
     text: string;
-    createdAt: any;
+    createdAt: Timestamp; // Sadece Firestore kullandığımız için Timestamp türü en doğrusu.
     replyingTo?: ReplyInfo;
 }
 
@@ -32,26 +47,28 @@ interface PinnedMessage extends Message {
 interface UserProfile {
     mutedUntil?: Timestamp;
 }
+
 const MAX_CHAR_LIMIT = 300;
+const PAGE_SIZE = 50; // Hem ilk yükleme hem de "daha fazla yükle" için standart boyut.
 
 const formatRemainingTime = (endDate: Date) => {
     const totalSeconds = Math.floor((endDate.getTime() - new Date().getTime()) / 1000);
     if (totalSeconds <= 0) return "0 saniye";
-
     const days = Math.floor(totalSeconds / 86400);
     const hours = Math.floor((totalSeconds % 86400) / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    
     let result = '';
     if (days > 0) result += `${days} gün `;
     if (hours > 0) result += `${hours} saat `;
     if (minutes > 0) result += `${minutes} dakika `;
     if (seconds > 0 && days === 0 && hours === 0) result += `${seconds} saniye`;
-    
     return result.trim();
 };
 
+// ===================================================================================
+//                                  ANA BİLEŞEN
+// ===================================================================================
 const ChatPage: React.FC = () => {
     const { user, isAdmin, loading: authLoading } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -65,8 +82,9 @@ const ChatPage: React.FC = () => {
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [isSending, setIsSending] = useState(false);
-    const lastMessageTimestamp = useRef(0);
+    const lastMessageSpamCheck = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
+    const initialLoadDone = useRef(false);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -91,35 +109,54 @@ const ChatPage: React.FC = () => {
         };
     }, []);
 
+    const syncChat = useCallback(async () => {
+        const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const documentSnapshots = await getDocs(q);
+        const msgs: Message[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)).reverse();
+        
+        setMessages(msgs);
+
+        if (documentSnapshots.docs.length > 0) {
+            setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+        }
+        setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
+    }, []);
+
     useEffect(() => {
         if (!user) return;
-        grantAchievement(user.uid, 'chat_initiate').catch(console.error);
-        const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(50));
         
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const msgs: Message[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
-            setMessages(msgs.reverse());
+        syncChat();
+        grantAchievement(user.uid, 'chat_initiate').catch(console.error);
 
-            if (querySnapshot.docs.length > 0) {
-                setLastVisible(querySnapshot.docs[querySnapshot.docs.length - 1]);
+        const metaRef = doc(db, 'chat_meta', 'last_update');
+        const unsubscribeMeta = onSnapshot(metaRef, () => {
+            if (initialLoadDone.current) {
+                console.log("Sinyal alındı, sohbet güncelleniyor...");
+                syncChat();
+            } else {
+                initialLoadDone.current = true;
             }
-            setHasMore(querySnapshot.docs.length >= 50);
         });
 
-        return () => unsubscribe();
-    }, [user]);
-
+        return () => unsubscribeMeta();
+    }, [user, syncChat]);
+    
     useEffect(() => {
         setTimeout(() => {
             dummy.current?.scrollIntoView({ behavior: 'auto' });
-        }, 0);
+        }, 100);
     }, [messages]);
     
+    const triggerSignal = async () => {
+        const metaRef = doc(db, 'chat_meta', 'last_update');
+        await setDoc(metaRef, { timestamp: serverTimestamp() });
+    };
+
     const loadMoreMessages = async () => {
         if (loadingMore || !hasMore || !lastVisible) return;
         setLoadingMore(true);
 
-        const nextQuery = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(50));
+        const nextQuery = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
         const documentSnapshots = await getDocs(nextQuery);
 
         const newMsgs: Message[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
@@ -127,8 +164,10 @@ const ChatPage: React.FC = () => {
         const previousScrollHeight = container?.scrollHeight || 0;
 
         setMessages(prevMessages => [...newMsgs.reverse(), ...prevMessages]);
-        setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
-        setHasMore(documentSnapshots.docs.length >= 50);
+        if(documentSnapshots.docs.length > 0) {
+           setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+        }
+        setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
 
         if (container) {
             requestAnimationFrame(() => { container.scrollTop = container.scrollHeight - previousScrollHeight; });
@@ -149,7 +188,7 @@ const ChatPage: React.FC = () => {
         const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
         const pinData: PinnedMessage = { ...message, pinnedBy: user.displayName || 'Admin' };
         try {
-            await setDoc(pinnedMessageRef, pinData);
+            await setDoc(pinnedMessageRef, pinData as any);
         } catch (error) {
             console.error("Mesaj sabitlenirken hata:", error);
         }
@@ -175,10 +214,8 @@ const ChatPage: React.FC = () => {
             const userSnap = await getDoc(userRef);
             if (userSnap.exists()) {
                 const userData = userSnap.data() as UserProfile;
-                const mutedUntil = userData.mutedUntil;
-
-                if (mutedUntil && mutedUntil.toDate() > new Date()) {
-                    const remainingTime = formatRemainingTime(mutedUntil.toDate());
+                if (userData.mutedUntil && userData.mutedUntil.toDate() > new Date()) {
+                    const remainingTime = formatRemainingTime(userData.mutedUntil.toDate());
                     setChatError(`Sohbette susturuldun. Kalan süre: ${remainingTime}.`);
                     setTimeout(() => setChatError(null), 5000);
                     return; 
@@ -190,32 +227,33 @@ const ChatPage: React.FC = () => {
 
         const now = Date.now();
         const COOLDOWN_SECONDS = 2;
-        if (now - lastMessageTimestamp.current < COOLDOWN_SECONDS * 1000) {
-            const timeLeft = ((COOLDOWN_SECONDS * 1000 - (now - lastMessageTimestamp.current)) / 1000).toFixed(1);
+        if (now - lastMessageSpamCheck.current < COOLDOWN_SECONDS * 1000) {
+            const timeLeft = ((COOLDOWN_SECONDS * 1000 - (now - lastMessageSpamCheck.current)) / 1000).toFixed(1);
             setChatError(`SPAM Yasaktır, ${timeLeft} saniye sonra tekrar dene.`);
             setTimeout(() => setChatError(null), 3000);
             return;
         }
 
         setIsSending(true);
-        const newMessageData: any = {
+        const newMessageData = {
             text: newMessage,
             uid: user.uid,
             displayName: user.displayName,
-            createdAt: serverTimestamp()
+            createdAt: serverTimestamp(),
+            ...(replyingToMessage && {
+                replyingTo: {
+                    uid: replyingToMessage.uid,
+                    displayName: replyingToMessage.displayName,
+                    text: replyingToMessage.text
+                }
+            })
         };
-        
-        if (replyingToMessage) {
-            newMessageData.replyingTo = {
-                uid: replyingToMessage.uid,
-                displayName: replyingToMessage.displayName,
-                text: replyingToMessage.text
-            };
-        }
 
         try {
             await addDoc(collection(db, 'messages'), newMessageData);
-            lastMessageTimestamp.current = now;
+            await triggerSignal();
+            
+            lastMessageSpamCheck.current = now;
             
             if (containsProfanity(newMessage)) {
                 const wisdomQuotes = ["Evren, kelimelerimizin yankılarını saklar...", "En güçlü ses...","Bazı kelimeler köprü kurar...","Kelimelerin de bir ağırlığı vardır..."];
@@ -245,7 +283,7 @@ const ChatPage: React.FC = () => {
         if (!isAdmin) return;
         try { 
             await deleteDoc(doc(db, 'messages', messageId));
-            setMessages(prev => prev.filter(msg => msg.id !== messageId));
+            await triggerSignal();
         } catch (error) { console.error("Mesaj silinirken hata:", error); }
     };
     
@@ -262,7 +300,6 @@ const ChatPage: React.FC = () => {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[calc(100vh-150px)] max-w-4xl mx-auto">
             {pinnedMessage && (
                 <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-yellow-900/50 border border-yellow-700/50 rounded-lg flex items-start gap-3 text-sm">
-                    {/* HATA DÜZELTMESİ: Pin ikonu kullanılıyor */}
                     <Pin className="text-yellow-400 mt-1 flex-shrink-0" size={18}/>
                     <div className="flex-1">
                         <p className="font-bold text-yellow-300">Sabitlenmiş Mesaj</p>
@@ -308,7 +345,6 @@ const ChatPage: React.FC = () => {
                             </div>
                             <div className={`flex gap-2 items-center absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}>
                                 <button onClick={() => handleStartReply(msg)} title="Yanıtla" className="text-cyber-gray hover:text-white"><CornerDownLeft size={16}/></button>
-                                {/* HATA DÜZELTMESİ: Pin ikonu kullanılıyor */}
                                 {isAdmin && <button onClick={() => handlePinMessage(msg)} title="Sabitle" className="text-yellow-400 hover:text-yellow-300"><Pin size={16} /></button>}
                                 {isAdmin && <button onClick={() => deleteMessage(msg.id)} title="Mesajı Sil" className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>}
                             </div>

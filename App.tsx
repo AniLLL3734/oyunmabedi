@@ -1,4 +1,4 @@
-// DOSYA: App.tsx
+// DOSYA: App.tsx (Doğru import yolu ile güncellendi)
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
@@ -8,9 +8,12 @@ import Layout from './components/Layout';
 import { LoaderCircle } from 'lucide-react';
 import { useScoreSystem } from './hooks/useScoreSystem';
 import { usePresence } from './hooks/usePresence';
-import { useDailyRewards } from './hooks/useDailyRewards.tsx';
+import { useDailyRewards } from './hooks/useDailyRewards';
+// ======================= DEĞİŞİKLİK BURADA =======================
+// Vite'a dosyanın doğru yerini (src klasörünün içi) gösteriyoruz.
+import PrivateRoute from './src/components/PrivateRoute';
+// =================================================================
 
-// Rota Bazlı Kod Bölümleme (Performans için)
 const HomePage = React.lazy(() => import('./pages/HomePage'));
 const GamePage = React.lazy(() => import('./pages/GamePage'));
 const CreatorPage = React.lazy(() => import('./pages/CreatorPage'));
@@ -21,12 +24,11 @@ const AdminPage = React.lazy(() => import('./pages/AdminPage'));
 const LeaderboardPage = React.lazy(() => import('./pages/LeaderboardPage'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'));
 const AllUsersPage = React.lazy(() => import('./pages/AllUsersPage'));
-const DirectMessagesPage = React.lazy(() => import('./pages/DirectMessagesPage'));
-const PrivateChatPage = React.lazy(() => import('./pages/PrivateChatPage'));
 const EditProfilePage = React.lazy(() => import('./pages/EditProfilePage'));
+const ChatRoomSelectionPage = React.lazy(() => import('./pages/ChatRoomSelectionPage'));
+const AuthlessChatPage = React.lazy(() => import('./pages/AuthlessChatPage'));
 
 
-// Tembel yüklenen sayfalar için yedek bileşen
 const PageLoader = () => (
   <div className="flex justify-center items-center h-full py-20">
     <LoaderCircle className="animate-spin text-electric-purple" size={48} />
@@ -37,7 +39,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const location = useLocation();
   
-  // Arka plan sistemlerini başlat
   useScoreSystem();
   usePresence();
   useDailyRewards();
@@ -45,7 +46,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => { 
       setLoading(false); 
-    }, 3000); 
+    }, 2000); 
 
     return () => clearTimeout(timer);
   }, []);
@@ -64,16 +65,16 @@ const App: React.FC = () => {
                     <Route path="/" element={<HomePage />} />
                     <Route path="/leaderboard" element={<LeaderboardPage />} />
                     <Route path="/profile/:userId" element={<ProfilePage />} />
-                    <Route path="/edit-profile" element={<EditProfilePage />} />
+                    <Route path="/edit-profile" element={<PrivateRoute><EditProfilePage /></PrivateRoute>} />
                     <Route path="/game/:id" element={<GamePage />} />
                     <Route path="/creator" element={<CreatorPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/signup" element={<SignupPage />} />
-                    <Route path="/chat" element={<ChatPage />} />
-                    <Route path="/admin" element={<AdminPage />} />
+                    <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
+                    <Route path="/admin" element={<PrivateRoute><AdminPage /></PrivateRoute>} />
                     <Route path="/all-users" element={<AllUsersPage />} />
-                    <Route path="/dms" element={<DirectMessagesPage />} />
-                    <Route path="/dm/:recipientId" element={<PrivateChatPage />} />
+                    <Route path="/chat-rooms" element={<PrivateRoute><ChatRoomSelectionPage /></PrivateRoute>} />
+                    <Route path="/chat/:serverId" element={<PrivateRoute><AuthlessChatPage /></PrivateRoute>} />
                 </Routes>
               </AnimatePresence>
             </Suspense>
