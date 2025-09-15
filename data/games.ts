@@ -308,7 +308,7 @@ SPACE: Hızlanmak için basılı tut.`,
     type: GameType.HTML5,
 
     // BURAYI DEĞİŞTİR: dist klasörünü Netlify'a yükledikten sonra sana verilen linki buraya yapıştır.
-    url: 'https://luminous-pie-1b9594.netlify.app/', 
+    url: 'https://eloquent-cheesecake-bc9592.netlify.app/', 
 
     // BURAYI DEĞİŞTİR: Oyunun güzel bir ekran görüntüsünü alıp yükle ve linkini buraya yapıştır.
     thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20221936.png', 
