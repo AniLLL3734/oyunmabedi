@@ -20,7 +20,7 @@ import {
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile } from 'lucide-react';
-import { grantAchievement } from '../src/utils/grantAchievement';
+import { checkAndGrantAchievements } from '../src/utils/achievementService';
 import AdminTag from '../components/AdminTag';
 import { containsProfanity } from '../src/utils/profanityFilter';
 import { moderateMessage, clearUserHistory } from '../src/utils/advancedModeration';
@@ -135,7 +135,6 @@ const ChatPage: React.FC = () => {
         if (!user) return;
         
         syncChat();
-        grantAchievement(user.uid, 'chat_initiate').catch(console.error);
 
         const metaRef = doc(db, 'chat_meta', 'last_update');
         const unsubscribeMeta = onSnapshot(metaRef, () => {
@@ -219,23 +218,17 @@ const ChatPage: React.FC = () => {
             console.error("Sabitlenmiş mesaj kaldırılırken hata:", error);
         }
     };
-    
-    // Admin komut sistemi kaldırıldı - artık admin panelinde
 
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         
-        if (newMessage.trim() === '' || !user || isSending || newMessage.length > MAX_CHAR_LIMIT) return;
+        if (newMessage.trim() === '' || !user || !userProfile || isSending || newMessage.length > MAX_CHAR_LIMIT) return;
 
-        // Admin komut kontrolü kaldırıldı - artık admin panelinde
-
-        // Gelişmiş moderasyon kontrolü
         const moderationResult = moderateMessage(newMessage, user.uid);
         if (moderationResult.isBlocked) {
             setChatError(moderationResult.reason || 'Mesajınız moderasyon tarafından engellendi.');
             setTimeout(() => setChatError(null), 5000);
             
-            // Eğer spam ise kullanıcı geçmişini temizle
             if (moderationResult.action === 'block' && moderationResult.confidence > 80) {
                 clearUserHistory(user.uid);
             }
@@ -294,12 +287,19 @@ const ChatPage: React.FC = () => {
                 setChatError(randomQuote);
                 setTimeout(() => setChatError(null), 4000);
             }
+
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, { messageCount: increment(1) });
-            const userSnap = await getDoc(userRef);
-            const messageCount = userSnap.data()?.messageCount || 0;
-            if (messageCount >= 100) await grantAchievement(user.uid, 'frequency_echo');
-            if (messageCount >= 1000) await grantAchievement(user.uid, 'void_caller');
+            
+            const updatedProfile = {
+                ...userProfile,
+                messageCount: (userProfile.messageCount || 0) + 1,
+            };
+            
+            checkAndGrantAchievements(updatedProfile, { 
+                type: 'MESSAGE_SENT', 
+                payload: { updatedProfile } 
+            });
             
             setNewMessage('');
             handleCancelReply();
@@ -326,7 +326,6 @@ const ChatPage: React.FC = () => {
         return 'text-cyber-gray';
     };
 
-    // Emoji picker fonksiyonları
     const getAllEmojis = () => {
         return [
             { name: 'Piksel', emojis: ['🕹️','👾','💾','🧠'] },
@@ -381,7 +380,6 @@ const ChatPage: React.FC = () => {
                     const isSystemMessage = msg.uid === 'system';
                     const isAnnouncement = (msg as any).isAnnouncement;
                     
-                    // Sistem mesajları için özel görünüm
                     if (isSystemMessage) {
                         return (
                             <div key={msg.id} className="flex justify-center my-4">
@@ -484,7 +482,6 @@ const ChatPage: React.FC = () => {
                             className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
                         />
                         
-                        {/* Emoji Picker Modal */}
                         {showEmojiPicker && (
                             <div className="absolute bottom-full mb-2 left-0 right-0 bg-dark-gray border border-cyber-gray/50 rounded-lg p-4 shadow-lg z-10">
                                 <div className="flex items-center justify-between mb-3">

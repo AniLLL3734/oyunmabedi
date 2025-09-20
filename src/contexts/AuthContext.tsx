@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
+
+// ==============================================================================
+// GEREKLİ IMPORTLAR
+// ==============================================================================
+import { checkAndGrantAchievements } from '../utils/achievementService'; // Başarım Servisini import et
+import { defaultAvatarUrl } from '../../data/avatars'; // Varsayılan avatarı import et
 
 export interface UserProfileData {
     uid: string;
@@ -16,17 +22,14 @@ export interface UserProfileData {
 }
 
 interface AuthContextType {
-  user: User | null; // Orijinal 'User' tipini koruyoruz
-  userProfile: UserProfileData | null; // 'userProfile'ı ayrı tutuyoruz
+  user: User | null;
+  userProfile: UserProfileData | null;
   isAdmin: boolean;
   loading: boolean;
-  // setUserProfile'ı kaldırdık çünkü artık buna gerek yok, otomatik güncellenecek.
 }
 
-// undefined yerine doğru başlangıç değerlerini veriyoruz.
 const AuthContext = createContext<AuthContextType>({ user: null, userProfile: null, isAdmin: false, loading: true });
 
-// Bu hook aynı kalıyor, sadece tipi düzelttik
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
@@ -50,16 +53,57 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const userDocRef = doc(db, 'users', currentUser.uid);
         
         const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
-            if(docSnap.exists()){
+            if (docSnap.exists()) {
+                // =====================================================================
+                // 1. MEVCUT KULLANICI GİRİŞ YAPTIĞINDA
+                // =====================================================================
                 const profileData = docSnap.data() as UserProfileData;
-                setUserProfile(profileData); // Firestore profilini AYRI BİR state'e ayarla
+                setUserProfile(profileData); 
+                
+                // KULLANICI GİRİŞ YAPTIĞI ANDA EKSİK BAŞARIMLARINI KONTROL ET!
+                checkAndGrantAchievements(profileData, { type: 'USER_LOGIN' });
+
             } else {
-                setUserProfile(null);
+                // =====================================================================
+                // 2. YENİ KULLANICI İLK DEFA GİRİŞ YAPIYORSA
+                // =====================================================================
+                
+                // Yeni kullanıcı için varsayılan bir profil nesnesi oluştur
+                const newUserProfile: UserProfileData = {
+                    uid: currentUser.uid,
+                    displayName: currentUser.displayName || `Gezgin#${Math.floor(Math.random() * 9000) + 1000}`,
+                    email: currentUser.email || '',
+                    role: 'user',
+                    score: 0,
+                    bio: 'Bu dijital evrendeki yolculuğuma yeni başladım!',
+                    avatarUrl: currentUser.photoURL || defaultAvatarUrl,
+                    achievements: [],
+                    joinDate: new Date(),
+                    messageCount: 0,
+                    playedGames: []
+                };
+
+                // Asenkron işlemleri yönetmek için IIFE (Immediately Invoked Function Expression) kullan
+                (async () => {
+                    try {
+                        // Yeni profili Firestore'a kaydet
+                        await setDoc(userDocRef, newUserProfile);
+                        
+                        // YENİ KULLANICI OLAYINI BAŞARIM SERVİSİNE BİLDİR!
+                        checkAndGrantAchievements(newUserProfile, { type: 'USER_CREATED' });
+
+                        // Uygulamanın anında tepki vermesi için state'i hemen güncelle
+                        setUserProfile(newUserProfile); 
+                        
+                    } catch (error) {
+                        console.error("Yeni kullanıcı profili oluşturulurken hata oluştu:", error);
+                    }
+                })();
             }
             setLoading(false);
         });
 
-        // Kullanıcı çıkış yaptığında Firestore dinleyicisini iptal et
+        // Component unmount olduğunda Firestore dinleyicisini iptal et
         return () => unsubscribeProfile();
         
       } else {
@@ -69,15 +113,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
     
+    // Component unmount olduğunda Auth dinleyicisini iptal et
     return () => unsubscribeAuth();
-  }, []);
+  }, []); // Bu useEffect sadece bir kez çalışır.
 
-  // isAdmin'i, AYRI olan userProfile state'inden türetiyoruz. EN KRİTİK DÜZELTME BURADA!
   const isAdmin = userProfile?.role === 'admin';
   const value = { user, userProfile, isAdmin, loading };
 
   return (
     <AuthContext.Provider value={value}>
+      {/* Yükleme bitene kadar alt component'leri render etme */}
       {!loading && children}
     </AuthContext.Provider>
   );
