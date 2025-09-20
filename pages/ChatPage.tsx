@@ -19,10 +19,11 @@ import {
     DocumentData, deleteDoc, Timestamp, setDoc
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X } from 'lucide-react';
+import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile } from 'lucide-react';
 import { grantAchievement } from '../src/utils/grantAchievement';
 import AdminTag from '../components/AdminTag';
 import { containsProfanity } from '../src/utils/profanityFilter';
+import { moderateMessage, clearUserHistory } from '../src/utils/advancedModeration';
 
 // --- ARAYÜZ TANIMLARI ---
 interface ReplyInfo {
@@ -70,7 +71,7 @@ const formatRemainingTime = (endDate: Date) => {
 //                                  ANA BİLEŞEN
 // ===================================================================================
 const ChatPage: React.FC = () => {
-    const { user, isAdmin, loading: authLoading } = useAuth();
+    const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
     const [allUsers, setAllUsers] = useState<Map<string, any>>(new Map());
     const [newMessage, setNewMessage] = useState('');
@@ -81,6 +82,7 @@ const ChatPage: React.FC = () => {
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const lastMessageSpamCheck = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
@@ -112,7 +114,14 @@ const ChatPage: React.FC = () => {
     const syncChat = useCallback(async () => {
         const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         const documentSnapshots = await getDocs(q);
-        const msgs: Message[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)).reverse();
+        const msgs: Message[] = documentSnapshots.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                displayName: data.displayName || 'Anonim'
+            } as Message;
+        }).reverse();
         
         setMessages(msgs);
 
@@ -159,7 +168,14 @@ const ChatPage: React.FC = () => {
         const nextQuery = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
         const documentSnapshots = await getDocs(nextQuery);
 
-        const newMsgs: Message[] = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+        const newMsgs: Message[] = documentSnapshots.docs.map(doc => {
+            const data = doc.data();
+            return { 
+                id: doc.id, 
+                ...data,
+                displayName: data.displayName || 'Anonim'
+            } as Message;
+        });
         const container = chatContainerRef.current;
         const previousScrollHeight = container?.scrollHeight || 0;
 
@@ -186,7 +202,7 @@ const ChatPage: React.FC = () => {
     const handlePinMessage = async (message: Message) => {
         if (!isAdmin || !user) return;
         const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
-        const pinData: PinnedMessage = { ...message, pinnedBy: user.displayName || 'Admin' };
+        const pinData: PinnedMessage = { ...message, pinnedBy: userProfile?.displayName || user.displayName || 'Admin' };
         try {
             await setDoc(pinnedMessageRef, pinData as any);
         } catch (error) {
@@ -204,10 +220,27 @@ const ChatPage: React.FC = () => {
         }
     };
     
+    // Admin komut sistemi kaldırıldı - artık admin panelinde
+
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         
         if (newMessage.trim() === '' || !user || isSending || newMessage.length > MAX_CHAR_LIMIT) return;
+
+        // Admin komut kontrolü kaldırıldı - artık admin panelinde
+
+        // Gelişmiş moderasyon kontrolü
+        const moderationResult = moderateMessage(newMessage, user.uid);
+        if (moderationResult.isBlocked) {
+            setChatError(moderationResult.reason || 'Mesajınız moderasyon tarafından engellendi.');
+            setTimeout(() => setChatError(null), 5000);
+            
+            // Eğer spam ise kullanıcı geçmişini temizle
+            if (moderationResult.action === 'block' && moderationResult.confidence > 80) {
+                clearUserHistory(user.uid);
+            }
+            return;
+        }
 
         try {
             const userRef = doc(db, 'users', user.uid);
@@ -238,7 +271,7 @@ const ChatPage: React.FC = () => {
         const newMessageData = {
             text: newMessage,
             uid: user.uid,
-            displayName: user.displayName,
+            displayName: userProfile?.displayName || user.displayName || 'Anonim',
             createdAt: serverTimestamp(),
             ...(replyingToMessage && {
                 replyingTo: {
@@ -292,6 +325,27 @@ const ChatPage: React.FC = () => {
         if (newMessage.length > MAX_CHAR_LIMIT * 0.9) return 'text-yellow-400';
         return 'text-cyber-gray';
     };
+
+    // Emoji picker fonksiyonları
+    const getAllEmojis = () => {
+        return [
+            { name: 'Piksel', emojis: ['🕹️','👾','💾','🧠'] },
+            { name: 'Oyun', emojis: ['🎮','🎯','🏆','⚡'] },
+            { name: 'Uzay', emojis: ['🚀','🛸','⭐','🌌'] },
+            { name: 'Siber', emojis: ['🤖','💻','🔮','⚡'] },
+            { name: 'Anime', emojis: ['😺','🌸','⚔️','💫'] },
+            { name: 'Klasik', emojis: ['😀','😂','😍','🤔','😎','😢','😡','🤗'] },
+            { name: 'Hayvanlar', emojis: ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'] },
+            { name: 'Yemek', emojis: ['🍕','🍔','🍟','🌭','🥪','🌮','🌯','🍰'] },
+            { name: 'Spor', emojis: ['⚽','🏀','🏈','⚾','🎾','🏐','🏉','🎱'] },
+            { name: 'Müzik', emojis: ['🎵','🎶','🎤','🎧','🎸','🎹','🥁','🎺'] }
+        ];
+    };
+
+    const insertEmoji = (emoji: string) => {
+        setNewMessage(prev => prev + emoji);
+        setShowEmojiPicker(false);
+    };
     
     if (authLoading) return <div className="flex justify-center items-center h-full py-20"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>;
     if (!user) return <div className="text-center py-20"><h1 className="text-4xl font-heading">Erişim Reddedildi</h1><p className="mt-4 text-cyber-gray">Sohbet frekansına bağlanmak için sisteme giriş yapmalısın.</p><Link to="/login" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">Giriş Yap</Link></div>;
@@ -324,10 +378,52 @@ const ChatPage: React.FC = () => {
                 {messages.map(msg => {
                     const senderIsAdmin = allUsers.get(msg.uid)?.role === 'admin';
                     const messageIsFromCurrentUser = user.uid === msg.uid;
+                    const isSystemMessage = msg.uid === 'system';
+                    const isAnnouncement = (msg as any).isAnnouncement;
+                    
+                    // Sistem mesajları için özel görünüm
+                    if (isSystemMessage) {
+                        return (
+                            <div key={msg.id} className="flex justify-center my-4">
+                                <div className={`p-4 rounded-lg max-w-2xl text-center ${
+                                    isAnnouncement 
+                                        ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-2 border-yellow-400 text-yellow-200' 
+                                        : 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-400 text-blue-200'
+                                }`}>
+                                    <div className="flex items-center justify-center gap-2 mb-2">
+                                        {isAnnouncement ? '📢' : '🤖'}
+                                        <span className="font-bold text-lg">{msg.displayName}</span>
+                                    </div>
+                                    <p className="text-sm">{msg.text}</p>
+                                </div>
+                            </div>
+                        );
+                    }
+                    
                     return (
                         <div key={msg.id} className={`flex items-start gap-3 group relative ${messageIsFromCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
                             {!messageIsFromCurrentUser && <Link to={`/profile/${msg.uid}`}><img src={allUsers.get(msg.uid)?.avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.uid}`} alt={msg.displayName} className="w-10 h-10 rounded-full bg-dark-gray object-cover flex-shrink-0"/></Link>}
-                            <div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400 bg-dark-gray' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`}>
+                            <motion.div 
+                                className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${
+                                    senderIsAdmin 
+                                        ? 'border-2 border-yellow-400 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 shadow-lg shadow-yellow-400/20 animate-admin-glow' 
+                                        : messageIsFromCurrentUser 
+                                            ? 'bg-electric-purple text-white' 
+                                            : 'bg-space-black'
+                                }`}
+                                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                transition={{ 
+                                    duration: 0.3,
+                                    type: "spring",
+                                    stiffness: 200,
+                                    damping: 20
+                                }}
+                                whileHover={senderIsAdmin ? { 
+                                    scale: 1.02,
+                                    boxShadow: "0 0 20px rgba(255, 215, 0, 0.3)"
+                                } : {}}
+                            >
                                 {!messageIsFromCurrentUser && (
                                     senderIsAdmin ? 
                                     <AdminTag name={msg.displayName} className="text-sm mb-1" /> :
@@ -342,7 +438,7 @@ const ChatPage: React.FC = () => {
                                 )}
 
                                 <p className="text-ghost-white">{msg.text}</p>
-                            </div>
+                            </motion.div>
                             <div className={`flex gap-2 items-center absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}>
                                 <button onClick={() => handleStartReply(msg)} title="Yanıtla" className="text-cyber-gray hover:text-white"><CornerDownLeft size={16}/></button>
                                 {isAdmin && <button onClick={() => handlePinMessage(msg)} title="Sabitle" className="text-yellow-400 hover:text-yellow-300"><Pin size={16} /></button>}
@@ -379,13 +475,59 @@ const ChatPage: React.FC = () => {
                     </motion.div>
                 )}
                 <form onSubmit={sendMessage} className="flex gap-4 items-start">
-                    <input 
-                        value={newMessage} 
-                        onChange={(e) => setNewMessage(e.target.value)} 
-                        placeholder="Bir mesaj gönder..." 
-                        maxLength={MAX_CHAR_LIMIT}
-                        className="flex-1 p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
-                    />
+                    <div className="flex-1 relative">
+                        <input 
+                            value={newMessage} 
+                            onChange={(e) => setNewMessage(e.target.value)} 
+                            placeholder="Bir mesaj gönder..." 
+                            maxLength={MAX_CHAR_LIMIT}
+                            className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
+                        />
+                        
+                        {/* Emoji Picker Modal */}
+                        {showEmojiPicker && (
+                            <div className="absolute bottom-full mb-2 left-0 right-0 bg-dark-gray border border-cyber-gray/50 rounded-lg p-4 shadow-lg z-10">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h3 className="text-sm font-semibold text-electric-purple">Emoji Setleri</h3>
+                                    <button 
+                                        onClick={() => setShowEmojiPicker(false)}
+                                        className="text-cyber-gray hover:text-white"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                
+                                <div className="space-y-3 max-h-60 overflow-y-auto">
+                                    {getAllEmojis().map((emojiSet, setIndex) => (
+                                        <div key={setIndex} className="border-b border-cyber-gray/30 pb-2 last:border-b-0">
+                                            <p className="text-xs text-cyber-gray mb-2">{emojiSet.name}</p>
+                                            <div className="flex gap-2 flex-wrap">
+                                                {emojiSet.emojis.map((emoji, index) => (
+                                                    <button
+                                                        key={index}
+                                                        onClick={() => insertEmoji(emoji)}
+                                                        className="text-2xl hover:scale-110 transition-transform p-1 rounded hover:bg-cyber-gray/20"
+                                                    >
+                                                        {emoji}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <button 
+                        type="button"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="p-3 bg-cyber-gray/50 text-white rounded-md hover:bg-cyber-gray/70 transition-all"
+                        title="Emoji Ekle"
+                    >
+                        <Smile size={20} />
+                    </button>
+                    
                     <button 
                         type="submit" 
                         disabled={!newMessage.trim() || isSending || newMessage.length > MAX_CHAR_LIMIT} 

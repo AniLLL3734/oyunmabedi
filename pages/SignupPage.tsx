@@ -1,9 +1,9 @@
-import React, { useState } from 'react'; // useState import edildi
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore'; // Değişiklik: serverTimestamp import edildi
 import { motion } from 'framer-motion';
 import { grantAchievement } from '../src/utils/grantAchievement';
 import { defaultAvatarUrl } from '../data/avatars';
@@ -14,37 +14,29 @@ const SignupPage: React.FC = () => {
     const navigate = useNavigate();
     const [firebaseError, setFirebaseError] = useState<string | null>(null);
 
-    // --- YENİ YARDIMCI FONKSİYON: Kullanıcı adını e-posta için temizler ---
     const sanitizeUsernameForEmail = (username: string): string => {
         return username
-            .toLowerCase() // Her şeyi küçük harfe çevir
-            .replace(/ı/g, 'i') // Türkçe karakterleri dönüştür
+            .toLowerCase()
+            .replace(/ı/g, 'i')
             .replace(/ğ/g, 'g')
             .replace(/ü/g, 'u')
             .replace(/ş/g, 's')
             .replace(/ö/g, 'o')
             .replace(/ç/g, 'c')
-            .replace(/\s+/g, '') // Boşlukları kaldır
-            .replace(/[^a-z0-9_]/g, ''); // Geriye sadece harf, rakam ve _ bırak
+            .replace(/\s+/g, '')
+            .replace(/[^a-z0-9_]/g, '');
     };
 
     const onSubmit = async (data: any) => {
-        // Kullanıcının girdiği orijinal ismi (displayName) alıyoruz
         const displayName = data.username.trim();
-        
-        // Bu orijinal ismi e-posta formatına uygun hale getiriyoruz
         const sanitizedUsername = sanitizeUsernameForEmail(displayName);
-        
-        // Temizlenmiş isimle sahte e-postayı oluşturuyoruz
         const email = `${sanitizedUsername}@ttmtal.com`;
         
-        // Temizlenmiş isim boş kalırsa (örn: "şşş" gibi bir isim girilirse) hata ver
         if (!sanitizedUsername) {
             setFirebaseError("Lütfen geçerli karakterler içeren bir kullanıcı adı girin.");
             return;
         }
 
-        // Admin ismi kontrolleri
         if (sanitizedUsername.includes('admin') && sanitizedUsername !== 'fatalrhymer37') {
              setFirebaseError('Bu kullanıcı adını seçemezsin.');
              return;
@@ -53,11 +45,9 @@ const SignupPage: React.FC = () => {
         try {
             setFirebaseError(null);
             
-            // Firebase Auth'u "temiz" e-posta ile oluştur
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const user = userCredential.user;
 
-            // Auth profiline ve Firestore'a kullanıcının girdiği "orijinal" ismi kaydet
             await updateProfile(user, { displayName: displayName });
 
             const role = displayName === 'FaTaLRhymeR37' ? 'admin' : 'user';
@@ -67,17 +57,20 @@ const SignupPage: React.FC = () => {
             
             await setDoc(doc(db, 'users', user.uid), {
                 uid: user.uid,
-                displayName: displayName, // Firestore'a güzel isim
-                email: email, // Firestore'a "temiz" e-posta
+                displayName: displayName,
+                email: email,
                 role: role,
                 score: isAdmin ? 99999 : 0,
-                messageCount: 0,
                 achievements: initialAchievements,
                 selectedTitle: null, 
                 avatarUrl: defaultAvatarUrl,
                 unreadChats: [],
-                lastLogin: null,
-                loginStreak: 0,
+
+                // --- YENİ EKLENEN ALANLAR ---
+                messageCount: 0,
+                joinDate: serverTimestamp(),
+                lastLogin: serverTimestamp(),
+                loginStreak: 1,
             });
 
             if (!isAdmin) {
@@ -103,7 +96,6 @@ const SignupPage: React.FC = () => {
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                     <div>
                         <label className="text-sm font-bold text-cyber-gray block mb-2">Görünür Adın</label>
-                        {/* Kural (pattern) kısmını kaldırdık, çünkü artık her şeyi kabul ediyoruz! */}
                         <input type="text" {...register('username', { 
                             required: 'Bir kullanıcı adı seçmelisin',
                             minLength: { value: 3, message: 'Kullanıcı adı en az 3 karakter olmalı' },

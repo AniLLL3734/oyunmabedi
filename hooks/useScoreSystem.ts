@@ -7,7 +7,7 @@ import { doc, setDoc, increment } from 'firebase/firestore';
 
 // Skor kazanma ayarları
 const SCORE_INTERVAL = 5 * 60 * 1000; // 5 Dakika (milisaniye cinsinden)
-const SCORE_AMOUNT = 100;
+const SCORE_AMOUNT = 125;
 
 export const useScoreSystem = () => {
   const { user } = useAuth();

@@ -335,7 +335,7 @@ SPACE: Hızlanmak için basılı tut.`,
   title: 'KLASİK YILAN OYUNU',
   description: 'Nostaljik atari klasiği artık tarayıcınızda. Yemleri toplayarak yılanı büyütün, duvarlara veya kendinize çarpmadan en yüksek puanı elde etmeye çalışın!',
   type: 'HTML5', // Assuming GameType.HTML5 corresponds to a 'HTML5' string
-  url: 'https://delightful-squirrel-433f90.netlify.app/',
+  url: 'https://dashing-jelly-76bdb9.netlify.app/',
   
   // GÜNCELLENDİ: Thumbnail URL'si isteğiniz üzerine bu formatta oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20225521.png', 
@@ -344,5 +344,62 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: 'HTML5, Arcade, Klasik, Yılan, Beceri, Sonsuz',
   controls: `Yön Tuşları: Yılanı hareket ettir.`,
 },
+{
+  id: 'geometry-dash',
+  title: 'GEOMETRY DASH',
+  description: 'Müzikle senkronize bir şekilde zıplayın, uçun ve engellerden kaçın! Bu hızlı tempolu ritim platform oyununda reflekslerinizi test edin ve imkansız seviyeleri geçmeye çalışın!',
+  type: 'HTML5',
+  url: 'https://serene-cascaron-d5f4f5.netlify.app/',
+  
+  // GÜNCELLENDİ: Thumbnail URL'si, verdiğin GitHub linkindeki dosya adıyla ve senin yönteminle oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-20%20190746.png', 
+  
+  category: 'Beceri',
+  tags: 'HTML5, Platform, Müzik, Ritim, Beceri, Zor, Tek Tuş',
+  controls: `Boşluk Tuşu / Sol Tık: Zıpla / Uç.`,
+},
+{
+  id: 'subway-surfers',
+  title: 'SUBWAY SURFERS',
+  description: 'Huysuz bekçi ve köpeğinden kaç! Trenlerin üzerinden zıpla, engellerden sıyrıl ve metroyu boydan boya geç. Bu efsanevi sonsuz koşu oyununda jetpack\'ler ve kaykaylarla en yüksek skora ulaş!',
+  type: 'HTML5',
+  url: 'https://bright-boba-e08359.netlify.app/',
+  
+  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir111.jpg', 
+  
+  category: 'Beceri',
+  tags: 'HTML5, Sonsuz Koşu, Beceri, Arcade, Refleks, 3D',
+  controls: 'Yön Tuşları / Mouse Sürükleme: Sağa-sola hareket et, zıpla, yuvarlan.',
+},
+{
+  id: 'slope-2',
+  title: 'SLOPE 2',
+  description: 'Neon dünyasında hızla aşağı yuvarlanan bir topu kontrol et! Dar yollarda kalmaya çalış, kırmızı engellerden kaçın ve ne kadar uzağa gidebileceğini gör. Bu 3D sonsuz koşu oyununda reflekslerin sınırlarını zorla!',
+  type: 'HTML5',
+  url: 'https://spiffy-kleicha-44b0d5.netlify.app/',
+  
+  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(4).jpg', 
+  
+  category: 'Beceri',
+  tags: 'HTML5, Sonsuz Koşu, 3D, Beceri, Refleks, Hız, Top Oyunu',
+  controls: 'Sol/Sağ Yön Tuşları: Topu yönlendir.',
+},
+{
+  id: 'car-simulator',
+  title: 'CAR SIMULATOR',
+  description: 'Gerçekçi bir sürüş deneyimine hazır ol! Bu 3D araba simülatöründe şehrin sokaklarında serbestçe dolaş, görevleri tamamla veya sadece hızın tadını çıkar. Farklı araçları test et ve sürüş yeteneklerini göster!',
+  type: 'HTML5',
+  url: 'https://courageous-syrniki-7ec2cc.netlify.app/',
+  
+  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/https://github.com/AniLLL3734/GAMEARCHIVE/blob/main/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-21%20011748.png', 
+  
+  category: 'Simülasyon',
+  tags: 'HTML5, Simülasyon, Araba, Sürüş, 3D, Yarış',
+  controls: `W,A,S,D / Yön Tuşları: Arabayı sür.\nBoşluk Tuşu: El freni.\nC Tuşu: Kamera açısını değiştir.`,
+},
+
 
 ];

@@ -15,3 +15,4 @@ export interface Game {
   tags: string[];
   controls: string;
 }
+

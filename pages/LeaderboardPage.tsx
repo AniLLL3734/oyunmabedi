@@ -59,7 +59,7 @@ const LeaderboardPage: React.FC = () => {
                     if (data.score !== undefined && data.score >= 0) {
                          board.push({
                             uid: doc.id,
-                            displayName: data.displayName,
+                            displayName: data.displayName || 'Anonim',
                             score: data.score,
                             avatarUrl: data.avatarUrl,
                             role: data.role

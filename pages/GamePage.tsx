@@ -1,26 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, Link } from 'react-router-dom';
-// import { motion } from 'framer-motion'; // PERFORMANS İÇİN KALDIRILDI
 import { games } from '../data/games';
-import { Game, GameType } from '../types';
+import { GameType } from '../types';
 import { ArrowLeft, Gamepad2, Fullscreen, Info, Play, LoaderCircle } from 'lucide-react';
 import { db } from '../src/firebase';
 import { doc, setDoc, increment } from 'firebase/firestore';
+import GameSplashScreen from '../components/GameSplashScreen';
 
-// ================================================================================================
-// LAZY LOADING
-// ================================================================================================
 const RufflePlayer = lazy(() => import('../components/RufflePlayer'));
 const CommentSection = lazy(() => import('../components/CommentSection'));
 
-// ================================================================================================
-// SABİTLER
-// ================================================================================================
-const RETRY_ATTEMPTS = 3;
-const RETRY_DELAY = 2000;
-const CONNECTION_TIMEOUT = 15000;
-
-// Yükleyici bileşeni
 const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
     <div className="flex flex-col items-center justify-center text-center p-8 text-cyber-gray h-full">
         <LoaderCircle size={32} className="animate-spin text-electric-purple" />
@@ -28,152 +17,66 @@ const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
     </div>
 );
 
-// ================================================================================================
-// ANA BİLEŞEN: GamePage
-// ================================================================================================
 const GamePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const game = useMemo(() => games.find((g) => g.id === id), [id]);
 
     const gameContainerRef = useRef<HTMLDivElement>(null);
     const playCountTracked = useRef(false);
-    const abortControllerRef = useRef<AbortController | null>(null);
-    const retryCountRef = useRef(0);
-    const preloadStarted = useRef(false);
 
-    // State Management
     const [gameStarted, setGameStarted] = useState(false);
-    const [isPreloading, setIsPreloading] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
-    const [loadedKB, setLoadedKB] = useState(0);
-    const [isTotalSizeKnown, setIsTotalSizeKnown] = useState(true);
-    const [blobUrl, setBlobUrl] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-
-    // Preload Fonksiyonu
-    const preloadGame = useCallback(async () => {
-        if (!game || game.type !== GameType.SWF || preloadStarted.current || blobUrl) return;
-        
-        preloadStarted.current = true;
-        setIsPreloading(true);
-        setLoadingProgress(0);
-        setLoadedKB(0);
-        setError(null);
-        retryCountRef.current = 0;
-
-        const tryPreload = async () => {
-            abortControllerRef.current = new AbortController();
-            const signal = abortControllerRef.current.signal;
-            try {
-                const response = await fetch(game.url, { signal });
-                if (!response.ok) throw new Error(`Sunucu Hatası: ${response.status}`);
-                
-                const contentLength = Number(response.headers.get('content-length'));
-                setIsTotalSizeKnown(!!contentLength && contentLength > 0);
-
-                const reader = response.body?.getReader();
-                if (!reader) throw new Error("Dosya akışı okunamıyor.");
-                
-                const chunks: Uint8Array[] = [];
-                let loaded = 0;
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    chunks.push(value);
-                    loaded += value.length;
-                    
-                    if (contentLength > 0) {
-                        setLoadingProgress(Math.round((loaded / contentLength) * 100));
-                    } else {
-                        setLoadedKB(Math.round(loaded / 1024));
-                    }
-                }
-                
-                const blob = new Blob(chunks, { type: 'application/x-shockwave-flash' });
-                setBlobUrl(URL.createObjectURL(blob));
-                setIsPreloading(false);
-            } catch (err: any) {
-                if (err.name !== 'AbortError') {
-                    if (retryCountRef.current < RETRY_ATTEMPTS) {
-                        retryCountRef.current++;
-                        setTimeout(tryPreload, RETRY_DELAY * retryCountRef.current);
-                    } else {
-                        setError("Oyun yüklenemedi. Sayfayı yenileyin.");
-                        setIsPreloading(false);
-                        preloadStarted.current = false;
-                    }
-                } else {
-                     setIsPreloading(false);
-                     preloadStarted.current = false;
-                }
-            }
-        };
-
-        tryPreload();
-    }, [game, blobUrl]);
-
-    // Cleanup Effect
-    useEffect(() => {
-        let currentBlobUrl = blobUrl;
-        return () => { 
-            abortControllerRef.current?.abort();
-            if (currentBlobUrl) URL.revokeObjectURL(currentBlobUrl);
-        };
-    }, [blobUrl]);
+    const [showSplashScreen, setShowSplashScreen] = useState(false);
     
-    // Oyun Başlatma
-    const handleStartGame = useCallback(() => {
-        if (isPreloading || error) return;
-
-        if (blobUrl) {
-            setGameStarted(true);
-            if (!playCountTracked.current && id) {
-                playCountTracked.current = true;
-                requestIdleCallback(() => {
-                    setDoc(doc(db, 'games', id), { playCount: increment(1) }, { merge: true }).catch(console.error);
+    // ========================================================================
+    // YENİ EKLENEN KOD: HTML5 OYUNLARI İÇİN SAHTE YÜKLEME SİMÜLASYONU
+    // ========================================================================
+    useEffect(() => {
+        // Bu etki sadece splash screen görünür olduğunda VE oyun tipi HTML5 olduğunda çalışsın.
+        if (showSplashScreen && game?.type === GameType.HTML5) {
+            
+            // `loadingProgress` state'ini yavaş yavaş 100'e çıkaran bir zamanlayıcı başlat.
+            const progressInterval = setInterval(() => {
+                setLoadingProgress(prev => {
+                    if (prev >= 100) {
+                        clearInterval(progressInterval); // %100'e ulaştığında zamanlayıcıyı temizle.
+                        return 100;
+                    }
+                    // Her 100 milisaniyede %5 artır (Toplam 2 saniye sürer).
+                    return prev + 5;
                 });
-            }
-        } else if (game?.type === GameType.SWF) {
-            preloadGame();
-        } else {
-            setGameStarted(true);
-        }
-    }, [isPreloading, error, id, blobUrl, preloadGame, game]);
+            }, 100);
 
-    // Tam Ekran
+            // Component DOM'dan kaldırılırsa zamanlayıcıyı temizle (bellek sızıntısını önler).
+            return () => clearInterval(progressInterval);
+        }
+    }, [showSplashScreen, game]); // Sadece bu değerler değiştiğinde çalışır.
+    // ========================================================================
+
+
+    const handleSplashScreenComplete = useCallback(() => {
+        setShowSplashScreen(false);
+        setGameStarted(true);
+        if (!playCountTracked.current && id) {
+            playCountTracked.current = true;
+            requestIdleCallback(() => {
+                setDoc(doc(db, 'games', id), { playCount: increment(1) }, { merge: true }).catch(console.error);
+            });
+        }
+    }, [id]);
+
+    const handleStartGame = useCallback(() => {
+        if (showSplashScreen || gameStarted) return;
+        setLoadingProgress(0); // Progress'i her seferinde sıfırla.
+        setShowSplashScreen(true);
+    }, [showSplashScreen, gameStarted]);
+
     const handleFullScreen = useCallback(() => {
         if (gameContainerRef.current?.requestFullscreen) {
             gameContainerRef.current.requestFullscreen().catch(console.error);
         }
     }, []);
 
-    // Memoized Buton İçeriği
-    const buttonContent = useMemo(() => {
-        if (error) return <span className='text-red-400 font-semibold px-4 text-center'>{error}</span>;
-        if (isPreloading) {
-            const progressText = isTotalSizeKnown
-                ? `${loadingProgress}%`
-                : (loadedKB > 0 ? `${loadedKB} KB` : 'Yükleniyor...');
-            return (
-                <>
-                    <LoaderCircle size={48} className="text-white animate-spin" />
-                    <span className="text-white text-xl font-bold font-heading tracking-widest">{progressText}</span>
-                </>
-            );
-        }
-        return (
-            <>
-                <div className="p-4 bg-black/50 rounded-full group-hover:scale-110 group-hover:bg-electric-purple transition-transform">
-                    <Play size={64} className="text-white ml-2" />
-                </div>
-                <span className="text-white text-2xl font-bold font-heading tracking-widest">OYNA</span>
-            </>
-        );
-    }, [error, isPreloading, loadingProgress, loadedKB, isTotalSizeKnown]);
-    
-    // 404 Sayfası
     if (!game) {
         return (
             <div className="text-center py-20">
@@ -187,11 +90,21 @@ const GamePage: React.FC = () => {
     }
     
     return (
-        <div className="max-w-7xl mx-auto px-4">
-            <Link to="/" className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple my-6 transition-colors">
-                <ArrowLeft size={20} />
-                <span>Diğer Simülasyonlara Dön</span>
-            </Link>
+        <>
+            <GameSplashScreen
+                gameTitle={game.title}
+                gameThumbnail={game.thumbnail}
+                gameType={game.type} 
+                loadingProgress={loadingProgress}
+                isVisible={showSplashScreen}
+                onComplete={handleSplashScreenComplete}
+            />
+
+            <div className="max-w-7xl mx-auto px-4">
+                <Link to="/" className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple my-6 transition-colors">
+                    <ArrowLeft size={20} />
+                    <span>Diğer Simülasyonlara Dön</span>
+                </Link>
 
             <div className="bg-dark-gray p-4 md:p-8 rounded-lg border border-cyber-gray/50">
                 <div className="flex justify-between items-start mb-4">
@@ -205,25 +118,26 @@ const GamePage: React.FC = () => {
                 <div ref={gameContainerRef} className="w-full aspect-video bg-space-black rounded-md overflow-hidden border border-cyber-gray/50 mb-6 relative">
                     {!gameStarted ? (
                         <div 
-                            className={`w-full h-full flex items-center justify-center group ${!isPreloading && !error ? 'cursor-pointer' : 'cursor-default'}`} 
+                            className="w-full h-full flex items-center justify-center group cursor-pointer"
                             onClick={handleStartGame}
-                            onMouseEnter={preloadGame}
                         >
                             <img 
                                 src={game.thumbnail} 
                                 alt={`${game.title} kapak resmi`} 
                                 className="w-full h-full object-cover brightness-50 group-hover:brightness-75 transition-all"
                                 loading="lazy"
-                                decoding="async"
                             />
                             <div className="absolute flex flex-col items-center justify-center gap-4 text-center p-4">
-                                {buttonContent}
+                               <div className="p-4 bg-black/50 rounded-full group-hover:scale-110 group-hover:bg-electric-purple transition-transform">
+                                   <Play size={64} className="text-white ml-2" />
+                               </div>
+                               <span className="text-white text-2xl font-bold font-heading tracking-widest">OYNA</span>
                             </div>
                         </div>
                     ) : (
                         <Suspense fallback={<GenericLoader message="Oyun motoru başlatılıyor..." />}>
                             {game.type === GameType.SWF ? (
-                                <RufflePlayer swfUrl={blobUrl!} />
+                                <RufflePlayer swfUrl={game.url} />
                             ) : (
                                 <iframe
                                     src={game.url}
@@ -253,7 +167,8 @@ const GamePage: React.FC = () => {
                     <CommentSection gameId={game.id} />
                 </Suspense>
             </div>
-        </div>
+            </div>
+        </>
     );
 };
 

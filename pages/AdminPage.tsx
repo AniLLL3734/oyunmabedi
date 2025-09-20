@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff } from 'lucide-react';
+import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, where, addDoc, setDoc } from 'firebase/firestore';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 // Tipler
@@ -29,6 +29,15 @@ interface FeedbackData {
     message: string;
     isRead: boolean;
     createdAt: any;
+}
+
+interface SystemStats {
+    activeUsers: number;
+    totalMessages: number;
+    messagesLastHour: number;
+    totalGamesPlayed: number;
+    gamesLastHour: number;
+    systemUptime: string;
 }
 
 // Susturma Modal Bileşeni'nin tam hali
@@ -59,15 +68,75 @@ const MuteModal: React.FC<{
 
 // Ana Admin Paneli Bileşeni'nin tam hali
 const AdminPage: React.FC = () => {
-    const { user, isAdmin, loading: authLoading } = useAuth();
+    const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'users' | 'games' | 'feedback'>('users');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'commands'>('dashboard');
     const [users, setUsers] = useState<UserData[]>([]);
     const [games, setGames] = useState<GameData[]>([]);
     const [feedback, setFeedback] = useState<FeedbackData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isMuteModalOpen, setIsMuteModalOpen] = useState(false);
     const [selectedUserForMute, setSelectedUserForMute] = useState<UserData | null>(null);
+    const [systemStats, setSystemStats] = useState<SystemStats>({
+        activeUsers: 0,
+        totalMessages: 0,
+        messagesLastHour: 0,
+        totalGamesPlayed: 0,
+        gamesLastHour: 0,
+        systemUptime: '0d 0h 0m'
+    });
+    
+    // Admin komutları için state'ler
+    const [announcementText, setAnnouncementText] = useState('');
+    const [pinText, setPinText] = useState('');
+    const [muteUsername, setMuteUsername] = useState('');
+    const [muteDuration, setMuteDuration] = useState('1h');
+    const [kickUsername, setKickUsername] = useState('');
+
+    // Gerçek zamanlı istatistikleri dinle
+    useEffect(() => {
+        if (!isAdmin) return;
+
+        const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+            setSystemStats(prev => ({
+                ...prev,
+                activeUsers: snapshot.size
+            }));
+        });
+
+        const unsubscribeMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
+            const now = new Date();
+            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+            
+            const messagesLastHour = snapshot.docs.filter(doc => {
+                const messageTime = doc.data().createdAt?.toDate();
+                return messageTime && messageTime > oneHourAgo;
+            }).length;
+
+            setSystemStats(prev => ({
+                ...prev,
+                totalMessages: snapshot.size,
+                messagesLastHour
+            }));
+        });
+
+        const unsubscribeGames = onSnapshot(collection(db, 'games'), (snapshot) => {
+            const totalGamesPlayed = snapshot.docs.reduce((sum, doc) => {
+                return sum + (doc.data().playCount || 0);
+            }, 0);
+
+            setSystemStats(prev => ({
+                ...prev,
+                totalGamesPlayed
+            }));
+        });
+
+        return () => {
+            unsubscribeUsers();
+            unsubscribeMessages();
+            unsubscribeGames();
+        };
+    }, [isAdmin]);
 
     useEffect(() => {
         if (!isAdmin) { setIsLoading(false); return; }
@@ -77,7 +146,13 @@ const AdminPage: React.FC = () => {
                 if (view === 'users') {
                     const q = query(collection(db, 'users'), orderBy('displayName'));
                     const querySnapshot = await getDocs(q);
-                    setUsers(querySnapshot.docs.map(doc => doc.data() as UserData));
+                    setUsers(querySnapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            ...data,
+                            displayName: data.displayName || 'Anonim'
+                        } as UserData;
+                    }));
                 } else if (view === 'games') {
                     const q = query(collection(db, 'games'), orderBy('playCount', 'desc'));
                     const querySnapshot = await getDocs(q);
@@ -85,7 +160,14 @@ const AdminPage: React.FC = () => {
                 } else if (view === 'feedback') {
                     const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
                     const querySnapshot = await getDocs(q);
-                    setFeedback(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackData)));
+                    setFeedback(querySnapshot.docs.map(doc => {
+                        const data = doc.data();
+                        return {
+                            id: doc.id,
+                            ...data,
+                            displayName: data.displayName || 'Anonim'
+                        } as FeedbackData;
+                    }));
                 }
             } catch (error) { console.error("Admin paneli verisi çekilirken hata:", error); } 
             finally { setIsLoading(false); }
@@ -170,6 +252,168 @@ const AdminPage: React.FC = () => {
             }
         }
     };
+
+    // Admin komutları
+    const sendAnnouncement = async () => {
+        if (!announcementText.trim()) {
+            alert('Duyuru metni boş olamaz!');
+            return;
+        }
+        
+        try {
+            await addDoc(collection(db, 'messages'), {
+                text: `📢 **DUYURU:** ${announcementText}`,
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isAnnouncement: true
+            });
+            setAnnouncementText('');
+            alert('Duyuru gönderildi!');
+        } catch (error) {
+            console.error('Duyuru gönderilirken hata:', error);
+            alert('Duyuru gönderilirken hata oluştu.');
+        }
+    };
+
+    const pinMessage = async () => {
+        if (!pinText.trim()) {
+            alert('Sabitlenecek mesaj boş olamaz!');
+            return;
+        }
+        
+        try {
+            await setDoc(doc(db, 'chat_meta', 'pinned_message'), {
+                text: pinText,
+                pinnedBy: userProfile?.displayName || user?.displayName || 'Admin',
+                pinnedAt: new Date()
+            });
+            
+            await addDoc(collection(db, 'messages'), {
+                text: `📌 **Mesaj sabitlendi:** ${pinText}`,
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+            setPinText('');
+            alert('Mesaj sabitlendi!');
+        } catch (error) {
+            console.error('Mesaj sabitlenirken hata:', error);
+            alert('Mesaj sabitlenirken hata oluştu.');
+        }
+    };
+
+    const muteUser = async () => {
+        if (!muteUsername.trim()) {
+            alert('Kullanıcı adı boş olamaz!');
+            return;
+        }
+        
+        try {
+            const durationMs = parseDuration(muteDuration);
+            if (durationMs === 0) {
+                alert('Geçersiz süre formatı!');
+                return;
+            }
+            
+            await addDoc(collection(db, 'messages'), {
+                text: `🔇 **${muteUsername}** susturuldu. Süre: ${formatDuration(durationMs)} (Sadece bildirim)`,
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+            setMuteUsername('');
+            alert('Susturma bildirimi gönderildi!');
+        } catch (error) {
+            console.error('Susturma bildirimi gönderilirken hata:', error);
+            alert('Susturma bildirimi gönderilirken hata oluştu.');
+        }
+    };
+
+    const kickUser = async () => {
+        if (!kickUsername.trim()) {
+            alert('Kullanıcı adı boş olamaz!');
+            return;
+        }
+        
+        try {
+            await addDoc(collection(db, 'messages'), {
+                text: `👢 **${kickUsername}** sohbetten atıldı. (Sadece bildirim)`,
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+            setKickUsername('');
+            alert('Atma bildirimi gönderildi!');
+        } catch (error) {
+            console.error('Atma bildirimi gönderilirken hata:', error);
+            alert('Atma bildirimi gönderilirken hata oluştu.');
+        }
+    };
+
+    const clearChat = async () => {
+        if (!window.confirm('Sohbeti temizlemek istediğinizden emin misiniz?')) return;
+        
+        try {
+            await addDoc(collection(db, 'messages'), {
+                text: '🧹 **Sohbet temizlendi.** (Sadece bildirim - Mesajlar silinmedi)',
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+            alert('Temizleme bildirimi gönderildi!');
+        } catch (error) {
+            console.error('Temizleme bildirimi gönderilirken hata:', error);
+            alert('Temizleme bildirimi gönderilirken hata oluştu.');
+        }
+    };
+
+    const removeAnnouncement = async () => {
+        if (!window.confirm('Duyuruyu kaldırmak istediğinizden emin misiniz?')) return;
+        
+        try {
+            await addDoc(collection(db, 'messages'), {
+                text: '📢 **Duyuru kaldırıldı.**',
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+            alert('Duyuru kaldırma bildirimi gönderildi!');
+        } catch (error) {
+            console.error('Duyuru kaldırma bildirimi gönderilirken hata:', error);
+            alert('Duyuru kaldırma bildirimi gönderilirken hata oluştu.');
+        }
+    };
+
+    const parseDuration = (duration: string): number => {
+        const match = duration.match(/^(\d+)([mhd])$/);
+        if (!match) return 0;
+        
+        const value = parseInt(match[1]);
+        const unit = match[2];
+        
+        switch (unit) {
+            case 'm': return value * 60 * 1000; // dakika
+            case 'h': return value * 60 * 60 * 1000; // saat
+            case 'd': return value * 24 * 60 * 60 * 1000; // gün
+            default: return 0;
+        }
+    };
+
+    const formatDuration = (ms: number): string => {
+        const minutes = Math.floor(ms / (60 * 1000));
+        const hours = Math.floor(ms / (60 * 60 * 1000));
+        const days = Math.floor(ms / (24 * 60 * 60 * 1000));
+        
+        if (days > 0) return `${days} gün`;
+        if (hours > 0) return `${hours} saat`;
+        return `${minutes} dakika`;
+    };
     
     if (authLoading || isLoading) { return <div className="flex justify-center items-center h-full py-20"><LoaderCircle className="animate-spin text-electric-purple" size={48} /><p className="ml-4 text-cyber-gray">Yükleniyor...</p></div>; }
     if (!isAdmin) { return <div className="text-center text-red-500 py-20"><h1>ERİŞİM REDDEDİLDİ.</h1></div>; }
@@ -181,10 +425,152 @@ const AdminPage: React.FC = () => {
             {isMuteModalOpen && selectedUserForMute && (<MuteModal user={selectedUserForMute} onClose={closeMuteModal} onMute={handleMuteUser} />)}
             <h1 className="text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             <div className="flex flex-wrap gap-4 mb-8 border-b border-cyber-gray/50">
+                <button onClick={() => setView('dashboard')} className={`py-3 px-5 text-lg font-bold ${view === 'dashboard' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Activity className="inline-block mr-2" /> Dashboard</button>
                 <button onClick={() => setView('users')} className={`py-3 px-5 text-lg font-bold ${view === 'users' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Users className="inline-block mr-2" /> Kullanıcılar</button>
                 <button onClick={() => setView('games')} className={`py-3 px-5 text-lg font-bold ${view === 'games' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Gamepad2 className="inline-block mr-2" /> Oyunlar</button>
                 <button onClick={() => setView('feedback')} className={`py-3 px-5 text-lg font-bold relative ${view === 'feedback' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Geri Bildirimler{unreadFeedbackCount > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}</button>
+                <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Megaphone className="inline-block mr-2" /> Sohbet Komutları</button>
             </div>
+
+            {view === 'dashboard' && (
+                <div className="space-y-6">
+                    {/* Gerçek Zamanlı İstatistikler */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-gradient-to-br from-electric-purple/20 to-cyber-blue/20 p-6 rounded-lg border border-electric-purple/30"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-cyber-gray text-sm">Aktif Kullanıcılar</p>
+                                    <p className="text-3xl font-bold text-electric-purple">{systemStats.activeUsers}</p>
+                                </div>
+                                <Users className="text-electric-purple" size={32} />
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-6 rounded-lg border border-green-500/30"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-cyber-gray text-sm">Toplam Mesaj</p>
+                                    <p className="text-3xl font-bold text-green-400">{systemStats.totalMessages.toLocaleString()}</p>
+                                </div>
+                                <MessageSquare className="text-green-400" size={32} />
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-6 rounded-lg border border-yellow-500/30"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-cyber-gray text-sm">Son Saat Mesaj</p>
+                                    <p className="text-3xl font-bold text-yellow-400">{systemStats.messagesLastHour}</p>
+                                </div>
+                                <TrendingUp className="text-yellow-400" size={32} />
+                            </div>
+                        </motion.div>
+
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="bg-gradient-to-br from-red-500/20 to-pink-500/20 p-6 rounded-lg border border-red-500/30"
+                        >
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-cyber-gray text-sm">Oyun Oynanma</p>
+                                    <p className="text-3xl font-bold text-red-400">{systemStats.totalGamesPlayed.toLocaleString()}</p>
+                                </div>
+                                <Gamepad2 className="text-red-400" size={32} />
+                            </div>
+                        </motion.div>
+                    </div>
+
+                    {/* Sistem Durumu */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.4 }}
+                        className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"
+                    >
+                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
+                            <Zap className="text-electric-purple" />
+                            Sistem Durumu
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-ghost-white">Veritabanı: Aktif</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-ghost-white">Sohbet: Aktif</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                                <span className="text-ghost-white">Oyunlar: Aktif</span>
+                            </div>
+                        </div>
+                    </motion.div>
+
+                    {/* Hızlı İşlemler */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.5 }}
+                        className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"
+                    >
+                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
+                            <Clock className="text-electric-purple" />
+                            Hızlı İşlemler
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <button 
+                                onClick={() => setView('users')}
+                                className="p-4 bg-electric-purple/20 hover:bg-electric-purple/30 rounded-lg border border-electric-purple/30 transition-colors text-left"
+                            >
+                                <Users className="text-electric-purple mb-2" size={24} />
+                                <p className="font-bold">Kullanıcıları Yönet</p>
+                                <p className="text-sm text-cyber-gray">Sustur, sil, mesaj at</p>
+                            </button>
+                            <button 
+                                onClick={() => setView('feedback')}
+                                className="p-4 bg-yellow-500/20 hover:bg-yellow-500/30 rounded-lg border border-yellow-500/30 transition-colors text-left"
+                            >
+                                <MessageSquare className="text-yellow-400 mb-2" size={24} />
+                                <p className="font-bold">Geri Bildirimler</p>
+                                <p className="text-sm text-cyber-gray">{unreadFeedbackCount} okunmamış</p>
+                            </button>
+                            <button 
+                                onClick={() => setView('games')}
+                                className="p-4 bg-red-500/20 hover:bg-red-500/30 rounded-lg border border-red-500/30 transition-colors text-left"
+                            >
+                                <Gamepad2 className="text-red-400 mb-2" size={24} />
+                                <p className="font-bold">Oyun İstatistikleri</p>
+                                <p className="text-sm text-cyber-gray">En popüler oyunlar</p>
+                            </button>
+                            <button 
+                                onClick={() => navigate('/chat')}
+                                className="p-4 bg-green-500/20 hover:bg-green-500/30 rounded-lg border border-green-500/30 transition-colors text-left"
+                            >
+                                <MessageSquare className="text-green-400 mb-2" size={24} />
+                                <p className="font-bold">Sohbete Git</p>
+                                <p className="text-sm text-cyber-gray">Admin komutları kullan</p>
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
 
             {view === 'users' && (
                 <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
@@ -232,6 +618,141 @@ const AdminPage: React.FC = () => {
                         </div>
                     </div>
                 ))}
+                </div>
+            )}
+
+            {view === 'commands' && (
+                <div className="space-y-6">
+                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2">
+                        <Megaphone className="text-electric-purple" />
+                        Sohbet Komutları
+                    </h2>
+                    
+                    {/* Duyuru Gönderme */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <Megaphone className="text-yellow-400" />
+                            Duyuru Yönetimi
+                        </h3>
+                        <div className="space-y-4">
+                            <textarea
+                                value={announcementText}
+                                onChange={(e) => setAnnouncementText(e.target.value)}
+                                placeholder="Duyuru metnini buraya yazın..."
+                                className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray resize-none"
+                                rows={3}
+                            />
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={sendAnnouncement}
+                                    className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors"
+                                >
+                                    Duyuru Gönder
+                                </button>
+                                <button
+                                    onClick={removeAnnouncement}
+                                    className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors"
+                                >
+                                    Duyuruyu Kaldır
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Mesaj Sabitleme */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <Pin className="text-blue-400" />
+                            Mesaj Sabitle
+                        </h3>
+                        <div className="space-y-4">
+                            <textarea
+                                value={pinText}
+                                onChange={(e) => setPinText(e.target.value)}
+                                placeholder="Sabitlenecek mesajı buraya yazın..."
+                                className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray resize-none"
+                                rows={3}
+                            />
+                            <button
+                                onClick={pinMessage}
+                                className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors"
+                            >
+                                Mesajı Sabitle
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Kullanıcı Susturma */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <MicOff className="text-red-400" />
+                            Kullanıcı Sustur
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <input
+                                type="text"
+                                value={muteUsername}
+                                onChange={(e) => setMuteUsername(e.target.value)}
+                                placeholder="Kullanıcı adı"
+                                className="p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                            />
+                            <select
+                                value={muteDuration}
+                                onChange={(e) => setMuteDuration(e.target.value)}
+                                className="p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
+                            >
+                                <option value="5m">5 Dakika</option>
+                                <option value="1h">1 Saat</option>
+                                <option value="6h">6 Saat</option>
+                                <option value="1d">1 Gün</option>
+                                <option value="7d">7 Gün</option>
+                            </select>
+                            <button
+                                onClick={muteUser}
+                                className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors"
+                            >
+                                Sustur
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Kullanıcı Atma */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <UserX className="text-orange-400" />
+                            Kullanıcı At
+                        </h3>
+                        <div className="flex gap-4">
+                            <input
+                                type="text"
+                                value={kickUsername}
+                                onChange={(e) => setKickUsername(e.target.value)}
+                                placeholder="Kullanıcı adı"
+                                className="flex-1 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                            />
+                            <button
+                                onClick={kickUser}
+                                className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition-colors"
+                            >
+                                At
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Sohbet Temizleme */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <Trash className="text-purple-400" />
+                            Sohbet Temizle
+                        </h3>
+                        <p className="text-cyber-gray mb-4">Sohbete temizleme bildirimi gönderir (mesajlar silinmez).</p>
+                        <button
+                            onClick={clearChat}
+                            className="px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg transition-colors"
+                        >
+                            Temizleme Bildirimi Gönder
+                        </button>
+                    </div>
                 </div>
             )}
         </motion.div>

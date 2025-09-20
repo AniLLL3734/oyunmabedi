@@ -1,17 +1,16 @@
-import React, { useState } from 'react'; // useState import edildi
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../src/firebase';
+import { auth, db } from '../src/firebase'; // Değişiklik: db import edildi
 import { motion } from 'framer-motion';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Değişiklik: firestore importları eklendi
 
 const LoginPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
   const navigate = useNavigate();
   const [firebaseError, setFirebaseError] = useState<string | null>(null);
 
-  // --- SIGNUP SAYFASINDAN KOPYALANAN AYNI TEMİZLEME FONKSİYONU ---
-  // Bu, her iki sayfanın da aynı dili konuşmasını sağlar.
   const sanitizeUsernameForEmail = (username: string): string => {
       return username
           .toLowerCase()
@@ -27,21 +26,49 @@ const LoginPage: React.FC = () => {
 
   const onSubmit = async (data: any) => {
     const username = data.username.trim();
-    // E-postayı oluştururken, kullanıcının girdiği ismi temizleme fonksiyonundan geçiriyoruz
     const email = `${sanitizeUsernameForEmail(username)}@ttmtal.com`; 
 
     try {
       setFirebaseError(null);
-      // Firebase'e, artık her zaman doğru formatta olan bu e-posta ile giriş yap
-      await signInWithEmailAndPassword(auth, email, data.password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, data.password);
+      const user = userCredential.user;
       
-      console.log('Giriş başarılı!');
+      // --- YENİ EKLENEN GİRİŞ SERİSİ MANTIĞI ---
+      const userRef = doc(db, 'users', user.uid);
+      const userSnap = await getDoc(userRef);
+
+      if (userSnap.exists()) {
+        const userData = userSnap.data();
+        const lastLogin = userData.lastLogin?.toDate();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); 
+        
+        let newStreak = userData.loginStreak || 1;
+
+        if (lastLogin) {
+          const lastLoginDay = new Date(lastLogin);
+          lastLoginDay.setHours(0, 0, 0, 0);
+
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          
+          if (lastLoginDay.getTime() === yesterday.getTime()) {
+            newStreak++;
+          } else if (lastLoginDay.getTime() < yesterday.getTime()) {
+            newStreak = 1;
+          }
+        }
+        
+        await updateDoc(userRef, {
+          loginStreak: newStreak,
+          lastLogin: serverTimestamp()
+        });
+      }
+      
+      console.log('Giriş başarılı ve seri güncellendi!');
       navigate('/'); 
     } catch (error: any) {
       console.error("Giriş hatası:", error);
-      // Genel bir hata mesajı vermek en iyisidir,
-      // çünkü "kullanıcı bulunamadı" veya "şifre yanlış" gibi spesifik mesajlar
-      // kötü niyetli kişilere ipucu verebilir.
       setFirebaseError("Kullanıcı adı veya şifre hatalı.");
     }
   };
@@ -53,7 +80,6 @@ const LoginPage: React.FC = () => {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div>
             <label className="text-sm font-bold text-cyber-gray block mb-2">Kullanıcı Adı</label>
-            {/* Formda herhangi bir kısıtlama olmasına gerek yok, kullanıcı istediğini yazabilir. */}
             <input 
               type="text" 
               {...register('username', { required: 'Kullanıcı adı zorunludur' })} 
