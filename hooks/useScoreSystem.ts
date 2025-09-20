@@ -1,79 +1,107 @@
-// DOSYA: hooks/useScoreSystem.ts (HİLEYE KARŞI GÜVENLİ VERSİYON)
+// DOSYA: hooks/useScoreSystem.ts (AFK UYARILI VE 10 DAKİKALIK NİHAİ VERSİYON)
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
 import { doc, setDoc, increment } from 'firebase/firestore';
 
-// Skor kazanma ayarları
-const SCORE_INTERVAL = 5 * 60 * 1000; // 5 Dakika
+// Skor ve AFK ayarları (milisaniye cinsinden)
+const PASSIVE_SCORE_INTERVAL = 10 * 60 * 1000;      // 5 Dakika
+const AFK_TIMEOUT = 5 * 60 * 1000;       // 10 Dakika (Test için 5000 yapabilirsiniz)
 const SCORE_AMOUNT = 125;
 
-export const useScoreSystem = () => {
+// Hook'un birden fazla kez çalışmasını engelleyen global bir bayrak
+let isScoreSystemActive = false;
+
+// Bu hook, kullanıcının AFK olup olmadığını belirten bir boolean (true/false) değeri döndürür.
+export const useScoreSystem = (): boolean => {
   const { user } = useAuth();
-  // `intervalId`'yi useRef ile saklamak, render'lar arasında kaybolmasını engeller.
-  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+  const [isAfk, setIsAfk] = useState(false);
+  const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const afkTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Sadece kullanıcı giriş yapmışsa sistemi çalıştır
-    if (user) {
-        
-        // Skor verme işlemini başlatan fonksiyon
-        const startScoreInterval = () => {
-            // Eğer zaten çalışan bir zamanlayıcı varsa, tekrar başlatma (önlem amaçlı)
-            if (intervalIdRef.current) return;
+    // Sadece kullanıcı giriş yapmışsa VE sistem daha önce başlatılmadıysa çalıştır
+    if (user && !isScoreSystemActive) {
+        isScoreSystemActive = true;
 
-            // Zamanlayıcıyı başlat ve referansını sakla
-            intervalIdRef.current = setInterval(async () => {
+        const setAfkStatus = (status: boolean) => {
+            setIsAfk(status);
+            if (status) {
+                document.body.classList.add('user-is-afk');
+            } else {
+                document.body.classList.remove('user-is-afk');
+            }
+        };
+
+        const stopScoreInterval = () => {
+            if (scoreIntervalRef.current) {
+                clearInterval(scoreIntervalRef.current);
+                scoreIntervalRef.current = null;
+            }
+        };
+
+        const startScoreInterval = () => {
+            if (scoreIntervalRef.current) return;
+            scoreIntervalRef.current = setInterval(async () => {
+                if (document.hidden) return;
                 const userRef = doc(db, 'users', user.uid);
                 try {
-                    // merge:true yerine doğrudan increment kullanmak daha verimlidir.
-                    // setDoc yerine updateDoc daha uygun olabilir ama increment ile setDoc de çalışır.
                     await setDoc(userRef, { score: increment(SCORE_AMOUNT) }, { merge: true });
-                    console.log(`AKTİF KULLANICI ${user.displayName} ${SCORE_AMOUNT} skor kazandı!`);
+                    console.log(`[AKTİF & AFK DEĞİL] ${user.displayName} ${SCORE_AMOUNT} skor kazandı!`);
                 } catch (error) {
                     console.error("Skor güncellenirken hata oluştu:", error);
                 }
             }, SCORE_INTERVAL);
-            console.log('Kullanıcı sekmeye aktif. Skor sistemi başlatıldı/devam ediyor.');
         };
-
-        // Skor verme işlemini durduran fonksiyon
-        const stopScoreInterval = () => {
-            if (intervalIdRef.current) {
-                clearInterval(intervalIdRef.current);
-                intervalIdRef.current = null; // Referansı temizle
-                console.log('Kullanıcı sekmeden ayrıldı veya aktif değil. Skor sistemi durduruldu.');
+        
+        const resetAfkTimer = () => {
+            setAfkStatus(false);
+            if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
+            if (!scoreIntervalRef.current && !document.hidden) {
+                startScoreInterval();
+                console.log('Kullanıcı aktivitesi algılandı. Skor sayacı başlatıldı.');
             }
+            
+            afkTimerRef.current = setTimeout(() => {
+                stopScoreInterval();
+                setAfkStatus(true);
+                console.log('Kullanıcı AFK durumuna geçti. Skor sayacı durduruldu.');
+            }, AFK_TIMEOUT);
         };
 
-        // Tarayıcının sekme görünürlüğü değiştiğinde bu fonksiyon çalışacak
         const handleVisibilityChange = () => {
-            // Eğer sekme GİZLENDİYSE (kullanıcı başka sekmeye geçtiyse veya tarayıcıyı küçülttüyse)
             if (document.hidden) {
                 stopScoreInterval();
-            } 
-            // Eğer sekme GÖRÜNÜR OLDUYSA
-            else {
-                startScoreInterval();
+                if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
+                setAfkStatus(false);
+                console.log('Sekme arka plana alındı. Tüm sayaçlar durduruldu.');
+            } else {
+                console.log('Sekmeye geri dönüldü.');
+                resetAfkTimer();
             }
         };
+        
+        const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
 
-        // Başlangıçta, eğer sayfa zaten görünürse zamanlayıcıyı başlat
         if (!document.hidden) {
-            startScoreInterval();
+            resetAfkTimer();
         }
-
-        // Sekme görünürlüğü değiştiğinde `handleVisibilityChange` fonksiyonunu dinle
+        
+        activityEvents.forEach(event => window.addEventListener(event, resetAfkTimer));
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        // Component DOM'dan kaldırıldığında (kullanıcı çıkış yaptığında vb.)
-        // hem zamanlayıcıyı hem de dinleyiciyi temizle. Bu ÇOK ÖNEMLİDİR!
         return () => {
             stopScoreInterval();
+            if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
+            activityEvents.forEach(event => window.removeEventListener(event, resetAfkTimer));
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            isScoreSystemActive = false;
+            setAfkStatus(false); // Temizlikte her zaman durumu sıfırla
         };
 
     }
-  }, [user]); // Bu useEffect sadece kullanıcı durumu değiştiğinde yeniden çalışır
+  }, [user]); // Bu useEffect sadece kullanıcı durumu (giriş/çıkış) değiştiğinde yeniden çalışır
+
+  return isAfk;
 };
