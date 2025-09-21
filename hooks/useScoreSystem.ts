@@ -7,7 +7,7 @@ import { doc, setDoc, increment, getDoc } from 'firebase/firestore';
 
 // Ayarlar
 const PASSIVE_SCORE_INTERVAL = 10 * 60 * 1000; // 10 Dakika olarak güncellendi
-const AFK_TIMEOUT = 60 * 60 * 1000;            // 1 Saat (Aynen kaldı)
+const AFK_TIMEOUT = 3 * 60 * 60 * 1000; // 3 Saat (3 saat * 60 dakika * 60 saniye * 1000 milisaniye)
 const SCORE_AMOUNT = 125;                      // 125 Skor olarak güncellendi
 // === AUTO CLICKER TESPİT AYARLARI ===
 const MAX_CLICKS_PER_SECOND = 20;        // Saniyede izin verilen maksimum tıklama
