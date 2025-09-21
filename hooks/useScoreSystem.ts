@@ -1,19 +1,17 @@
-// DOSYA: hooks/useScoreSystem.ts (AFK UYARILI VE 10 DAKİKALIK NİHAİ VERSİYON)
+// DOSYA: hooks/useScoreSystem.ts (DEĞİŞKEN ADI HATASI DÜZELTİLMİŞ NİHAİ VERSİYON)
 
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
 import { doc, setDoc, increment } from 'firebase/firestore';
 
-// Skor ve AFK ayarları (milisaniye cinsinden)
-const PASSIVE_SCORE_INTERVAL = 10 * 60 * 1000;      // 5 Dakika
-const AFK_TIMEOUT = 5 * 60 * 1000;       // 10 Dakika (Test için 5000 yapabilirsiniz)
-const SCORE_AMOUNT = 125;
+// Skor ve AFK ayarları (milisaniye cinsinden) - SENİN DÜZENLEDİĞİN DEĞERLERLE
+const PASSIVE_SCORE_INTERVAL = 10 * 60 * 1000;  // 10 Dakika
+const AFK_TIMEOUT = 5 * 60 * 1000;             // 5 Dakika
+const SCORE_AMOUNT = 125;                      // 125 Skor
 
-// Hook'un birden fazla kez çalışmasını engelleyen global bir bayrak
 let isScoreSystemActive = false;
 
-// Bu hook, kullanıcının AFK olup olmadığını belirten bir boolean (true/false) değeri döndürür.
 export const useScoreSystem = (): boolean => {
   const { user } = useAuth();
   const [isAfk, setIsAfk] = useState(false);
@@ -21,7 +19,6 @@ export const useScoreSystem = (): boolean => {
   const afkTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Sadece kullanıcı giriş yapmışsa VE sistem daha önce başlatılmadıysa çalıştır
     if (user && !isScoreSystemActive) {
         isScoreSystemActive = true;
 
@@ -52,7 +49,11 @@ export const useScoreSystem = (): boolean => {
                 } catch (error) {
                     console.error("Skor güncellenirken hata oluştu:", error);
                 }
-            }, SCORE_INTERVAL);
+            // ==========================================================
+            //                 İŞTE DÜZELTME BURADA
+            // ==========================================================
+            }, PASSIVE_SCORE_INTERVAL); // 'SCORE_INTERVAL' yerine 'PASSIVE_SCORE_INTERVAL' kullanıldı
+            // ==========================================================
         };
         
         const resetAfkTimer = () => {
@@ -97,11 +98,11 @@ export const useScoreSystem = (): boolean => {
             activityEvents.forEach(event => window.removeEventListener(event, resetAfkTimer));
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             isScoreSystemActive = false;
-            setAfkStatus(false); // Temizlikte her zaman durumu sıfırla
+            setAfkStatus(false);
         };
 
     }
-  }, [user]); // Bu useEffect sadece kullanıcı durumu (giriş/çıkış) değiştiğinde yeniden çalışır
+  }, [user]);
 
   return isAfk;
 };

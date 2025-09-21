@@ -1,9 +1,7 @@
-// TAM, EKSİKSİZ VE KESİN ÇÖZÜM KODU: components/Header.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth, UserProfile } from '../src/contexts/AuthContext';
+import { useAuth, UserProfileData } from '../src/contexts/AuthContext'; // UserProfile'ı UserProfileData olarak düzelttim, seninkine göre ayarla
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit } from 'firebase/firestore';
@@ -13,9 +11,7 @@ const Header: React.FC = () => {
   const { user, isAdmin, userProfile } = useAuth();
   const navigate = useNavigate();
   
-  // State 1: Normal kullanıcı için okunmamış admin mesajı var mı?
   const [hasUnreadAdminMessage, setHasUnreadAdminMessage] = useState(false);
-  // State 2: Admin için okunmamış herhangi bir DM var mı?
   const [hasUnreadDmsForAdmin, setHasUnreadDmsForAdmin] = useState(false);
 
   const handleLogout = async () => {
@@ -25,47 +21,61 @@ const Header: React.FC = () => {
     } catch(error) { console.error("Çıkış hatası:", error); }
   };
 
-  // Bildirimleri dinleyen ana useEffect bloğu
+  // ==============================================================================
+  //                 İŞTE KRİTİK DÜZELTME BURADA
+  // ==============================================================================
   useEffect(() => {
-    // 1. KULLANICI İÇİN BİLDİRİM DİNLEYİCİSİ (Admin olmayanlar)
-    if (user && !isAdmin) {
-      const userDocRef = doc(db, 'users', user.uid);
-      const unsubscribe = onSnapshot(userDocRef, (doc) => {
-        const data = doc.data() as UserProfile;
-        setHasUnreadAdminMessage(data?.unreadAdminMessage === true);
-      });
-      return () => unsubscribe(); // Dinleyiciyi temizle
-    }
+    // Aktif olan dinleyiciyi (unsubscribe fonksiyonunu) tutacak TEK bir değişken tanımla.
+    let unsubscribe: (() => void) | null = null;
     
-    // 2. ADMİN İÇİN BİLDİRİM DİNLEYİCİSİ (Admin olanlar)
-    if (user && isAdmin) {
-      const chatsRef = collection(db, 'chats');
-      // Sorgu: Adminin dahil olduğu VE 'unreadBy' alanında adminin UID'si 'true' olan sohbetleri bul.
-      const q = query(
-        chatsRef, 
-        where('users', 'array-contains', user.uid), 
-        where(`unreadBy.${user.uid}`, '==', true), 
-        limit(1) // Sadece 1 tane bulması yeterli, bu çok verimlidir.
-      );
+    if (user) {
+        if (isAdmin) {
+            // --- ADMİN DİNLEYİCİSİ ---
+            const chatsRef = collection(db, 'chats');
+            const q = query(
+                chatsRef, 
+                where('users', 'array-contains', user.uid), 
+                where(`unreadBy.${user.uid}`, '==', true), 
+                limit(1)
+            );
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                setHasUnreadDmsForAdmin(!snapshot.empty);
+            }, (error) => {
+                console.error("Admin DM dinleyicisinde hata:", error);
+            });
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        // Eğer sorgu bir sonuç dönerse (snapshot boş değilse), okunmamış mesaj var demektir.
-        setHasUnreadDmsForAdmin(!snapshot.empty);
-      });
-      return () => unsubscribe(); // Dinleyiciyi temizle
-    }
-    
-    // Kullanıcı çıkış yaparsa tüm bildirimleri temizle
-    if (!user) {
+        } else {
+            // --- KULLANICI DİNLEYİCİSİ ---
+            const userDocRef = doc(db, 'users', user.uid);
+            unsubscribe = onSnapshot(userDocRef, (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data() as UserProfileData;
+                    setHasUnreadAdminMessage(data?.unreadAdminMessage === true);
+                }
+            }, (error) => {
+                console.error("Kullanıcı bildirim dinleyicisinde hata:", error);
+            });
+        }
+    } else {
+        // Kullanıcı yoksa tüm bildirimleri temizle.
         setHasUnreadAdminMessage(false);
         setHasUnreadDmsForAdmin(false);
     }
-  }, [user, isAdmin]);
+    
+    // TEMİZLİK FONKSİYONU: useEffect'in sonunda SADECE BİR KERE çağrılır.
+    // Component kaldırıldığında veya 'user'/'isAdmin' değiştiğinde,
+    // HANGİ dinleyici aktif olursa olsun, bu fonksiyon onu kapatır.
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [user, isAdmin]); // Bağımlılıklar doğru.
 
   // "Adminle Sohbet" butonu (kullanıcı için)
   const handleGoToAdminChat = () => {
     if (!user) return;
-    const adminUid = "WXdz4GWVqTb9SwihXFN9nh0LJVn2"; // Gerçek admin UID'niz
+    const adminUid = "WXdz4GWVqTb9SwihXFN9nh0LJVn2";
     const chatId = [user.uid, adminUid].sort().join('_');
     navigate(`/dm/${chatId}`);
   };
@@ -78,11 +88,9 @@ const Header: React.FC = () => {
       <nav className="container mx-auto flex justify-between items-center p-4">
         <Link to="/" className="text-2xl font-heading font-bold hover:text-electric-purple transition-colors">TTMTAL <span className="text-electric-purple">GAMES</span></Link>
         
-        {/* Navigasyon Linkleri */}
         <ul className="flex items-center space-x-4 md:space-x-6 text-lg">
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sayfa</NavLink></motion.div></li>
           
-          {/* SADECE KULLANICILAR İÇİN GÖRÜNEN LİNK */}
           {user && !isAdmin && (
              <li>
                 <motion.div variants={navItemVariants} whileHover="hover" className="relative">
@@ -104,7 +112,6 @@ const Header: React.FC = () => {
           )}
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/creator" style={({ isActive }) => (isActive ? activeStyle : {})}>Yapımcı</NavLink></motion.div></li>
           
-          {/* SADECE ADMİN İÇİN GÖRÜNEN LİNKLER */}
           {isAdmin && (
             <>
               <li>
@@ -128,7 +135,6 @@ const Header: React.FC = () => {
             </>
           )}
           
-          {/* Giriş/Çıkış ve Profil Alanı */}
           {user && userProfile ? (
             <li className="flex items-center gap-3">
               <button onClick={handleLogout} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">Çıkış Yap</button>
