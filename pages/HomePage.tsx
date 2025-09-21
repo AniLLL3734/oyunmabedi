@@ -1,5 +1,3 @@
-// TAM VE EKSİKSİZ KOD: Yöntem 2 (Periyodik Kontrol) Aktif HomePage.tsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import GameCard from '../components/GameCard';
@@ -10,7 +8,8 @@ import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, do
 import { db } from '../src/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { SendHorizonal, MessageSquare, CheckCircle, TrendingUp, Compass, Sparkles, X, Mail, AlertTriangle, UserPlus, LogIn, ShoppingBag, Crown, Star } from 'lucide-react';
+// YENİ: Search ikonu eklendi
+import { SendHorizonal, MessageSquare, CheckCircle, TrendingUp, Compass, Sparkles, X, Mail, AlertTriangle, UserPlus, LogIn, ShoppingBag, Crown, Star, Search } from 'lucide-react';
 
 const shuffleArray = (array: Game[]): Game[] => {
   const shuffled = [...array];
@@ -71,16 +70,14 @@ const HomePage: React.FC = () => {
   // Bildirim Kontrolü useEffect'i - YÖNTEM 2 AKTİF
   useEffect(() => {
     if (user) {
-      // YÖNTEM 2: 10 DAKİKADA BİR KONTROL (Daha az maliyetli)
       const checkNotifications = async () => {
-        if (!user) return; // Kullanıcı çıkış yapmış olabilir, tekrar kontrol et
+        if (!user) return;
         console.log("Periyodik bildirim kontrolü yapılıyor...");
         const userDocRef = doc(db, 'users', user.uid);
         try {
             const userSnap = await getDoc(userDocRef);
             if (userSnap.exists()) {
               const data = userSnap.data();
-              // Sadece durum değişmişse state'i güncelle
               if(data?.unreadAdminMessage === true && !showAdminMessagePopup) {
                   setShowAdminMessagePopup(true);
               } else if (data?.unreadAdminMessage === false && showAdminMessagePopup) {
@@ -92,16 +89,11 @@ const HomePage: React.FC = () => {
         }
       };
       
-      checkNotifications(); // Sayfa ilk açıldığında bir kere kontrol et
-      
-      // Her 10 dakikada bir (10 * 60 * 1000 milisaniye) tekrar kontrol etmesi için bir zamanlayıcı kur
+      checkNotifications();
       const intervalId = setInterval(checkNotifications, 10 * 60 * 1000); 
-      
-      // Bu çok önemlidir: Component sayfadan kaldırıldığında (kullanıcı başka sayfaya geçtiğinde)
-      // bu zamanlayıcıyı temizle ki arka planda gereksiz yere çalışmaya devam etmesin.
       return () => clearInterval(intervalId);
     }
-  }, [user, showAdminMessagePopup]); // showAdminMessagePopup'ı da bağımlılığa ekledik.
+  }, [user, showAdminMessagePopup]);
   
   const handleViewAdminMessage = async () => {
     if (!user) return;
@@ -139,11 +131,13 @@ const HomePage: React.FC = () => {
 
   const filteredGames = shuffledGames.filter(game => {
     const matchesCategory = selectedCategory ? game.category === selectedCategory : true;
-    const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const isSearchQueryActive = searchQuery.trim().toLowerCase();
+    const matchesSearch = isSearchQueryActive ? game.title.toLowerCase().includes(isSearchQueryActive) : true;
     return matchesCategory && matchesSearch;
   });
 
   const allCategories = [...new Set(games.map(game => game.category))].filter(Boolean) as string[];
+  const isSearching = searchQuery.trim() !== '';
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
@@ -174,30 +168,56 @@ const HomePage: React.FC = () => {
             <SearchBar onSearch={setSearchQuery} />
         </div>
 
-        {mostPlayed.length > 0 && (
+        {/* YENİ: ARAMA SONUÇLARI BÖLÜMÜ */}
+        {/* Sadece kullanıcı arama yapıyorsa bu bölümü göster */}
+        {isSearching && (
             <section className="mb-16">
-            <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><TrendingUp /> En Popüler Simülasyonlar</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {mostPlayed.map((game, index) => (
-                    <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }}>
-                        <GameCard game={game} />
-                    </motion.div>
-                ))}
-            </div>
+                <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Search /> Arama Sonuçları</h2>
+                {filteredGames.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                        {filteredGames.map((game, index) => (
+                            <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }}>
+                                <GameCard game={game} />
+                            </motion.div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 bg-dark-gray/50 rounded-lg">
+                        <p className="text-cyber-gray text-lg">Aradığın kriterlere uygun simülasyon bulunamadı.</p>
+                    </div>
+                )}
             </section>
         )}
 
-        {newlyAdded.length > 0 && (
-            <section className="mb-16">
-            <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Sparkles /> En Son Eklenenler</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {newlyAdded.map((game, index) => (
-                    <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }}>
-                        <GameCard game={game} />
-                    </motion.div>
-                ))}
-            </div>
-            </section>
+        {/* GÜNCELLEME: Aşağıdaki bölümleri sadece arama yapılmadığında göster */}
+        {!isSearching && (
+            <>
+                {mostPlayed.length > 0 && (
+                    <section className="mb-16">
+                        <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><TrendingUp /> En Popüler Simülasyonlar</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {mostPlayed.map((game, index) => (
+                                <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }}>
+                                    <GameCard game={game} />
+                                </motion.div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {newlyAdded.length > 0 && (
+                    <section className="mb-16">
+                        <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Sparkles /> En Son Eklenenler</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                            {newlyAdded.map((game, index) => (
+                                <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.5, delay: index * 0.1 }}>
+                                    <GameCard game={game} />
+                                </motion.div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+            </>
         )}
 
         <section className="my-16 py-16 border-y-2 border-dashed border-cyber-gray/20">
@@ -237,26 +257,28 @@ const HomePage: React.FC = () => {
             )}
         </section>
 
-        <section>
-            <div className="flex flex-wrap items-center justify-between mb-6">
-                <h2 className="text-3xl font-heading border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Compass /> Tüm Simülasyonlar</h2>
-                <div className="flex flex-wrap gap-2 mt-4 md:mt-0">
-                    <button onClick={() => setSelectedCategory(null)} className={`px-4 py-2 rounded-full text-sm font-semibold ${!selectedCategory ? 'bg-electric-purple' : 'bg-dark-gray'}`}>Tümü</button>
-                    {allCategories.map(category => (
-                        <button key={category} onClick={() => setSelectedCategory(category)} className={`px-4 py-2 rounded-full text-sm font-semibold ${selectedCategory === category ? 'bg-electric-purple' : 'bg-dark-gray'}`}>{category}</button>
+        {/* GÜNCELLEME: Tüm Simülasyonlar bölümünü de sadece arama yapılmadığında göster */}
+        {!isSearching && (
+            <section>
+                <div className="flex flex-wrap items-center justify-between mb-6">
+                    <h2 className="text-3xl font-heading border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Compass /> Tüm Simülasyonlar</h2>
+                    <div className="flex flex-wrap gap-2 mt-4 md:mt-0">
+                        <button onClick={() => setSelectedCategory(null)} className={`px-4 py-2 rounded-full text-sm font-semibold ${!selectedCategory ? 'bg-electric-purple' : 'bg-dark-gray'}`}>Tümü</button>
+                        {allCategories.map(category => (
+                            <button key={category} onClick={() => setSelectedCategory(category)} className={`px-4 py-2 rounded-full text-sm font-semibold ${selectedCategory === category ? 'bg-electric-purple' : 'bg-dark-gray'}`}>{category}</button>
+                        ))}
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    {filteredGames.map((game) => (
+                        <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
+                            <GameCard game={game} />
+                        </motion.div>
                     ))}
                 </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {filteredGames.map((game) => (
-                    <motion.div key={game.id} initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}>
-                        <GameCard game={game} />
-                    </motion.div>
-                ))}
-            </div>
-        </section>
-
-        {/* Giriş Yapmayan Kullanıcılar İçin Uyarı Popup'ı */}
+            </section>
+        )}
+        
         <AnimatePresence>
           {showGuestWarning && !user && (
             <motion.div
@@ -271,7 +293,6 @@ const HomePage: React.FC = () => {
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.8, y: 50 }}
               >
-                {/* Kapatma butonu */}
                 <button
                   onClick={() => setShowGuestWarning(false)}
                   className="absolute top-4 right-4 text-cyber-gray hover:text-ghost-white transition-colors"
@@ -279,17 +300,13 @@ const HomePage: React.FC = () => {
                   <X size={24} />
                 </button>
 
-                {/* Uyarı ikonu */}
                 <div className="mb-6">
                   <AlertTriangle className="mx-auto text-yellow-400" size={64} />
                 </div>
 
-                {/* Başlık */}
                 <h2 className="text-3xl font-heading mb-4 text-ghost-white">
                   Dijital Evrene Hoş Geldin, Misafir!
                 </h2>
-
-                {/* Açıklama */}
                 <div className="text-cyber-gray mb-8 space-y-4">
                   <p className="text-lg">
                     Şu anda sadece oyunları oynayabiliyorsun, ama çok daha fazlası seni bekliyor!
@@ -330,7 +347,6 @@ const HomePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Butonlar */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                   <Link
                     to="/signup"
@@ -355,8 +371,6 @@ const HomePage: React.FC = () => {
                     İstemiyorum
                   </button>
                 </div>
-
-                {/* Alt bilgi */}
                 <p className="text-xs text-cyber-gray mt-6">
                   Kayıt olmak tamamen ücretsizdir ve sadece birkaç saniye sürer.
                 </p>

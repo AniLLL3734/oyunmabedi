@@ -241,6 +241,9 @@ export const useScoreSystem = (): { isAfk: boolean, isBlocked: boolean } => {
         setIsLeader(true);
         console.log(`%c[Sekme ID: ${tabId.current}] Bu sekme lider oldu!`, "background: #222; color: #bada55");
 
+        // Skor sayacını hemen başlat
+        startScoreInterval();
+
         // Diğer sekmelere lider olduğunu bildirmek için periyodik "ping" gönder
         leaderPingRef.current = setInterval(() => {
             leaderChannel.postMessage({ type: 'ping', id: tabId.current });
@@ -250,7 +253,7 @@ export const useScoreSystem = (): { isAfk: boolean, isBlocked: boolean } => {
         const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
         activityEvents.forEach(event => window.addEventListener(event as any, resetAfkTimer));
         
-        resetAfkTimer(); // Lider olur olmaz sayaçları başlat
+        resetAfkTimer(); // AFK sayacını başlat
     };
 
     // Başka bir sekmeden mesaj geldiğinde çalışacak fonksiyon

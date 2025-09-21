@@ -400,6 +400,64 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: 'HTML5, Simülasyon, Araba, Sürüş, 3D, Yarış',
   controls: `W,A,S,D / Yön Tuşları: Arabayı sür.\nBoşluk Tuşu: El freni.\nC Tuşu: Kamera açısını değiştir.`,
 },
+{
+  id: 'fruit-ninja',
+  title: 'FRUIT NINJA',
+  description: 'Boşlukta süzülen meyvelerin kaderi, bir anlık keskin bir refleksle çizilir. Her bir dilim, bir sanat; her bir bomba ise kaçınılmaz bir sondur. Bakalım senin kılıcın, bu renkli kaosun içinde ne kadar süre ahenkle dans edebilecek? -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://fruitninja-9zb.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/fruit.jpg',
+  
+  category: 'Beceri',
+  tags: 'HTML5, Arcade, Beceri, Meyve, Kesme, Refleks, Klasik',
+  controls: 'Mouse Hareketi: Kılıcı savur.',
+},
+{
+  id: 'island-clash',
+  title: 'TTMTAL: ISLAND CLASH',
+  description: 'Ufukta beliren düşman dalgaları, cennet adanın huzurunu tehdit ediyor. Zekan, en ölümcül silahındır. Kulelerini stratejik olarak yerleştir, antik güçleri serbest bırak ve bu topraklara ait olanı koru. -FaTaLRhymeR37',
+  
+  // Bu bir SWF (Flash) oyunu olduğu için tipini belirtiyoruz.
+  type: 'SWF',
+  
+  // URL'yi, GitHub linkindeki dosya adından senin yönteminle oluşturdum.
+  // Bu A2.swf dosyasını, 'ttmtaldosyalar' Netlify projenin ana dizinine yüklemelisin.
+  url: 'https://ttmtaldosyalar.netlify.app/A2.swf',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/IC.jpg',
+  
+  category: 'Strateji',
+  tags: 'SWF, Flash, Strateji, Kule Savunma, Savaş, Ada',
+  controls: 'Mouse: Kuleleri seç ve yerleştir.',
+},
+{
+  id: 'moto-x3m-winter',
+  title: 'MOTO X3M WINTER',
+  description: 'Zeminin buzla kaplı olması, hız için bir bahane değil, bir davettir. Karlı tepelerde motorunla taklalar at, devasa engelleri aş ve bitiş çizgisine en çılgın şekilde ulaş. Donmuş yollar, sadece en cesurları ödüllendirir. -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://motox3mwinter.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/download.jpeg',
+  
+  category: 'Yarış',
+  tags: 'HTML5, Yarış, Motor, Beceri, Fizik, Platform, Kış',
+  controls: 'W / Yukarı Ok: Hızlan\nS / Aşağı Ok: Fren\nA / Sol Ok: Geri Yaslan\nD / Sağ Ok: Öne Eğil',
+},
+{
+  id: 'minecraft',
+  title: 'MINECRAFT',
+  description: 'Her bir blok, yeni bir ihtimal. Hayal gücünün sınırlarında bir evren yarat ya da bilinmeyenin derinliklerinde hayatta kalmaya çalış. Bu pikselli gerçeklikte, kuralları sadece sen koyarsın. Unutma, en derin mağaralar en nadir hazineleri saklar. -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://mc152222.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/MC.jpg',
+  
+  category: 'Sandbox',
+  tags: 'HTML5, Sandbox, Macera, Hayatta Kalma, Yaratıcılık, İnşa Etme, Klasik',
+  controls: 'W,A,S,D: Hareket\nBoşluk Tuşu: Zıpla\nMouse Sol Tık: Kır / Vur\nMouse Sağ Tık: Blok Koy\nE Tuşu: Envanter\nSohbet: T',
+},
+
 
 
 ];
