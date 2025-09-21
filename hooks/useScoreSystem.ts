@@ -8,7 +8,7 @@ import { doc, setDoc, increment, getDoc } from 'firebase/firestore';
 // Ayarlar
 const PASSIVE_SCORE_INTERVAL = 5 * 60 * 1000;  // 5 Dakika
 const AFK_TIMEOUT = 60 * 60 * 1000;             // 1 Saat (60 dakika)
-const SCORE_AMOUNT = 50;
+const SCORE_AMOUNT = 125;
 // === AUTO CLICKER TESPİT AYARLARI ===
 const MAX_CLICKS_PER_SECOND = 20;        // Saniyede izin verilen maksimum tıklama
 const PERFECT_INTERVAL_STREAK_LIMIT = 5; // Makro tespiti için mükemmel aralıklı tıklama serisi limiti
