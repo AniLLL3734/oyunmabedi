@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, getDocs, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, where, addDoc, setDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc } from 'firebase/firestore';
 import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface UserData {
     uid: string;
@@ -328,7 +328,7 @@ const AdminPage: React.FC = () => {
                 <button onClick={() => setView('users')} className={`py-3 px-5 text-lg font-bold ${view === 'users' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Users className="inline-block mr-2" /> Kullanıcılar</button>
                 <button onClick={() => setView('games')} className={`py-3 px-5 text-lg font-bold ${view === 'games' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Gamepad2 className="inline-block mr-2" /> Oyunlar</button>
                 <button onClick={() => setView('feedback')} className={`py-3 px-5 text-lg font-bold relative ${view === 'feedback' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Geri Bildirimler{unreadFeedbackCount > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}</button>
-                <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Megaphone className="inline-block mr-2" /> Sohbet Komutları</button>
+                <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Shield className="inline-block mr-2" /> Sistem Komutları</button>
             </div>
 
             {view === 'dashboard' && (
@@ -391,6 +391,31 @@ const AdminPage: React.FC = () => {
                     </table>
                 </div>
             )}
+
+            {view === 'games' && (
+                <div className="space-y-4">
+                    <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="border-b border-cyber-gray/50">
+                                <tr>
+                                    <th className="p-4">Oyun Adı</th>
+                                    <th className="p-4">Kategori</th>
+                                    <th className="p-4">Oynanma Sayısı</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {games.map(game => (
+                                    <tr key={game.id} className="border-b border-cyber-gray/50 last:border-0 hover:bg-space-black">
+                                        <td className="p-4">{game.title}</td>
+                                        <td className="p-4 text-cyber-gray">{game.category || 'Kategorisiz'}</td>
+                                        <td className="p-4">{game.playCount?.toLocaleString() || '0'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
             
             {view === 'feedback' && (
                 <div className="space-y-4">
@@ -414,7 +439,9 @@ const AdminPage: React.FC = () => {
 
             {view === 'commands' && (
                 <div className="space-y-6">
-                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><Megaphone className="text-electric-purple" />Sohbet Komutları</h2>
+                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><Megaphone className="text-electric-purple" />Sistem Komutları</h2>
+                    
+
                     <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
                         <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Megaphone className="text-yellow-400" />Duyuru Yönetimi</h3>
                         <div className="space-y-4"><textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} placeholder="Duyuru metnini buraya yazın..." className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray resize-none" rows={3}/>

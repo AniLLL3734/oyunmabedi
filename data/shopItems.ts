@@ -168,22 +168,22 @@ export const shopItems: ShopItem[] = [
   {
     id: 'speed_demon_24h',
     name: 'Hız Şeytanı (24 Saat)',
-    description: '24 saat boyunca 2x skor çarpanı. Hızınızla herkesi geçin.',
+    description: '24 saat boyunca 1.5x skor çarpanı. Hızınızla herkesi geçin.',
     type: ShopItemType.TEMPORARY_ACHIEVEMENT,
-    price: 2000,
+    price: 8000,
     category: 'Geçici',
     rarity: 'rare',
     duration: 1440 // 24 saat = 1440 dakika
   },
   {
-    id: 'time_lord_7d',
-    name: 'Zaman Lordu (7 Gün)',
-    description: '7 gün boyunca 3x skor çarpanı. Zamanın efendisi olun.',
+    id: 'time_lord_29h',
+    name: 'Zaman Lordu (29 Saat)',
+    description: '29 saat boyunca 2x skor çarpanı. Zamanın efendisi olun.',
     type: ShopItemType.TEMPORARY_ACHIEVEMENT,
-    price: 8000,
+    price: 25000,
     category: 'Geçici',
     rarity: 'legendary',
-    duration: 10080 // 7 gün = 10080 dakika
+    duration: 1740 // 29 saat = 1740 dakika
   },
   {
     id: 'afk_master_24h',

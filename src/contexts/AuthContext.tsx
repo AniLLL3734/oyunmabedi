@@ -15,6 +15,7 @@ export interface UserProfileData {
     email: string;
     role: 'admin' | 'user';
     score?: number;
+    highestScore?: number;  // En yüksek skoru tutacak yeni alan
     bio?: string;
     avatarUrl?: string;
     achievements?: string[];

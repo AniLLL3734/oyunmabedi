@@ -14,6 +14,7 @@ interface UserProfile {
     uid: string;
     displayName: string;
     score: number;
+    highestScore?: number;
     achievements: string[];
     role?: 'admin' | 'user';
     bio?: string;
@@ -289,7 +290,15 @@ const ProfilePage: React.FC = () => {
                          {shopItems.find(item => item.id === profile.inventory?.activeSpecialTitle)?.name}
                      </p>
                  )}
-                 <p className="text-3xl md:text-4xl font-mono text-cyber-gray mt-2">{profile.score?.toLocaleString() || 0} SKOR</p>
+                 <div className="flex items-center justify-center gap-4">
+                    <p className="text-3xl md:text-4xl font-mono text-cyber-gray mt-2">{profile.score?.toLocaleString() || 0} SKOR</p>
+                    <div className="border-l border-cyber-gray/20 pl-4 mt-2">
+                        <p className="text-2xl md:text-3xl font-mono text-yellow-400">
+                            {profile.highestScore?.toLocaleString() || profile.score?.toLocaleString() || 0}
+                        </p>
+                        <p className="text-xs text-cyber-gray uppercase">En Yüksek Skor</p>
+                    </div>
+                 </div>
 
                 {/* İstatistikler Bölümü */}
                 <div className="flex flex-wrap justify-center gap-4 md:gap-8 mt-6 border-t border-cyber-gray/20 pt-6 w-full">

@@ -7,9 +7,19 @@ service cloud.firestore {
     
     // --- USERS KOLEKSİYONU ---
     match /users/{userId} {
+      // Kullanıcı bilgilerini okuma izni
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      
+      // Kullanıcının kendi bilgilerini güncelleme izni
+      allow update: if request.auth != null && (
+        // Kullanıcı kendi verilerini güncelleyebilir
+        request.auth.uid == userId ||
+        // Admin tüm kullanıcıları güncelleyebilir
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+      );
+      
+      // Yeni kullanıcı oluşturma
+      allow create: if request.auth != null && request.auth.uid == userId;
     }
 
     // --- GAMES & YORUMLAR ---

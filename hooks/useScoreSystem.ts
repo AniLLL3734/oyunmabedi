@@ -8,7 +8,7 @@ import { doc, setDoc, increment, getDoc } from 'firebase/firestore';
 // Ayarlar
 const PASSIVE_SCORE_INTERVAL = 5 * 60 * 1000;  // 5 Dakika
 const AFK_TIMEOUT = 60 * 60 * 1000;             // 1 Saat (60 dakika)
-const SCORE_AMOUNT = 125;
+const SCORE_AMOUNT = 25;  // Her 5 dakikada 25 skor
 // === AUTO CLICKER TESPİT AYARLARI ===
 const MAX_CLICKS_PER_SECOND = 20;        // Saniyede izin verilen maksimum tıklama
 const PERFECT_INTERVAL_STREAK_LIMIT = 5; // Makro tespiti için mükemmel aralıklı tıklama serisi limiti
@@ -157,8 +157,21 @@ export const useScoreSystem = (): { isAfk: boolean, isBlocked: boolean } => {
                 // Skor çarpanını hesapla
                 const multiplier = await getScoreMultiplier();
                 const finalScoreAmount = SCORE_AMOUNT * multiplier;
+
+                // Mevcut skoru ve en yüksek skoru kontrol et
+                const userDoc = await getDoc(userRef);
+                const userData = userDoc.data();
+                const currentScore = (userData?.score || 0) + finalScoreAmount;
                 
-                await setDoc(userRef, { score: increment(finalScoreAmount) }, { merge: true });
+                // Güncellenecek verileri hazırla
+                const updateData: any = { score: increment(finalScoreAmount) };
+                
+                // En yüksek skor güncellenmesi gerekiyorsa
+                if (!userData?.highestScore || currentScore > userData.highestScore) {
+                    updateData.highestScore = currentScore;
+                }
+                
+                await setDoc(userRef, updateData, { merge: true });
                 
                 if (multiplier > 1) {
                     console.log(`%c[Sekme ID: ${tabId.current}] ${finalScoreAmount} skor verildi (${multiplier}x çarpan aktif).`, "color: #25D366;");
