@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { db } from '../src/firebase';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield } from 'lucide-react'; // Shield ikonu import edildi
+import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield, ShoppingBag, Crown, Palette, Star, Clock, MessageSquare as MessageSquareIcon } from 'lucide-react'; // Shield ikonu import edildi
 import { achievementsList, adminTitle } from '../data/achievements';
+import { shopItems } from '../data/shopItems';
 import { useAuth } from '../src/contexts/AuthContext';
 import AdminTag from '../components/AdminTag';
 
@@ -22,6 +23,16 @@ interface UserProfile {
     messageCount?: number;
     loginStreak?: number;
     lastLogin?: Timestamp;
+    inventory?: {
+        avatarFrames: string[];
+        colorThemes: string[];
+        specialTitles: string[];
+        temporaryAchievements: { id: string; expiresAt: Date }[];
+        specialEmojis: string[];
+        activeAvatarFrame?: string;
+        activeColorTheme?: string;
+        activeSpecialTitle?: string;
+    };
 }
 
 const titles: { [key: string]: string } = {
@@ -99,6 +110,83 @@ const ProfilePage: React.FC = () => {
             console.error("Unvan güncellenirken bir hata oluştu:", error);
         }
     };
+
+    // Dükkan ürünlerini aktif etme/etmeme fonksiyonları
+    const handleEquipShopItem = async (itemType: 'avatarFrame' | 'colorTheme' | 'specialTitle', itemId: string) => {
+        if (!currentUser || currentUser.uid !== userId || !profile?.inventory) return;
+        
+        try {
+            const userRef = doc(db, 'users', userId);
+            const updateData: any = {};
+            
+            // Mevcut aktif ürünü kaldır ve yenisini ekle
+            switch (itemType) {
+                case 'avatarFrame':
+                    updateData['inventory.activeAvatarFrame'] = itemId;
+                    break;
+                case 'colorTheme':
+                    updateData['inventory.activeColorTheme'] = itemId;
+                    break;
+                case 'specialTitle':
+                    updateData['inventory.activeSpecialTitle'] = itemId;
+                    break;
+            }
+            
+            await updateDoc(userRef, updateData);
+            
+            // Local state'i güncelle
+            setProfile(prev => {
+                if (!prev || !prev.inventory) return prev;
+                return {
+                    ...prev,
+                    inventory: {
+                        ...prev.inventory,
+                        [`active${itemType.charAt(0).toUpperCase() + itemType.slice(1)}`]: itemId
+                    }
+                };
+            });
+        } catch (error) {
+            console.error("Ürün aktif edilirken hata:", error);
+        }
+    };
+
+    const handleUnequipShopItem = async (itemType: 'avatarFrame' | 'colorTheme' | 'specialTitle') => {
+        if (!currentUser || currentUser.uid !== userId || !profile?.inventory) return;
+        
+        try {
+            const userRef = doc(db, 'users', userId);
+            const updateData: any = {};
+            
+            // Aktif ürünü kaldır
+            switch (itemType) {
+                case 'avatarFrame':
+                    updateData['inventory.activeAvatarFrame'] = null;
+                    break;
+                case 'colorTheme':
+                    updateData['inventory.activeColorTheme'] = null;
+                    break;
+                case 'specialTitle':
+                    updateData['inventory.activeSpecialTitle'] = null;
+                    break;
+            }
+            
+            await updateDoc(userRef, updateData);
+            
+            // Local state'i güncelle
+            setProfile(prev => {
+                if (!prev || !prev.inventory) return prev;
+                return {
+                    ...prev,
+                    inventory: {
+                        ...prev.inventory,
+                        [`active${itemType.charAt(0).toUpperCase() + itemType.slice(1)}`]: undefined
+                    }
+                };
+            });
+        } catch (error) {
+            console.error("Ürün kaldırılırken hata:", error);
+        }
+    };
     
     // Yüklenme durumu (hem authentication hem de profil verisi için)
     if (isLoading || authLoading) {
@@ -140,11 +228,41 @@ const ProfilePage: React.FC = () => {
                     </Link>
                 )}
 
-                 <img 
-                     src={profile.avatarUrl || `https://ui-avatars.com/api/?name=${profile.displayName}&background=1a1a2e&color=ffffff`} 
-                     alt={profile.displayName || 'Anonim'} 
-                     className="w-24 h-24 rounded-full border-4 border-electric-purple shadow-neon-purple object-cover"
-                 />
+                 <div className="relative">
+                     <img 
+                         src={profile.avatarUrl || `https://ui-avatars.com/api/?name=${profile.displayName}&background=1a1a2e&color=ffffff`} 
+                         alt={profile.displayName || 'Anonim'} 
+                         className={`w-24 h-24 rounded-full border-4 object-cover ${
+                             profile.inventory?.activeAvatarFrame === 'neon_frame' 
+                                 ? 'border-electric-purple shadow-neon-purple ring-4 ring-cyan-400/50' 
+                                 : profile.inventory?.activeAvatarFrame === 'hologram_frame'
+                                 ? 'border-purple-400 shadow-purple-400 ring-4 ring-purple-400/50'
+                                 : profile.inventory?.activeAvatarFrame === 'golden_frame'
+                                 ? 'border-yellow-400 shadow-yellow-400 ring-4 ring-yellow-400/50'
+                                 : profile.inventory?.activeAvatarFrame === 'matrix_frame'
+                                 ? 'border-green-400 shadow-green-400 ring-4 ring-green-400/50'
+                                 : profile.inventory?.activeAvatarFrame === 'fire_frame'
+                                 ? 'border-red-400 shadow-red-400 ring-4 ring-red-400/50'
+                                 : 'border-electric-purple shadow-neon-purple'
+                         }`}
+                     />
+                     {/* Aktif çerçeve efekti */}
+                     {profile.inventory?.activeAvatarFrame && (
+                         <div className={`absolute inset-0 rounded-full animate-pulse ${
+                             profile.inventory.activeAvatarFrame === 'neon_frame' 
+                                 ? 'ring-2 ring-cyan-400/30' 
+                                 : profile.inventory.activeAvatarFrame === 'hologram_frame'
+                                 ? 'ring-2 ring-purple-400/30'
+                                 : profile.inventory.activeAvatarFrame === 'golden_frame'
+                                 ? 'ring-2 ring-yellow-400/30'
+                                 : profile.inventory.activeAvatarFrame === 'matrix_frame'
+                                 ? 'ring-2 ring-green-400/30'
+                                 : profile.inventory.activeAvatarFrame === 'fire_frame'
+                                 ? 'ring-2 ring-red-400/30'
+                                 : ''
+                         }`} />
+                     )}
+                 </div>
                  
                  {profile.role === 'admin' ? (
                      <div className="text-center w-full">
@@ -162,8 +280,14 @@ const ProfilePage: React.FC = () => {
                      <h1 className="text-4xl md:text-5xl font-heading mt-4">{profile.displayName || 'Anonim'}</h1>
                  )}
 
+                 {/* Aktif Unvanlar */}
                  {profile.selectedTitle && titles[profile.selectedTitle] && (
                      <p className="text-lg text-electric-purple mt-2 font-bold tracking-widest">{titles[profile.selectedTitle]}</p>
+                 )}
+                 {profile.inventory?.activeSpecialTitle && (
+                     <p className="text-lg text-purple-400 mt-2 font-bold tracking-widest">
+                         {shopItems.find(item => item.id === profile.inventory?.activeSpecialTitle)?.name}
+                     </p>
                  )}
                  <p className="text-3xl md:text-4xl font-mono text-cyber-gray mt-2">{profile.score?.toLocaleString() || 0} SKOR</p>
 
@@ -264,6 +388,245 @@ const ProfilePage: React.FC = () => {
                      })}
                  </div>
              </div>
+
+             {/* Dükkan Koleksiyonu Bölümü */}
+             {profile.inventory && (
+                 <div className="mt-12">
+                     <h2 className="text-3xl font-heading mb-6 flex items-center">
+                        <ShoppingBag className="inline-block mr-3 text-yellow-400" />Dükkan Koleksiyonu
+                    </h2>
+                     <p className="text-cyber-gray mb-6">Siber dükkandan satın alınan eşsiz ürünler.</p>
+                     
+                     {/* Avatar Çerçeveleri */}
+                     {profile.inventory.avatarFrames && profile.inventory.avatarFrames.length > 0 && (
+                         <div className="mb-8">
+                             <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
+                                 <Crown className="text-yellow-400" size={20} />
+                                 Avatar Çerçeveleri
+                             </h3>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 {profile.inventory.avatarFrames.map(frameId => {
+                                     const frame = shopItems.find(item => item.id === frameId);
+                                     if (!frame) return null;
+                                     const isActive = profile.inventory?.activeAvatarFrame === frameId;
+                                     const canInteract = currentUser?.uid === userId;
+                                     
+                                     return (
+                                         <motion.div 
+                                             key={frameId}
+                                             className={`p-4 rounded-lg border text-center transition-all ${
+                                                 isActive 
+                                                     ? 'border-yellow-400 bg-yellow-400/10 ring-2 ring-yellow-400/50' 
+                                                     : 'border-electric-purple bg-dark-gray/50'
+                                             }`}
+                                             whileHover={{ scale: canInteract ? 1.05 : 1 }}
+                                         >
+                                             <Crown className={`mx-auto mb-2 ${isActive ? 'text-yellow-400' : 'text-electric-purple'}`} size={24} />
+                                             <p className="text-sm font-bold text-ghost-white mb-2">{frame.name}</p>
+                                             {canInteract && (
+                                                 <button
+                                                     onClick={() => isActive 
+                                                         ? handleUnequipShopItem('avatarFrame')
+                                                         : handleEquipShopItem('avatarFrame', frameId)
+                                                     }
+                                                     className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                                                         isActive
+                                                             ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                             : 'bg-electric-purple hover:bg-electric-purple/80 text-white'
+                                                     }`}
+                                                 >
+                                                     {isActive ? 'Çıkar' : 'Tak'}
+                                                 </button>
+                                             )}
+                                         </motion.div>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Renk Temaları */}
+                     {profile.inventory.colorThemes && profile.inventory.colorThemes.length > 0 && (
+                         <div className="mb-8">
+                             <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
+                                 <Palette className="text-blue-400" size={20} />
+                                 Renk Temaları
+                             </h3>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 {profile.inventory.colorThemes.map(themeId => {
+                                     const theme = shopItems.find(item => item.id === themeId);
+                                     if (!theme) return null;
+                                     const isActive = profile.inventory?.activeColorTheme === themeId;
+                                     const canInteract = currentUser?.uid === userId;
+                                     
+                                     return (
+                                         <motion.div 
+                                             key={themeId}
+                                             className={`p-4 rounded-lg border text-center transition-all ${
+                                                 isActive 
+                                                     ? 'border-blue-400 bg-blue-400/10 ring-2 ring-blue-400/50' 
+                                                     : 'border-blue-400 bg-dark-gray/50'
+                                             }`}
+                                             whileHover={{ scale: canInteract ? 1.05 : 1 }}
+                                         >
+                                             <Palette className={`mx-auto mb-2 ${isActive ? 'text-blue-400' : 'text-blue-400'}`} size={24} />
+                                             <p className="text-sm font-bold text-ghost-white mb-2">{theme.name}</p>
+                                             {canInteract && (
+                                                 <button
+                                                     onClick={() => isActive 
+                                                         ? handleUnequipShopItem('colorTheme')
+                                                         : handleEquipShopItem('colorTheme', themeId)
+                                                     }
+                                                     className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                                                         isActive
+                                                             ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                             : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                     }`}
+                                                 >
+                                                     {isActive ? 'Çıkar' : 'Uygula'}
+                                                 </button>
+                                             )}
+                                         </motion.div>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Özel Unvanlar */}
+                     {profile.inventory.specialTitles && profile.inventory.specialTitles.length > 0 && (
+                         <div className="mb-8">
+                             <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
+                                 <Star className="text-purple-400" size={20} />
+                                 Özel Unvanlar
+                             </h3>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 {profile.inventory.specialTitles.map(titleId => {
+                                     const title = shopItems.find(item => item.id === titleId);
+                                     if (!title) return null;
+                                     const isActive = profile.inventory?.activeSpecialTitle === titleId;
+                                     const canInteract = currentUser?.uid === userId;
+                                     
+                                     return (
+                                         <motion.div 
+                                             key={titleId}
+                                             className={`p-4 rounded-lg border text-center transition-all ${
+                                                 isActive 
+                                                     ? 'border-purple-400 bg-purple-400/10 ring-2 ring-purple-400/50' 
+                                                     : 'border-purple-400 bg-dark-gray/50'
+                                             }`}
+                                             whileHover={{ scale: canInteract ? 1.05 : 1 }}
+                                         >
+                                             <Star className={`mx-auto mb-2 ${isActive ? 'text-purple-400' : 'text-purple-400'}`} size={24} />
+                                             <p className="text-sm font-bold text-ghost-white mb-2">{title.name}</p>
+                                             {canInteract && (
+                                                 <button
+                                                     onClick={() => isActive 
+                                                         ? handleUnequipShopItem('specialTitle')
+                                                         : handleEquipShopItem('specialTitle', titleId)
+                                                     }
+                                                     className={`px-3 py-1 rounded text-xs font-bold transition-all ${
+                                                         isActive
+                                                             ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                             : 'bg-purple-500 hover:bg-purple-600 text-white'
+                                                     }`}
+                                                 >
+                                                     {isActive ? 'Çıkar' : 'Seç'}
+                                                 </button>
+                                             )}
+                                         </motion.div>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Geçici Başarımlar */}
+                     {profile.inventory.temporaryAchievements && profile.inventory.temporaryAchievements.length > 0 && (
+                         <div className="mb-8">
+                             <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
+                                 <Clock className="text-orange-400" size={20} />
+                                 Geçici Başarımlar
+                             </h3>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 {profile.inventory.temporaryAchievements.map(achievement => {
+                                     const tempAchievement = shopItems.find(item => item.id === achievement.id);
+                                     if (!tempAchievement) return null;
+                                     const isExpired = new Date(achievement.expiresAt) < new Date();
+                                     return (
+                                         <motion.div 
+                                             key={achievement.id}
+                                             className={`p-4 rounded-lg border text-center ${
+                                                 isExpired 
+                                                     ? 'border-gray-600 bg-gray-800/50 opacity-60' 
+                                                     : 'border-orange-400 bg-dark-gray/50'
+                                             }`}
+                                             whileHover={{ scale: 1.05 }}
+                                         >
+                                             <Clock className={`mx-auto mb-2 ${isExpired ? 'text-gray-500' : 'text-orange-400'}`} size={24} />
+                                             <p className={`text-sm font-bold ${isExpired ? 'text-gray-500' : 'text-ghost-white'}`}>
+                                                 {tempAchievement.name}
+                                             </p>
+                                             {!isExpired && (
+                                                 <p className="text-xs text-orange-400 mt-1">
+                                                     {new Date(achievement.expiresAt).toLocaleDateString('tr-TR')}
+                                                 </p>
+                                             )}
+                                         </motion.div>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Özel Emojiler */}
+                     {profile.inventory.specialEmojis && profile.inventory.specialEmojis.length > 0 && (
+                         <div className="mb-8">
+                             <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
+                                 <MessageSquareIcon className="text-green-400" size={20} />
+                                 Özel Emojiler
+                             </h3>
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                 {profile.inventory.specialEmojis.map(emojiId => {
+                                     const emoji = shopItems.find(item => item.id === emojiId);
+                                     if (!emoji) return null;
+                                     return (
+                                         <motion.div 
+                                             key={emojiId}
+                                             className="p-4 rounded-lg border border-green-400 bg-dark-gray/50 text-center"
+                                             whileHover={{ scale: 1.05 }}
+                                         >
+                                             <MessageSquareIcon className="text-green-400 mx-auto mb-2" size={24} />
+                                             <p className="text-sm font-bold text-ghost-white">{emoji.name}</p>
+                                         </motion.div>
+                                     );
+                                 })}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Koleksiyon boşsa */}
+                     {(!profile.inventory.avatarFrames || profile.inventory.avatarFrames.length === 0) &&
+                      (!profile.inventory.colorThemes || profile.inventory.colorThemes.length === 0) &&
+                      (!profile.inventory.specialTitles || profile.inventory.specialTitles.length === 0) &&
+                      (!profile.inventory.temporaryAchievements || profile.inventory.temporaryAchievements.length === 0) &&
+                      (!profile.inventory.specialEmojis || profile.inventory.specialEmojis.length === 0) && (
+                         <div className="text-center py-12">
+                             <ShoppingBag className="mx-auto text-cyber-gray mb-4" size={64} />
+                             <h3 className="text-2xl font-bold text-cyber-gray mb-2">Koleksiyon Boş</h3>
+                             <p className="text-cyber-gray mb-4">Henüz dükkandan hiçbir ürün satın alınmamış.</p>
+                             {currentUser?.uid === userId && (
+                                 <Link 
+                                     to="/shop" 
+                                     className="inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all"
+                                 >
+                                     Siber Dükkana Git
+                                 </Link>
+                             )}
+                         </div>
+                     )}
+                 </div>
+             )}
         </motion.div>
     );
 };

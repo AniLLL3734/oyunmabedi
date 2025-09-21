@@ -1,14 +1,37 @@
 // DOSYA: components/Layout.tsx
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import Header from './Header';
 import { Toaster } from 'react-hot-toast'; // YENİ IMPORT
+import { useAuth } from '../src/contexts/AuthContext';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const { userProfile } = useAuth();
+
+  // Aktif renk temasını body'ye uygula
+  useEffect(() => {
+    const body = document.body;
+    
+    // Önceki tema sınıflarını kaldır
+    body.classList.remove(
+      'theme-cyber-blue',
+      'theme-neon-green', 
+      'theme-electric-purple',
+      'theme-blood-red',
+      'theme-cosmic-rainbow'
+    );
+
+    // Aktif tema varsa uygula
+    if (userProfile?.inventory?.activeColorTheme) {
+      const themeClass = `theme-${userProfile.inventory.activeColorTheme.replace('_theme', '')}`;
+      body.classList.add(themeClass);
+    }
+  }, [userProfile?.inventory?.activeColorTheme]);
+
   return (
     <div className="min-h-screen bg-space-black text-ghost-white font-sans">
       {/* BİLDİRİM SİSTEMİ BURADA AKTİF EDİLİYOR */}

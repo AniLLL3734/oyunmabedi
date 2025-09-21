@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile } from 'lucide-react';
+import { getUserEmojis } from '../data/specialEmojis';
 import { checkAndGrantAchievements } from '../src/utils/achievementService';
 import AdminTag from '../components/AdminTag';
 import { containsProfanity } from '../src/utils/profanityFilter';
@@ -82,8 +83,9 @@ const ChatPage: React.FC = () => {
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [isSending, setIsSending] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showSpecialEmojis, setShowSpecialEmojis] = useState(false);
+  const [isSending, setIsSending] = useState(false);
     const lastMessageSpamCheck = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
@@ -400,7 +402,45 @@ const ChatPage: React.FC = () => {
                     
                     return (
                         <div key={msg.id} className={`flex items-start gap-3 group relative ${messageIsFromCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                            {!messageIsFromCurrentUser && <Link to={`/profile/${msg.uid}`}><img src={allUsers.get(msg.uid)?.avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.uid}`} alt={msg.displayName} className="w-10 h-10 rounded-full bg-dark-gray object-cover flex-shrink-0"/></Link>}
+                            {!messageIsFromCurrentUser && (
+                                <Link to={`/profile/${msg.uid}`}>
+                                    <div className="relative">
+                                        <img 
+                                            src={allUsers.get(msg.uid)?.avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.uid}`} 
+                                            alt={msg.displayName} 
+                                            className={`w-10 h-10 rounded-full bg-dark-gray object-cover flex-shrink-0 ${
+                                                allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'neon_frame' 
+                                                    ? 'border-2 border-cyan-400 ring-2 ring-cyan-400/50' 
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'hologram_frame'
+                                                    ? 'border-2 border-purple-400 ring-2 ring-purple-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'golden_frame'
+                                                    ? 'border-2 border-yellow-400 ring-2 ring-yellow-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'matrix_frame'
+                                                    ? 'border-2 border-green-400 ring-2 ring-green-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'fire_frame'
+                                                    ? 'border-2 border-red-400 ring-2 ring-red-400/50'
+                                                    : ''
+                                            }`}
+                                        />
+                                        {/* Aktif çerçeve efekti */}
+                                        {allUsers.get(msg.uid)?.inventory?.activeAvatarFrame && (
+                                            <div className={`absolute inset-0 rounded-full animate-pulse ${
+                                                allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'neon_frame' 
+                                                    ? 'ring-1 ring-cyan-400/30' 
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'hologram_frame'
+                                                    ? 'ring-1 ring-purple-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'golden_frame'
+                                                    ? 'ring-1 ring-yellow-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'matrix_frame'
+                                                    ? 'ring-1 ring-green-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'fire_frame'
+                                                    ? 'ring-1 ring-red-400/30'
+                                                    : ''
+                                            }`} />
+                                        )}
+                                    </div>
+                                </Link>
+                            )}
                             <motion.div 
                                 className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${
                                     senderIsAdmin 
@@ -425,7 +465,19 @@ const ChatPage: React.FC = () => {
                                 {!messageIsFromCurrentUser && (
                                     senderIsAdmin ? 
                                     <AdminTag name={msg.displayName} className="text-sm mb-1" /> :
-                                    <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 mb-1 hover:underline">{msg.displayName}</Link>
+                                    <div className="mb-1">
+                                        <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 hover:underline">{msg.displayName}</Link>
+                                        {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle && (
+                                            <span className="ml-2 px-2 py-1 bg-purple-500/20 border border-purple-400/50 rounded-full text-xs text-purple-300 font-bold">
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'score_hunter_title' && 'Skor Avcısı'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'time_master_title' && 'Zaman Efendisi'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'pixel_master_title' && 'Piksel Ustası'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'digital_ghost_title' && 'Dijital Hayalet'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'cyber_legend_title' && 'Siber Efsane'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'code_breaker_title' && 'Kod Kırıcı'}
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                                 
                                 {msg.replyingTo && (
@@ -472,6 +524,36 @@ const ChatPage: React.FC = () => {
                         <span>{chatError}</span>
                     </motion.div>
                 )}
+                {/* Özel Emoji Seçici */}
+                {showSpecialEmojis && userProfile?.inventory?.specialEmojis && userProfile.inventory.specialEmojis.length > 0 && (
+                    <div className="mb-4 p-4 bg-dark-gray/50 border border-cyber-gray/50 rounded-lg">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-sm font-bold text-ghost-white">Özel Emojiler</h3>
+                            <button
+                                onClick={() => setShowSpecialEmojis(false)}
+                                className="text-cyber-gray hover:text-ghost-white transition-colors"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-6 gap-2">
+                            {getUserEmojis(userProfile.inventory).map((emoji) => (
+                                <button
+                                    key={emoji.id}
+                                    onClick={() => {
+                                        setNewMessage(prev => prev + emoji.emoji);
+                                        setShowSpecialEmojis(false);
+                                    }}
+                                    className="p-2 bg-space-black hover:bg-cyber-gray/50 rounded-lg transition-colors text-lg"
+                                    title={emoji.name}
+                                >
+                                    {emoji.emoji}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <form onSubmit={sendMessage} className="flex gap-4 items-start">
                     <div className="flex-1 relative">
                         <input 
@@ -524,6 +606,18 @@ const ChatPage: React.FC = () => {
                     >
                         <Smile size={20} />
                     </button>
+                    
+                    {/* Özel Emoji Butonu */}
+                    {userProfile?.inventory?.specialEmojis && userProfile.inventory.specialEmojis.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setShowSpecialEmojis(!showSpecialEmojis)}
+                            className="p-3 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-all"
+                            title="Özel Emojiler"
+                        >
+                            <Smile size={20} />
+                        </button>
+                    )}
                     
                     <button 
                         type="submit" 

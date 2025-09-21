@@ -7,9 +7,10 @@ interface AdminTagProps {
     name: string;
     className?: string;
     variant?: 'default' | 'crown' | 'lightning';
+    showAdminLabel?: boolean; // [ADMIN] etiketini göster/gizle
 }
 
-const AdminTag: React.FC<AdminTagProps> = ({ name, className, variant = 'default' }) => {
+const AdminTag: React.FC<AdminTagProps> = ({ name, className, variant = 'default', showAdminLabel = true }) => {
     const getIcon = () => {
         const iconProps = {
             size: "1em", // Yazı boyutuna göre kendini ayarlar
@@ -36,14 +37,20 @@ const AdminTag: React.FC<AdminTagProps> = ({ name, className, variant = 'default
         }
     };
 
-    // NOT: Ana kapsayıcıya gradient ve animasyon uygulanıyor.
-    // Hem ikon hem de metin bu kapsayıcının içinde.
-    // 'text-transparent' ve 'bg-clip-text' sadece metni etkiler,
-    // ikon kendi rengini korur, bu yüzden bu yapı doğrudur.
     return (
-        <span className={`inline-flex items-center justify-center gap-2 font-black bg-clip-text text-transparent ${getGradient()} animate-gradient-x ${className}`}>
-            {getIcon()}
-            <span>{name}</span>
+        <span className={`inline-flex items-center justify-center gap-2 font-black ${className}`}>
+            {/* [ADMIN] Etiketi */}
+            {showAdminLabel && (
+                <span className="px-2 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs font-bold rounded-md border border-red-400 shadow-lg animate-pulse">
+                    [ADMIN]
+                </span>
+            )}
+            
+            {/* Ana Admin Tag */}
+            <span className={`inline-flex items-center gap-2 bg-clip-text text-transparent ${getGradient()} animate-gradient-x`}>
+                {getIcon()}
+                <span>{name}</span>
+            </span>
         </span>
     );
 };

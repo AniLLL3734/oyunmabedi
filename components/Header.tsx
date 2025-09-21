@@ -5,7 +5,7 @@ import { useAuth, UserProfileData } from '../src/contexts/AuthContext'; // UserP
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit } from 'firebase/firestore';
-import { Shield, MessagesSquare, MessageCircle, Mail } from 'lucide-react'; 
+import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag } from 'lucide-react'; 
 
 const Header: React.FC = () => {
   const { user, isAdmin, userProfile } = useAuth();
@@ -106,6 +106,11 @@ const Header: React.FC = () => {
           
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/all-users" style={({ isActive }) => (isActive ? activeStyle : {})}>Gezginler</NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>Skor Tablosu</NavLink></motion.div></li>
+          {user && (
+            <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
+              <ShoppingBag size={18} className="text-yellow-400" /> Siber Dükkan
+            </NavLink></motion.div></li>
+          )}
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sohbet Odası</NavLink></motion.div></li>
           {user && (<li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat-rooms" style={({ isActive }) => (isActive ? activeStyle : {})}>
             <MessagesSquare size={18} className="inline-block mr-1"/><span className="hidden md:inline">Diğer Odalar</span></NavLink></motion.div></li>
@@ -139,7 +144,41 @@ const Header: React.FC = () => {
             <li className="flex items-center gap-3">
               <button onClick={handleLogout} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">Çıkış Yap</button>
               <Link to={`/profile/${user.uid}`} title="Profilini Görüntüle">
-                <img src={userProfile.avatarUrl} alt="Avatar" className="w-10 h-10 rounded-full border-2 border-cyber-gray hover:border-electric-purple transition-colors object-cover"/>
+                <div className="relative">
+                  <img 
+                    src={userProfile.avatarUrl} 
+                    alt="Avatar" 
+                    className={`w-10 h-10 rounded-full border-2 object-cover transition-all ${
+                      userProfile.inventory?.activeAvatarFrame === 'neon_frame' 
+                          ? 'border-cyan-400 ring-2 ring-cyan-400/50' 
+                          : userProfile.inventory?.activeAvatarFrame === 'hologram_frame'
+                          ? 'border-purple-400 ring-2 ring-purple-400/50'
+                          : userProfile.inventory?.activeAvatarFrame === 'golden_frame'
+                          ? 'border-yellow-400 ring-2 ring-yellow-400/50'
+                          : userProfile.inventory?.activeAvatarFrame === 'matrix_frame'
+                          ? 'border-green-400 ring-2 ring-green-400/50'
+                          : userProfile.inventory?.activeAvatarFrame === 'fire_frame'
+                          ? 'border-red-400 ring-2 ring-red-400/50'
+                          : 'border-cyber-gray hover:border-electric-purple'
+                    }`}
+                  />
+                  {/* Aktif çerçeve efekti */}
+                  {userProfile.inventory?.activeAvatarFrame && (
+                    <div className={`absolute inset-0 rounded-full animate-pulse ${
+                      userProfile.inventory.activeAvatarFrame === 'neon_frame' 
+                          ? 'ring-1 ring-cyan-400/30' 
+                          : userProfile.inventory.activeAvatarFrame === 'hologram_frame'
+                          ? 'ring-1 ring-purple-400/30'
+                          : userProfile.inventory.activeAvatarFrame === 'golden_frame'
+                          ? 'ring-1 ring-yellow-400/30'
+                          : userProfile.inventory.activeAvatarFrame === 'matrix_frame'
+                          ? 'ring-1 ring-green-400/30'
+                          : userProfile.inventory.activeAvatarFrame === 'fire_frame'
+                          ? 'ring-1 ring-red-400/30'
+                          : ''
+                    }`} />
+                  )}
+                </div>
               </Link>
             </li>
           ) : (

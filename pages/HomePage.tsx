@@ -8,9 +8,9 @@ import { games } from '../data/games';
 import type { Game } from '../types';
 import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
-import { useAuth, UserProfile } from '../src/contexts/AuthContext';
+import { useAuth } from '../src/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-import { SendHorizonal, MessageSquare, CheckCircle, Gamepad2, TrendingUp, Compass, Sparkles, X, Mail } from 'lucide-react';
+import { SendHorizonal, MessageSquare, CheckCircle, TrendingUp, Compass, Sparkles, X, Mail, AlertTriangle, UserPlus, LogIn, ShoppingBag, Crown, Star } from 'lucide-react';
 
 const shuffleArray = (array: Game[]): Game[] => {
   const shuffled = [...array];
@@ -24,7 +24,7 @@ const shuffleArray = (array: Game[]): Game[] => {
 const HomePage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [mostPlayed, setMostPlayed] = useState<Game[]>([]);
+  const [mostPlayed, setMostPlayed] = useState<(Game & { playCount: number })[]>([]);
   const [newlyAdded, setNewlyAdded] = useState<Game[]>([]);
   const [shuffledGames, setShuffledGames] = useState<Game[]>([]);
   
@@ -34,6 +34,7 @@ const HomePage: React.FC = () => {
   const [isSending, setIsSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [showAdminMessagePopup, setShowAdminMessagePopup] = useState(false);
+  const [showGuestWarning, setShowGuestWarning] = useState(false);
 
   // Popüler ve Yeni eklenen oyunları çekme fonksiyonu
   const fetchGameLists = useCallback(async () => {
@@ -42,11 +43,11 @@ const HomePage: React.FC = () => {
       const gamesRef = collection(db, 'games');
       const q = query(gamesRef, orderBy('playCount', 'desc'), limit(4));
       const querySnapshot = await getDocs(q);
-      const playedGamesData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Game));
+      const playedGamesData = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Game & { playCount: number }));
       const playedGames = playedGamesData.map(pg => {
         const localGame = games.find(g => g.id === pg.id);
         return localGame ? { ...localGame, playCount: pg.playCount } : null;
-      }).filter((g): g is Game => g !== null);
+      }).filter((g): g is Game & { playCount: number } => g !== null);
       setMostPlayed(playedGames);
     } catch (error) {
       console.error("En çok oynananlar çekilemedi:", error);
@@ -56,7 +57,16 @@ const HomePage: React.FC = () => {
   useEffect(() => {
     setShuffledGames(shuffleArray(games));
     fetchGameLists();
-  }, [fetchGameLists]);
+    
+    // Giriş yapmayan kullanıcılar için uyarı göster
+    if (!user) {
+      const timer = setTimeout(() => {
+        setShowGuestWarning(true);
+      }, 3000); // 3 saniye sonra uyarı göster
+      
+      return () => clearTimeout(timer);
+    }
+  }, [fetchGameLists, user]);
 
   // Bildirim Kontrolü useEffect'i - YÖNTEM 2 AKTİF
   useEffect(() => {
@@ -69,7 +79,7 @@ const HomePage: React.FC = () => {
         try {
             const userSnap = await getDoc(userDocRef);
             if (userSnap.exists()) {
-              const data = userSnap.data() as UserProfile;
+              const data = userSnap.data();
               // Sadece durum değişmişse state'i güncelle
               if(data?.unreadAdminMessage === true && !showAdminMessagePopup) {
                   setShowAdminMessagePopup(true);
@@ -245,6 +255,115 @@ const HomePage: React.FC = () => {
                 ))}
             </div>
         </section>
+
+        {/* Giriş Yapmayan Kullanıcılar İçin Uyarı Popup'ı */}
+        <AnimatePresence>
+          {showGuestWarning && !user && (
+            <motion.div
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <motion.div
+                className="bg-dark-gray border-2 border-electric-purple rounded-xl p-8 max-w-2xl w-full text-center relative"
+                initial={{ scale: 0.8, y: 50 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.8, y: 50 }}
+              >
+                {/* Kapatma butonu */}
+                <button
+                  onClick={() => setShowGuestWarning(false)}
+                  className="absolute top-4 right-4 text-cyber-gray hover:text-ghost-white transition-colors"
+                >
+                  <X size={24} />
+                </button>
+
+                {/* Uyarı ikonu */}
+                <div className="mb-6">
+                  <AlertTriangle className="mx-auto text-yellow-400" size={64} />
+                </div>
+
+                {/* Başlık */}
+                <h2 className="text-3xl font-heading mb-4 text-ghost-white">
+                  Dijital Evrene Hoş Geldin, Misafir!
+                </h2>
+
+                {/* Açıklama */}
+                <div className="text-cyber-gray mb-8 space-y-4">
+                  <p className="text-lg">
+                    Şu anda sadece oyunları oynayabiliyorsun, ama çok daha fazlası seni bekliyor!
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                    <div className="bg-space-black/50 p-4 rounded-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <ShoppingBag className="text-yellow-400" size={20} />
+                        <span className="font-bold text-ghost-white">Siber Dükkan</span>
+                      </div>
+                      <p className="text-sm">Avatar çerçeveleri, renk temaları, özel unvanlar ve daha fazlası!</p>
+                    </div>
+                    
+                    <div className="bg-space-black/50 p-4 rounded-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <MessageSquare className="text-green-400" size={20} />
+                        <span className="font-bold text-ghost-white">Sohbet Sistemi</span>
+                      </div>
+                      <p className="text-sm">Diğer oyuncularla sohbet et, deneyimlerini paylaş!</p>
+                    </div>
+                    
+                    <div className="bg-space-black/50 p-4 rounded-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Crown className="text-purple-400" size={20} />
+                        <span className="font-bold text-ghost-white">Başarım Sistemi</span>
+                      </div>
+                      <p className="text-sm">Özel başarımlar kazan, unvanlar elde et!</p>
+                    </div>
+                    
+                    <div className="bg-space-black/50 p-4 rounded-lg">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Star className="text-orange-400" size={20} />
+                        <span className="font-bold text-ghost-white">Skor Sistemi</span>
+                      </div>
+                      <p className="text-sm">Pasif skor kazan, liderlik tablosunda yer al!</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Butonlar */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <Link
+                    to="/signup"
+                    className="px-6 py-3 bg-electric-purple hover:bg-electric-purple/80 text-ghost-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <UserPlus size={20} />
+                    Kayıt Ol
+                  </Link>
+                  
+                  <Link
+                    to="/login"
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-ghost-white font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                  >
+                    <LogIn size={20} />
+                    Giriş Yap
+                  </Link>
+                  
+                  <button
+                    onClick={() => setShowGuestWarning(false)}
+                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-ghost-white font-bold rounded-lg transition-all"
+                  >
+                    İstemiyorum
+                  </button>
+                </div>
+
+                {/* Alt bilgi */}
+                <p className="text-xs text-cyber-gray mt-6">
+                  Kayıt olmak tamamen ücretsizdir ve sadece birkaç saniye sürer.
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
     </motion.div>
   );
 };

@@ -20,5 +20,193 @@
     background-size: 200% 200%;
     animation: gradient-x 3s ease infinite;
   }
+
+  /* === RENK TEMALARI === */
+  .theme-cyber-blue {
+    --primary-color: #3b82f6;
+    --secondary-color: #1e40af;
+    --accent-color: #60a5fa;
+    --text-color: #dbeafe;
+    --bg-color: #1e3a8a;
+  }
+
+  .theme-neon-green {
+    --primary-color: #10b981;
+    --secondary-color: #047857;
+    --accent-color: #34d399;
+    --text-color: #d1fae5;
+    --bg-color: #064e3b;
+  }
+
+  .theme-electric-purple {
+    --primary-color: #8b5cf6;
+    --secondary-color: #6d28d9;
+    --accent-color: #a78bfa;
+    --text-color: #ede9fe;
+    --bg-color: #4c1d95;
+  }
+
+  .theme-blood-red {
+    --primary-color: #ef4444;
+    --secondary-color: #dc2626;
+    --accent-color: #f87171;
+    --text-color: #fecaca;
+    --bg-color: #7f1d1d;
+  }
+
+  .theme-cosmic-rainbow {
+    --primary-color: #f59e0b;
+    --secondary-color: #d97706;
+    --accent-color: #fbbf24;
+    --text-color: #fef3c7;
+    --bg-color: #92400e;
+  }
+
+  /* Tema uygulama sınıfları - Kapsamlı renk değişiklikleri */
+  
+  /* Siber Mavi Tema */
+  .theme-cyber-blue {
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --secondary: #1e40af;
+    --accent: #60a5fa;
+  }
+  
+  .theme-cyber-blue .bg-electric-purple,
+  .theme-cyber-blue button.bg-electric-purple,
+  .theme-cyber-blue .bg-electric-purple\/80 { 
+    background-color: var(--primary) !important; 
+  }
+  
+  .theme-cyber-blue .text-electric-purple,
+  .theme-cyber-blue a.text-electric-purple { 
+    color: var(--primary) !important; 
+  }
+  
+  .theme-cyber-blue .border-electric-purple,
+  .theme-cyber-blue .border-electric-purple\/50 { 
+    border-color: var(--primary) !important; 
+  }
+  
+  .theme-cyber-blue .ring-electric-purple,
+  .theme-cyber-blue .ring-electric-purple\/50 { 
+    --tw-ring-color: var(--primary) !important; 
+  }
+
+  /* Neon Yeşil Tema */
+  .theme-neon-green {
+    --primary: #10b981;
+    --primary-hover: #059669;
+    --secondary: #047857;
+    --accent: #34d399;
+  }
+  
+  .theme-neon-green .bg-electric-purple,
+  .theme-neon-green button.bg-electric-purple,
+  .theme-neon-green .bg-electric-purple\/80 { 
+    background-color: var(--primary) !important; 
+  }
+  
+  .theme-neon-green .text-electric-purple,
+  .theme-neon-green a.text-electric-purple { 
+    color: var(--primary) !important; 
+  }
+  
+  .theme-neon-green .border-electric-purple,
+  .theme-neon-green .border-electric-purple\/50 { 
+    border-color: var(--primary) !important; 
+  }
+  
+  .theme-neon-green .ring-electric-purple,
+  .theme-neon-green .ring-electric-purple\/50 { 
+    --tw-ring-color: var(--primary) !important; 
+  }
+
+  /* Elektrik Mor Tema (Varsayılan) */
+  .theme-electric-purple {
+    --primary: #8b5cf6;
+    --primary-hover: #7c3aed;
+    --secondary: #6d28d9;
+    --accent: #a78bfa;
+  }
+  
+  .theme-electric-purple .bg-electric-purple,
+  .theme-electric-purple button.bg-electric-purple,
+  .theme-electric-purple .bg-electric-purple\/80 { 
+    background-color: var(--primary) !important; 
+  }
+  
+  .theme-electric-purple .text-electric-purple,
+  .theme-electric-purple a.text-electric-purple { 
+    color: var(--primary) !important; 
+  }
+  
+  .theme-electric-purple .border-electric-purple,
+  .theme-electric-purple .border-electric-purple\/50 { 
+    border-color: var(--primary) !important; 
+  }
+  
+  .theme-electric-purple .ring-electric-purple,
+  .theme-electric-purple .ring-electric-purple\/50 { 
+    --tw-ring-color: var(--primary) !important; 
+  }
+
+  /* Kan Kırmızısı Tema */
+  .theme-blood-red {
+    --primary: #ef4444;
+    --primary-hover: #dc2626;
+    --secondary: #dc2626;
+    --accent: #f87171;
+  }
+  
+  .theme-blood-red .bg-electric-purple,
+  .theme-blood-red button.bg-electric-purple,
+  .theme-blood-red .bg-electric-purple\/80 { 
+    background-color: var(--primary) !important; 
+  }
+  
+  .theme-blood-red .text-electric-purple,
+  .theme-blood-red a.text-electric-purple { 
+    color: var(--primary) !important; 
+  }
+  
+  .theme-blood-red .border-electric-purple,
+  .theme-blood-red .border-electric-purple\/50 { 
+    border-color: var(--primary) !important; 
+  }
+  
+  .theme-blood-red .ring-electric-purple,
+  .theme-blood-red .ring-electric-purple\/50 { 
+    --tw-ring-color: var(--primary) !important; 
+  }
+
+  /* Kozmik Gökkuşağı Tema */
+  .theme-cosmic-rainbow {
+    --primary: #f59e0b;
+    --primary-hover: #d97706;
+    --secondary: #d97706;
+    --accent: #fbbf24;
+  }
+  
+  .theme-cosmic-rainbow .bg-electric-purple,
+  .theme-cosmic-rainbow button.bg-electric-purple,
+  .theme-cosmic-rainbow .bg-electric-purple\/80 { 
+    background-color: var(--primary) !important; 
+  }
+  
+  .theme-cosmic-rainbow .text-electric-purple,
+  .theme-cosmic-rainbow a.text-electric-purple { 
+    color: var(--primary) !important; 
+  }
+  
+  .theme-cosmic-rainbow .border-electric-purple,
+  .theme-cosmic-rainbow .border-electric-purple\/50 { 
+    border-color: var(--primary) !important; 
+  }
+  
+  .theme-cosmic-rainbow .ring-electric-purple,
+  .theme-cosmic-rainbow .ring-electric-purple\/50 { 
+    --tw-ring-color: var(--primary) !important; 
+  }
 }
 /* -- EKLEME SONU -- */

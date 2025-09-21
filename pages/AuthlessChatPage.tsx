@@ -246,9 +246,63 @@ const AuthlessChatPage: React.FC = () => {
                     const messageIsFromCurrentUser = userInfo.uid === msg.uid;
                     return (
                         <div key={msg.id} className={`flex items-start gap-3 group relative ${messageIsFromCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
-                            {!messageIsFromCurrentUser && <Link to={`/profile/${msg.uid}`}><img src={allUsers.get(msg.uid)?.avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.uid}`} alt={msg.displayName} className="w-10 h-10 rounded-full bg-dark-gray object-cover flex-shrink-0"/></Link>}
+                            {!messageIsFromCurrentUser && (
+                                <Link to={`/profile/${msg.uid}`}>
+                                    <div className="relative">
+                                        <img 
+                                            src={allUsers.get(msg.uid)?.avatarUrl || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${msg.uid}`} 
+                                            alt={msg.displayName} 
+                                            className={`w-10 h-10 rounded-full bg-dark-gray object-cover flex-shrink-0 ${
+                                                allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'neon_frame' 
+                                                    ? 'border-2 border-cyan-400 ring-2 ring-cyan-400/50' 
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'hologram_frame'
+                                                    ? 'border-2 border-purple-400 ring-2 ring-purple-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'golden_frame'
+                                                    ? 'border-2 border-yellow-400 ring-2 ring-yellow-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'matrix_frame'
+                                                    ? 'border-2 border-green-400 ring-2 ring-green-400/50'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'fire_frame'
+                                                    ? 'border-2 border-red-400 ring-2 ring-red-400/50'
+                                                    : ''
+                                            }`}
+                                        />
+                                        {/* Aktif çerçeve efekti */}
+                                        {allUsers.get(msg.uid)?.inventory?.activeAvatarFrame && (
+                                            <div className={`absolute inset-0 rounded-full animate-pulse ${
+                                                allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'neon_frame' 
+                                                    ? 'ring-1 ring-cyan-400/30' 
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'hologram_frame'
+                                                    ? 'ring-1 ring-purple-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'golden_frame'
+                                                    ? 'ring-1 ring-yellow-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'matrix_frame'
+                                                    ? 'ring-1 ring-green-400/30'
+                                                    : allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'fire_frame'
+                                                    ? 'ring-1 ring-red-400/30'
+                                                    : ''
+                                            }`} />
+                                        )}
+                                    </div>
+                                </Link>
+                            )}
                             <div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400 bg-dark-gray' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`}>
-                                {!messageIsFromCurrentUser && ( senderIsAdmin ? <AdminTag name={msg.displayName} className="text-sm mb-1" /> : <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 mb-1 hover:underline">{msg.displayName}</Link> )}
+                                {!messageIsFromCurrentUser && (
+                                    senderIsAdmin ? 
+                                    <AdminTag name={msg.displayName} className="text-sm mb-1" /> :
+                                    <div className="mb-1">
+                                        <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 hover:underline">{msg.displayName}</Link>
+                                        {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle && (
+                                            <span className="ml-2 px-2 py-1 bg-purple-500/20 border border-purple-400/50 rounded-full text-xs text-purple-300 font-bold">
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'score_hunter_title' && 'Skor Avcısı'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'time_master_title' && 'Zaman Efendisi'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'pixel_master_title' && 'Piksel Ustası'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'digital_ghost_title' && 'Dijital Hayalet'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'cyber_legend_title' && 'Siber Efsane'}
+                                                {allUsers.get(msg.uid)?.inventory?.activeSpecialTitle === 'code_breaker_title' && 'Kod Kırıcı'}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                                 {msg.replyingTo && (
                                     <div className="mb-2 p-2 border-l-2 border-cyber-gray/50 bg-black/20 rounded-md text-xs opacity-80">
                                         <p className="font-bold">{msg.replyingTo.displayName}</p>
