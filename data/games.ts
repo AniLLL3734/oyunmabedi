@@ -457,6 +457,20 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: 'HTML5, Sandbox, Macera, Hayatta Kalma, Yaratıcılık, İnşa Etme, Klasik',
   controls: 'W,A,S,D: Hareket\nBoşluk Tuşu: Zıpla\nMouse Sol Tık: Kır / Vur\nMouse Sağ Tık: Blok Koy\nE Tuşu: Envanter\nSohbet: T',
 },
+{
+  id: 'color-tunnel',
+  title: 'COLOR TUNNEL',
+  description: 'Gözlerini kamaştıran renklerin ve geometrinin ortasında, inanılmaz bir hızla boşluğa doğru süzülüyorsun. Reflekslerin, seni bir sonraki anomaliye taşıyacak tek para birimi. Bu hipnotik tünelde ne kadar süre hayatta kalabilir, ne kadar derine inebilirsin? -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://spectacular-begonia-ea8c12.netlify.app/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/CT1.jpg',
+  
+  category: 'Beceri',
+  tags: 'HTML5, Sonsuz Koşu, 3D, Beceri, Refleks, Hız, Tünel',
+  controls: 'Sol/Sağ Yön Tuşları: Yön Değiştir.',
+},
+
 
 
 

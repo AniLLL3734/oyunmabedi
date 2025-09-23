@@ -146,8 +146,28 @@ const ChatPage: React.FC = () => {
     // Disclaimer kontrol effect'i
     useEffect(() => {
         if (!user) return;
-        setShowDisclaimer(true); // Her sohbete girişte varsayılan olarak göster
-        setDisclaimerTimer(10); // Sayacı sıfırla
+        
+        // Kullanıcının disclaimer durumunu kontrol et
+        const checkDisclaimerStatus = async () => {
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userData = userDoc.data();
+                
+                // Eğer kullanıcı daha önce kabul etmemişse göster
+                if (!userData?.hasAcceptedChatDisclaimer) {
+                    setShowDisclaimer(true);
+                    setDisclaimerTimer(10);
+                } else {
+                    setShowDisclaimer(false);
+                }
+            } catch (error) {
+                console.error("Disclaimer durumu kontrol edilirken hata:", error);
+                setShowDisclaimer(true);
+                setDisclaimerTimer(10);
+            }
+        };
+        
+        checkDisclaimerStatus();
     }, [user]);
 
     // Disclaimer sayaç effect'i
@@ -165,10 +185,17 @@ const ChatPage: React.FC = () => {
 
     // Disclaimer kabul edildiğinde Firestore'a kaydet ve sinyali tetikle
     const handleAcceptDisclaimer = async () => {
-        setShowDisclaimer(false);
         if (!user) return;
         
         try {
+            // Kullanıcı dokümanını güncelle
+            const userRef = doc(db, 'users', user.uid);
+            await updateDoc(userRef, {
+                hasAcceptedChatDisclaimer: true,
+                disclaimerAcceptedAt: serverTimestamp()
+            });
+            
+            setShowDisclaimer(false);
             await triggerSignal(); // Sohbet sinyalini tetikle
         } catch (error) {
             console.error("Sorumluluk reddi kaydedilirken hata:", error);
@@ -446,44 +473,61 @@ const ChatPage: React.FC = () => {
                     )}
                 </motion.div>
             )}
-            {/* Sorumluluk Reddi Modalı */}
+                        {/* Sorumluluk Reddi Modalı */}
             {showDisclaimer && (
-                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <motion.div 
                         initial={{ scale: 0.9, opacity: 0 }} 
                         animate={{ scale: 1, opacity: 1 }} 
-                        className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-md"
+                        className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-lg shadow-2xl shadow-electric-purple/20"
                     >
-                        <h2 className="text-2xl font-bold text-electric-purple mb-4">⚠️ Sinyale Girmeden Önce Oku</h2>
+                        <h2 className="text-2xl font-heading text-electric-purple mb-4 flex items-center gap-3">
+                            <ShieldAlert size={28}/> 
+                            FREKANSA BAĞLANMADAN ÖNCE...
+                        </h2>
                         <div className="space-y-4 text-ghost-white">
-                            <p className="text-yellow-400 font-semibold">Bu frekansa bağlanarak, evrenin aşağıdaki temel yasalarını kabul etmiş olursun:</p>
-                            <ul className="list-disc pl-5 space-y-3 text-cyber-gray">
-                                <li>Boşluğa fısıldanan her kelime <span className="font-bold text-ghost-white">sonsuza dek kaydedilir.</span> Yankısı asla kaybolmaz.</li>
-                                <li>Kaos, hakaret veya tehdit sinyalleri yayanlar, bu evrenden <span className="font-bold text-red-500">kalıcı olarak sürgün edilir.</span></li>
-                                <li>Gönderdiğin her sinyalin sorumluluğu <span className="font-bold text-ghost-white">yalnızca sana aittir.</span> Mimar, sadece yasaları uygular.</li>
-                                <li className="font-semibold text-orange-400">Unutma ki Mimar, bu evreni gözlemlemek için tasarladı, her bir gezgini denetlemek için değil. Sinyalinizin dış dünyadaki yankılarından (okul yönetimi, vs.) veya diğer gezginlerle aranızdaki frekans uyuşmazlıklarından <span className="underline">Mimar sorumlu tutulamaz.</span></li>
-                                <li>Bu kuralları ihlal eden bir sinyalin varlığı, sistemin yasal protokolleri başlatması için yeterlidir.</li>
+                            <p className="text-yellow-400 font-semibold">Bu sinyale katılarak, evrenin aşağıdaki temel yasalarını kalıcı olarak kabul etmiş olursun:</p>
+                            
+                            <ul className="list-none pl-2 space-y-3 text-cyber-gray border-l-2 border-electric-purple/50">
+                                <li className="pl-4">
+                                    <span className="font-bold text-ghost-white">KURAL I: Yankı Asla Kaybolmaz.</span>
+                                    <br/>
+                                    Boşluğa fısıldanan her sinyal (<span className="italic">mesaj</span>) sonsuza dek kaydedilir. Kişisel veri (isim, okul, adres) sızdırmak, sinyalin yozlaşması demektir ve yasaktır.
+                                </li>
+                                <li className="pl-4">
+                                    <span className="font-bold text-ghost-white">KURAL II: Kaosa Geçit Yok.</span>
+                                    <br/>
+                                    Ailevi, şahsi ve kutsal değerlere hakaret (<span className="italic">ana, bacı, sülale,din,Ataya hakaret ve diğerleri...</span>), tehdit veya kaos sinyali yaymak, frekanstan <span className="font-bold text-red-500">geri dönülmez şekilde sürgün edilme sebebidir.</span>
+                                </li>
+                                <li className="pl-4">
+                                    <span className="font-bold text-ghost-white">KURAL III: Mimar Değil, Gönderici Sorumludur.</span>
+                                    <br/>
+                                    Gönderdiğin her sinyalin ve onun dış dünyadaki yankılarının tek sorumlusu sensin. Mimar, evreni gözlemler, gezginleri denetlemez. Frekans uyuşmazlıklarından <span className="underline">Mimar sorumlu tutulamaz.</span>
+                                </li>
                             </ul>
-                            <p className="mt-4 text-electric-purple/80">Piksellerin de bir hafızası vardır. Rahatsız edici bir frekansla karşılaşırsan, kanıtını al ve Mimar'a ilet.</p>
+
+                            <p className="mt-4 p-3 bg-space-black border border-cyber-gray/30 rounded-md text-electric-purple/80">
+                                Unutma; piksellerin hafızası, kelimelerin ise ağırlığı vardır. Rahatsız edici bir frekansla karşılaşırsan, kanıtını al ve Mimar'a ilet.
+                            </p>
                         </div>
-                        <div className="mt-8 flex items-center justify-end gap-4">
-                            <span className="text-cyber-gray font-mono">{disclaimerTimer} saniye</span>
+
+                        <div className="mt-6 flex items-center justify-end gap-4">
+                            <span className="text-cyber-gray font-mono tracking-widest">{disclaimerTimer < 10 ? `0${disclaimerTimer}`: disclaimerTimer}</span>
                             <button
                                 onClick={handleAcceptDisclaimer}
                                 disabled={disclaimerTimer > 0}
-                                className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all ${
+                                className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all transform hover:scale-105 duration-300 ${
                                     disclaimerTimer > 0 
-                                    ? 'opacity-50 cursor-not-allowed' 
-                                    : 'hover:bg-opacity-80'
+                                    ? 'opacity-40 cursor-not-allowed filter grayscale' 
+                                    : 'hover:bg-opacity-80 hover:shadow-lg hover:shadow-electric-purple/50'
                                 }`}
                             >
-                                Yasaları Anladım ve Sorumluluğu Kabul Ediyorum
+                                Yasaları Anladım, Sorumluluğu Alıyorum
                             </button>
                         </div>
                     </motion.div>
                 </div>
             )}
-
 
 
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50">

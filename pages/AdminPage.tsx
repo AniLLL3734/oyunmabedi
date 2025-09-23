@@ -2,8 +2,8 @@
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc, getDoc } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download } from 'lucide-react';
+import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc, getDoc, where } from 'firebase/firestore';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface UserData {
@@ -12,6 +12,7 @@ interface UserData {
     email: string;
     role: 'admin' | 'user';
     mutedUntil?: Timestamp;
+    score?: number;
 }
 interface GameData {
     id: string;
@@ -90,6 +91,57 @@ const AdminPage: React.FC = () => {
     const [muteUsername, setMuteUsername] = useState('');
     const [muteDuration, setMuteDuration] = useState('1h');
     const [kickUsername, setKickUsername] = useState('');
+    const [searchUser, setSearchUser] = useState('');
+    const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+    const [scoreAmount, setScoreAmount] = useState<number>(0);
+
+    // Skor yönetimi fonksiyonları
+    const handleSearchUser = async () => {
+        if (!searchUser.trim()) return;
+        
+        try {
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('displayName', '==', searchUser.trim()));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                const userData = querySnapshot.docs[0].data() as UserData;
+                setSelectedUser({
+                    ...userData,
+                    uid: querySnapshot.docs[0].id,
+                    score: userData.score || 0
+                });
+            } else {
+                setSelectedUser(null);
+                alert('Kullanıcı bulunamadı');
+            }
+        } catch (error) {
+            console.error('Kullanıcı arama hatası:', error);
+            alert('Kullanıcı aranırken bir hata oluştu');
+        }
+    };
+
+    const handleUpdateScore = async (increment: boolean) => {
+        if (!selectedUser || !scoreAmount) return;
+        
+        try {
+            const userRef = doc(db, 'users', selectedUser.uid);
+            const userDoc = await getDoc(userRef);
+            const currentScore = userDoc.data()?.score || 0;
+            
+            const newScore = increment ? 
+                currentScore + Math.abs(scoreAmount) : 
+                Math.max(0, currentScore - Math.abs(scoreAmount));
+            
+            await updateDoc(userRef, { score: newScore });
+            
+            setSelectedUser(prev => prev ? {...prev, score: newScore} : null);
+            alert(`${selectedUser.displayName} kullanıcısının skoru ${newScore} olarak güncellendi`);
+        } catch (error) {
+            console.error('Skor güncelleme hatası:', error);
+            alert('Skor güncellenirken bir hata oluştu');
+        }
+    };
 
     useEffect(() => {
         if (!isAdmin) return;
@@ -539,6 +591,62 @@ const AdminPage: React.FC = () => {
                 <div className="space-y-6">
                     <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><Megaphone className="text-electric-purple" />Sistem Komutları</h2>
                     
+
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50 mb-6">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Trophy className="text-yellow-400" />Skor Yönetimi</h3>
+                        <div className="space-y-4">
+                            <div className="flex gap-3">
+                                <input
+                                    type="text"
+                                    value={searchUser}
+                                    onChange={(e) => setSearchUser(e.target.value)}
+                                    placeholder="Kullanıcı adı..."
+                                    className="flex-1 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                                />
+                                <button
+                                    onClick={handleSearchUser}
+                                    className="px-6 py-2 bg-electric-purple hover:bg-opacity-80 text-white font-bold rounded-lg transition-colors"
+                                >
+                                    <Search className="inline-block mr-2" />Ara
+                                </button>
+                            </div>
+                            
+                            {selectedUser && (
+                                <div className="bg-space-black p-4 rounded-lg">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <User className="text-electric-purple" />
+                                        <div>
+                                            <p className="font-bold text-ghost-white">{selectedUser.displayName}</p>
+                                            <p className="text-cyber-gray text-sm">Mevcut Skor: {selectedUser.score || 0}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex gap-3 items-center">
+                                        <input
+                                            type="number"
+                                            value={scoreAmount}
+                                            onChange={(e) => setScoreAmount(Math.max(0, parseInt(e.target.value) || 0))}
+                                            min="0"
+                                            placeholder="Skor miktarı..."
+                                            className="w-32 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                                        />
+                                        <button
+                                            onClick={() => handleUpdateScore(true)}
+                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Plus size={18} />Ekle
+                                        </button>
+                                        <button
+                                            onClick={() => handleUpdateScore(false)}
+                                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            <Minus size={18} />Çıkar
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
                         <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Megaphone className="text-yellow-400" />Duyuru Yönetimi</h3>

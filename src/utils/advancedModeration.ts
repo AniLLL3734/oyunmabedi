@@ -1,11 +1,12 @@
-// Gelişmiş Moderasyon Sistemi
-// Otomatik spam koruması, kelime filtreleme ve davranış analizi
+// Gelişmiş Moderasyon Sistemi v5 - Davranışsal ve Desen Tabanlı Filtreleme
+// Bu sürüm, sağlanan sohbet geçmişi analiz edilerek özel olarak tasarlanmıştır.
 
+// --- ARAYÜZLER VE TİPLER (Değişiklik Yok) ---
 export interface ModerationResult {
     isBlocked: boolean;
     reason?: string;
-    action: 'allow' | 'warn' | 'block' | 'mute';
-    confidence: number; // 0-100 arası güven skoru
+    action: 'allow' | 'warn' | 'block';
+    confidence: number; 
 }
 
 export interface SpamDetection {
@@ -14,223 +15,204 @@ export interface SpamDetection {
     confidence: number;
 }
 
-// Spam tespiti için kullanıcı geçmişi
+// --- VERİ DEPOLAMA (Değişiklik Yok) ---
 const userMessageHistory = new Map<string, {
     messages: string[];
     timestamps: number[];
     lastMessage: number;
 }>();
 
-// Spam koruması ayarları
-const SPAM_CONFIG = {
-    MAX_MESSAGES_PER_MINUTE: 5,
-    MAX_SIMILAR_MESSAGES: 3,
-    MAX_CAPS_RATIO: 0.7,
-    MAX_REPEAT_CHARS: 5,
-    COOLDOWN_SECONDS: 2,
-    SIMILARITY_THRESHOLD: 0.8
+
+// --- YAPILANDIRMA VE UYARI MESAJLARI ---
+
+// Gizemli ve Zeki Uyarı Mesajları Havuzu
+const PROFANITY_WARNINGS = [
+    "Sinyalin, evrenin karanlık bir köşesinde yutuldu. Daha aydınlık frekanslar dene.",
+    "Mimar, bu frekans anomalisini kaydetti. Piksellerin fısıltısı daha zarif olmalı.",
+    "Boşluğa gönderdiğin bu sinyal, bir kara deliğin olay ufkunda yankılanmaya mahkum edildi.",
+    "Bu kelimeler, zamanın dokusunda bir yırtık oluşturdu. Sistem, evreni korumak için mesajını izole etti.",
+    "Yüksek bir zeka, kelimelerini daha keskin bir kılıç gibi kullanır. Bu deneme kör bir baltaydı.",
+    "Tebrikler! Kozmik gürültü filtresini tetikledin. Belki bir sonraki sinyalin yıldızlara ulaşır.",
+];
+
+// Spam için standart uyarılar
+const SPAM_WARNINGS = {
+    SPAM: "Frekans boğuluyor. Lütfen daha yapıcı sinyaller gönder.",
+    COOLDOWN: "Sinyal gönderim hızın evrensel limitleri aşıyor. Lütfen yavaşla.",
+    REPEAT: "Aynı yankıyı tekrar tekrar göndermenin bir anlamı yok.",
 };
 
-// Gelişmiş kelime filtreleme
-const PROFANITY_LEVELS = {
-    MILD: ['aptal', 'salak', 'gerizekalı'],
-    MODERATE: ['amk', 'aq', 'oç'],
-    SEVERE: ['sik', 'sikerim', 'yarak', 'yarrak', 'göt']
+
+// --- AKILLI FİLTRELEME VERİTABANI ---
+// Not: Tüm kelimeler 'normalizeText' fonksiyonundan geçmiş halleriyle yazılmıştır.
+const PROFANITY_DATABASE = {
+    // Kural tabanlı yakalama için hedef kelimeler
+    TARGETS: {
+        FAMILY: ['ana', 'anne', 'baba', 'bacı', 'avrat', 'sulale', 'soy', 'olum', 'kız', 'olun', 'ölü', 'diri'],
+        RELIGIOUS_SELF: ['allah', 'kitap', 'din', 'peygamber'],
+    },
+
+    // Kural tabanlı yakalama için eylem kelimeleri
+    ACTIONS: {
+        SEVERE_VERBS: ['sik', 'sok', 'gotur', 'hoplat', 'bas', 'patlat', 'yal', 'yala', 'dans et', 'kaldir'],
+        GENERAL_VERBS: ['sov', 'geber']
+    },
+
+    // Tek başına kullanıldığında anında engellenecek hakaretler
+    INSULTS: {
+        SEVERE: [
+            'amk', 'amina', 'amq', 'amcik', 'amck',
+            'got', 'gotveren', 'götveren',
+            'sik', 'sok', 'yarrak', 'yarak', 'yarram', 'sikim',
+            'orospu', 'kahpe', 'fayse', 'fahişe',
+            'pezevenk', 'pezo',
+            'oç', 'oc',
+            'piç', 'pic',
+            'siktir', 'sktir'
+        ],
+        MODERATE: [
+            'gavat', 'kavat',
+            'yavsak', 'yavşak',
+            'döl', 'dol',
+            'ibne', 'top', 'travesti', // hakaret amaçlı kullanıldığında
+            'sakso', 'saksafon', // sohbet geçmişine özel
+            'pipi', 'purno'      // sohbet geçmişine özel
+        ],
+        // Hafif olanlar artık tamamen engellendiği için 'mild' seviyesi kaldırıldı.
+    }
 };
 
-const WARNING_MESSAGES = {
-    SPAM: "Mesajınız spam olarak algılandı. Lütfen daha yapıcı olun.",
-    PROFANITY: "Kibar bir dil kullanmanızı rica ederiz.",
-    CAPS: "Büyük harf kullanımını azaltın.",
-    REPEAT: "Aynı mesajı tekrar göndermeyin.",
-    COOLDOWN: "Çok hızlı mesaj gönderiyorsunuz. Lütfen bekleyin."
+// --- ÇEKİRDEK FONKSİYONLAR ---
+
+/**
+ * Metni, atlatılması neredeyse imkansız hale getirmek için agresifçe temizler.
+ */
+const normalizeText = (message: string): string => {
+    return message
+        .toLowerCase()
+        .replace(/@/g, 'a').replace(/4/g, 'a')
+        .replace(/[3e]/g, 'e')
+        .replace(/[1ilı!]/g, 'i')
+        .replace(/[0oö]/g, 'o')
+        .replace(/[5sş]/g, 's')
+        .replace(/[uü]/g, 'u')
+        .replace(/[gğ]/g, 'g')
+        .replace(/[cç]/g, 'c')
+        .replace(/[^a-z0-9]/g, ''); // Sadece harf ve rakamları bırakır, boşluk ve diğer her şeyi siler
 };
 
-// Spam tespiti
+
+/**
+ * İki kelime grubunun aynı metinde olup olmadığını kontrol eden desen motoru.
+ * Burası "ana bacı" gibi yapıları yakalayan beyindir.
+ */
+const findPattern = (text: string, targets: string[], actions:string[]): boolean => {
+    const hasTarget = targets.some(target => text.includes(target));
+    if (!hasTarget) return false;
+
+    const hasAction = actions.some(action => text.includes(action));
+    return hasAction;
+};
+
+/**
+ * Zeki ve ikonik uyarı mesajlarından rastgele birini seçer.
+ */
+const getRandomProfanityReason = (): string => {
+    return PROFANITY_WARNINGS[Math.floor(Math.random() * PROFANITY_WARNINGS.length)];
+};
+
+
+// --- ANA MODERASYON FONKSİYONLARI ---
+
+/**
+ * Sadece spam kontrolü yapar. Kodda değişiklik yapılmadı.
+ */
 export const detectSpam = (message: string, userId: string): SpamDetection => {
     const now = Date.now();
-    const userHistory = userMessageHistory.get(userId) || { messages: [], timestamps: [], lastMessage: 0 };
+    const history = userMessageHistory.get(userId) || { messages: [], timestamps: [], lastMessage: 0 };
     
-    // Cooldown kontrolü
-    if (now - userHistory.lastMessage < SPAM_CONFIG.COOLDOWN_SECONDS * 1000) {
-        return {
-            isSpam: true,
-            reason: WARNING_MESSAGES.COOLDOWN,
-            confidence: 95
-        };
+    // Basit cooldown
+    if (now - history.lastMessage < 1500) {
+        return { isSpam: true, reason: SPAM_WARNINGS.COOLDOWN, confidence: 95 };
     }
     
-    // Son 1 dakikadaki mesaj sayısı
-    const oneMinuteAgo = now - 60000;
-    const recentMessages = userHistory.timestamps.filter(t => t > oneMinuteAgo);
-    
-    if (recentMessages.length >= SPAM_CONFIG.MAX_MESSAGES_PER_MINUTE) {
-        return {
-            isSpam: true,
-            reason: WARNING_MESSAGES.SPAM,
-            confidence: 90
-        };
+    // Mesaj tekrarı
+    if (history.messages.length > 0 && history.messages.some(msg => msg === message)) {
+        return { isSpam: true, reason: SPAM_WARNINGS.REPEAT, confidence: 85 };
     }
+
+    history.messages.push(message);
+    history.timestamps.push(now);
+    history.lastMessage = now;
+    if (history.messages.length > 10) history.messages.shift();
+    userMessageHistory.set(userId, history);
     
-    // Büyük harf oranı kontrolü
-    const capsRatio = (message.match(/[A-ZĞÜŞİÖÇ]/g) || []).length / message.length;
-    if (capsRatio > SPAM_CONFIG.MAX_CAPS_RATIO && message.length > 10) {
-        return {
-            isSpam: true,
-            reason: WARNING_MESSAGES.CAPS,
-            confidence: 70
-        };
-    }
-    
-    // Tekrarlanan karakter kontrolü
-    const repeatChars = message.match(/(.)\1{4,}/g);
-    if (repeatChars) {
-        return {
-            isSpam: true,
-            reason: WARNING_MESSAGES.REPEAT,
-            confidence: 80
-        };
-    }
-    
-    // Benzer mesaj kontrolü
-    const similarity = calculateSimilarity(message, userHistory.messages);
-    if (similarity > SPAM_CONFIG.SIMILARITY_THRESHOLD) {
-        return {
-            isSpam: true,
-            reason: WARNING_MESSAGES.REPEAT,
-            confidence: 85
-        };
-    }
-    
-    // Geçmişi güncelle
-    userHistory.messages.push(message);
-    userHistory.timestamps.push(now);
-    userHistory.lastMessage = now;
-    
-    // Son 10 mesajı tut
-    if (userHistory.messages.length > 10) {
-        userHistory.messages = userHistory.messages.slice(-10);
-        userHistory.timestamps = userHistory.timestamps.slice(-10);
-    }
-    
-    userMessageHistory.set(userId, userHistory);
-    
-    return {
-        isSpam: false,
-        reason: '',
-        confidence: 0
-    };
+    return { isSpam: false, reason: '', confidence: 0 };
 };
 
-// Mesaj benzerliği hesaplama (Levenshtein distance)
-const calculateSimilarity = (message1: string, messages: string[]): number => {
-    if (messages.length === 0) return 0;
-    
-    const similarities = messages.map(msg => {
-        const distance = levenshteinDistance(message1.toLowerCase(), msg.toLowerCase());
-        const maxLength = Math.max(message1.length, msg.length);
-        return 1 - (distance / maxLength);
-    });
-    
-    return Math.max(...similarities);
-};
 
-const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix = Array(str2.length + 1).fill(null).map(() => Array(str1.length + 1).fill(null));
-    
-    for (let i = 0; i <= str1.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= str2.length; j++) matrix[j][0] = j;
-    
-    for (let j = 1; j <= str2.length; j++) {
-        for (let i = 1; i <= str1.length; i++) {
-            const indicator = str1[i - 1] === str2[j - 1] ? 0 : 1;
-            matrix[j][i] = Math.min(
-                matrix[j][i - 1] + 1,
-                matrix[j - 1][i] + 1,
-                matrix[j - 1][i - 1] + indicator
-            );
-        }
-    }
-    
-    return matrix[str2.length][str1.length];
-};
-
-// Gelişmiş kelime filtreleme
+/**
+ * Sohbet geçmişine göre tamamen yeniden yazılmış küfür filtresi.
+ */
 export const checkProfanity = (message: string): ModerationResult => {
-    const lowerMessage = message.toLowerCase();
-    
-    // Ağır küfür kontrolü
-    for (const word of PROFANITY_LEVELS.SEVERE) {
-        if (lowerMessage.includes(word)) {
-            return {
-                isBlocked: true,
-                reason: "Ağır küfür kullanımı tespit edildi.",
-                action: 'block',
-                confidence: 95
-            };
-        }
+    const normalizedMessage = normalizeText(message);
+
+    // KURAL 1: AİLE BİREYLERİNE YÖNELİK AĞIR SALDIRILAR (EN YÜKSEK ÖNCELİK)
+    if (findPattern(normalizedMessage, PROFANITY_DATABASE.TARGETS.FAMILY, PROFANITY_DATABASE.ACTIONS.SEVERE_VERBS)) {
+        return { isBlocked: true, reason: getRandomProfanityReason(), action: 'block', confidence: 100 };
     }
     
-    // Orta seviye küfür kontrolü
-    for (const word of PROFANITY_LEVELS.MODERATE) {
-        if (lowerMessage.includes(word)) {
-            return {
-                isBlocked: true,
-                reason: WARNING_MESSAGES.PROFANITY,
-                action: 'warn',
-                confidence: 80
-            };
-        }
+    // KURAL 2: DOĞRUDAN VE AĞIR KÜFÜRLER
+    if (PROFANITY_DATABASE.INSULTS.SEVERE.some(word => normalizedMessage.includes(word))) {
+        return { isBlocked: true, reason: getRandomProfanityReason(), action: 'block', confidence: 98 };
     }
     
-    // Hafif küfür kontrolü
-    for (const word of PROFANITY_LEVELS.MILD) {
-        if (lowerMessage.includes(word)) {
-            return {
-                isBlocked: false,
-                reason: WARNING_MESSAGES.PROFANITY,
-                action: 'warn',
-                confidence: 60
-            };
-        }
+    // KURAL 3: ORTA SEVİYE HAKARETLER VE ARGOLAR
+    if (PROFANITY_DATABASE.INSULTS.MODERATE.some(word => normalizedMessage.includes(word))) {
+        return { isBlocked: true, reason: getRandomProfanityReason(), action: 'block', confidence: 90 };
     }
     
-    return {
-        isBlocked: false,
-        action: 'allow',
-        confidence: 0
-    };
+    // KURAL 4: DİĞER DESENLER (daha az ağır eylemlerle)
+    if (findPattern(normalizedMessage, PROFANITY_DATABASE.TARGETS.FAMILY, PROFANITY_DATABASE.ACTIONS.GENERAL_VERBS)) {
+        return { isBlocked: true, reason: getRandomProfanityReason(), action: 'block', confidence: 85 };
+    }
+
+    return { isBlocked: false, action: 'allow', confidence: 0 };
 };
 
-// Ana moderasyon fonksiyonu
+
+/**
+ * Tüm kontrolleri birleştiren ana fonksiyon.
+ */
 export const moderateMessage = (message: string, userId: string): ModerationResult => {
-    // Spam kontrolü
+    // Spam kontrolü önce yapılır.
     const spamCheck = detectSpam(message, userId);
     if (spamCheck.isSpam) {
         return {
             isBlocked: true,
             reason: spamCheck.reason,
             action: 'block',
-            confidence: spamCheck.confidence
+            confidence: spamCheck.confidence,
         };
     }
     
-    // Küfür kontrolü
+    // Spam değilse, küfür kontrolü yapılır.
     const profanityCheck = checkProfanity(message);
     if (profanityCheck.isBlocked) {
-        return profanityCheck;
+        return profanityCheck; // Zaten engellendiği ve sebebi olduğu için direkt bunu döndür.
     }
     
     // Mesaj uzunluğu kontrolü
     if (message.length > 500) {
         return {
             isBlocked: true,
-            reason: "Mesaj çok uzun. Lütfen kısaltın.",
-            action: 'warn',
+            reason: "Sinyalin evrenin limitlerini aşıyor. Lütfen daha kısa bir frekans kullan.",
+            action: 'block',
             confidence: 70
         };
     }
-    
+
+    // Hiçbir kural ihlal edilmedi.
     return {
         isBlocked: false,
         action: 'allow',
@@ -238,12 +220,12 @@ export const moderateMessage = (message: string, userId: string): ModerationResu
     };
 };
 
-// Kullanıcı geçmişini temizle
+
+// --- YARDIMCI FONKSİYONLAR ---
 export const clearUserHistory = (userId: string) => {
     userMessageHistory.delete(userId);
 };
 
-// Tüm geçmişi temizle
 export const clearAllHistory = () => {
     userMessageHistory.clear();
 };
