@@ -16,7 +16,7 @@ import { db } from '../src/firebase';
 import {
     collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc,
     updateDoc, increment, getDocs, limit, startAfter, QueryDocumentSnapshot,
-    DocumentData, deleteDoc, Timestamp, setDoc
+    DocumentData, deleteDoc, Timestamp, setDoc, where
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile } from 'lucide-react';
@@ -51,7 +51,7 @@ interface UserProfile {
 }
 
 const MAX_CHAR_LIMIT = 300;
-const PAGE_SIZE = 50; // Hem ilk yükleme hem de "daha fazla yükle" için standart boyut.
+const PAGE_SIZE = 50; // Her seferinde yüklenecek mesaj sayısı
 
 const formatRemainingTime = (endDate: Date) => {
     const totalSeconds = Math.floor((endDate.getTime() - new Date().getTime()) / 1000);
@@ -83,11 +83,13 @@ const ChatPage: React.FC = () => {
     const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
+    const [disclaimerTimer, setDisclaimerTimer] = useState(10);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showSpecialEmojis, setShowSpecialEmojis] = useState(false);
   const [isSending, setIsSending] = useState(false);
     const lastMessageSpamCheck = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
+    const [showDisclaimer, setShowDisclaimer] = useState(true);
     const initialLoadDone = useRef(false);
 
     useEffect(() => {
@@ -113,8 +115,16 @@ const ChatPage: React.FC = () => {
         };
     }, []);
 
+    // Arşiv tarihi - 23 Eylül 2025 18:17'den önceki mesajları arşivle
+    const ARCHIVE_DATE = new Date('2025-09-23T18:17:00');
+
     const syncChat = useCallback(async () => {
-        const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const q = query(
+            collection(db, 'messages'),
+            where('createdAt', '>', Timestamp.fromDate(ARCHIVE_DATE)),
+            orderBy('createdAt', 'desc'),
+            limit(PAGE_SIZE)
+        );
         const documentSnapshots = await getDocs(q);
         const msgs: Message[] = documentSnapshots.docs.map(doc => {
             const data = doc.data();
@@ -133,13 +143,61 @@ const ChatPage: React.FC = () => {
         setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
     }, []);
 
+    // Disclaimer kontrol effect'i
+    useEffect(() => {
+        if (!user) return;
+        setShowDisclaimer(true); // Her sohbete girişte varsayılan olarak göster
+        setDisclaimerTimer(10); // Sayacı sıfırla
+    }, [user]);
+
+    // Disclaimer sayaç effect'i
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (showDisclaimer && disclaimerTimer > 0) {
+            timer = setInterval(() => {
+                setDisclaimerTimer(prev => prev - 1);
+            }, 1000);
+        }
+        return () => {
+            if (timer) clearInterval(timer);
+        };
+    }, [showDisclaimer, disclaimerTimer]);
+
+    // Disclaimer kabul edildiğinde Firestore'a kaydet ve sinyali tetikle
+    const handleAcceptDisclaimer = async () => {
+        setShowDisclaimer(false);
+        if (!user) return;
+        
+        try {
+            await triggerSignal(); // Sohbet sinyalini tetikle
+        } catch (error) {
+            console.error("Sorumluluk reddi kaydedilirken hata:", error);
+        }
+    };
+
     useEffect(() => {
         if (!user) return;
         
         syncChat();
 
-        const metaRef = doc(db, 'chat_meta', 'last_update');
-        const unsubscribeMeta = onSnapshot(metaRef, () => {
+        // Sohbet sinyallerini dinle (hem güncelleme hem admin yüklemeleri için)
+        const systemSignalRef = doc(db, 'system', 'chat_signal');
+        const chatSignalRef = doc(db, 'chat_meta', 'last_update');
+        
+        const unsubscribeSystem = onSnapshot(systemSignalRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                console.log('Sistem sinyali alındı:', data);
+                if (data.event === 'load_all' && isAdmin) {
+                    console.log('Admin sinyali alındı, sohbet güncelleniyor...');
+                    syncChat().catch(error => {
+                        console.error('Mesaj yükleme hatası:', error);
+                    });
+                }
+            }
+        });
+
+        const unsubscribeChat = onSnapshot(chatSignalRef, () => {
             if (initialLoadDone.current) {
                 console.log("Sinyal alındı, sohbet güncelleniyor...");
                 syncChat();
@@ -148,8 +206,11 @@ const ChatPage: React.FC = () => {
             }
         });
 
-        return () => unsubscribeMeta();
-    }, [user, syncChat]);
+        return () => {
+            unsubscribeSystem();
+            unsubscribeChat();
+        };
+    }, [user, syncChat, isAdmin]);
     
     useEffect(() => {
         setTimeout(() => {
@@ -166,30 +227,48 @@ const ChatPage: React.FC = () => {
         if (loadingMore || !hasMore || !lastVisible) return;
         setLoadingMore(true);
 
-        const nextQuery = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
-        const documentSnapshots = await getDocs(nextQuery);
+        const nextQuery = query(
+            collection(db, 'messages'),
+            where('createdAt', '>', Timestamp.fromDate(ARCHIVE_DATE)),
+            orderBy('createdAt', 'desc'), 
+            startAfter(lastVisible), 
+            limit(PAGE_SIZE)
+        );
+        
+        try {
+            const documentSnapshots = await getDocs(nextQuery);
 
-        const newMsgs: Message[] = documentSnapshots.docs.map(doc => {
-            const data = doc.data();
-            return { 
-                id: doc.id, 
-                ...data,
-                displayName: data.displayName || 'Anonim'
-            } as Message;
-        });
-        const container = chatContainerRef.current;
-        const previousScrollHeight = container?.scrollHeight || 0;
+            const newMsgs: Message[] = documentSnapshots.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    ...data,
+                    displayName: data.displayName || 'Anonim'
+                } as Message;
+            });
 
-        setMessages(prevMessages => [...newMsgs.reverse(), ...prevMessages]);
-        if(documentSnapshots.docs.length > 0) {
-           setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+            const container = chatContainerRef.current;
+            const previousScrollHeight = container?.scrollHeight || 0;
+
+            setMessages(prevMessages => [...newMsgs.reverse(), ...prevMessages]);
+            
+            if(documentSnapshots.docs.length > 0) {
+               setLastVisible(documentSnapshots.docs[documentSnapshots.docs.length - 1]);
+            }
+            
+            setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
+
+            if (container) {
+                requestAnimationFrame(() => { 
+                    container.scrollTop = container.scrollHeight - previousScrollHeight;
+                });
+            }
+        } catch (error) {
+            console.error('Mesajlar yüklenirken hata:', error);
+            setHasMore(false);
+        } finally {
+            setLoadingMore(false);
         }
-        setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
-
-        if (container) {
-            requestAnimationFrame(() => { container.scrollTop = container.scrollHeight - previousScrollHeight; });
-        }
-        setLoadingMore(false);
     };
 
     const handleStartReply = (message: Message) => {
@@ -367,6 +446,45 @@ const ChatPage: React.FC = () => {
                     )}
                 </motion.div>
             )}
+            {/* Sorumluluk Reddi Modalı */}
+            {showDisclaimer && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+                    <motion.div 
+                        initial={{ scale: 0.9, opacity: 0 }} 
+                        animate={{ scale: 1, opacity: 1 }} 
+                        className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-md"
+                    >
+                        <h2 className="text-2xl font-bold text-electric-purple mb-4">⚠️ Sinyale Girmeden Önce Oku</h2>
+                        <div className="space-y-4 text-ghost-white">
+                            <p className="text-yellow-400 font-semibold">Bu frekansa bağlanarak, evrenin aşağıdaki temel yasalarını kabul etmiş olursun:</p>
+                            <ul className="list-disc pl-5 space-y-3 text-cyber-gray">
+                                <li>Boşluğa fısıldanan her kelime <span className="font-bold text-ghost-white">sonsuza dek kaydedilir.</span> Yankısı asla kaybolmaz.</li>
+                                <li>Kaos, hakaret veya tehdit sinyalleri yayanlar, bu evrenden <span className="font-bold text-red-500">kalıcı olarak sürgün edilir.</span></li>
+                                <li>Gönderdiğin her sinyalin sorumluluğu <span className="font-bold text-ghost-white">yalnızca sana aittir.</span> Mimar, sadece yasaları uygular.</li>
+                                <li className="font-semibold text-orange-400">Unutma ki Mimar, bu evreni gözlemlemek için tasarladı, her bir gezgini denetlemek için değil. Sinyalinizin dış dünyadaki yankılarından (okul yönetimi, vs.) veya diğer gezginlerle aranızdaki frekans uyuşmazlıklarından <span className="underline">Mimar sorumlu tutulamaz.</span></li>
+                                <li>Bu kuralları ihlal eden bir sinyalin varlığı, sistemin yasal protokolleri başlatması için yeterlidir.</li>
+                            </ul>
+                            <p className="mt-4 text-electric-purple/80">Piksellerin de bir hafızası vardır. Rahatsız edici bir frekansla karşılaşırsan, kanıtını al ve Mimar'a ilet.</p>
+                        </div>
+                        <div className="mt-8 flex items-center justify-end gap-4">
+                            <span className="text-cyber-gray font-mono">{disclaimerTimer} saniye</span>
+                            <button
+                                onClick={handleAcceptDisclaimer}
+                                disabled={disclaimerTimer > 0}
+                                className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all ${
+                                    disclaimerTimer > 0 
+                                    ? 'opacity-50 cursor-not-allowed' 
+                                    : 'hover:bg-opacity-80'
+                                }`}
+                            >
+                                Yasaları Anladım ve Sorumluluğu Kabul Ediyorum
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
+
 
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50">
                 {hasMore && (
@@ -385,7 +503,7 @@ const ChatPage: React.FC = () => {
                     if (isSystemMessage) {
                         return (
                             <div key={msg.id} className="flex justify-center my-4">
-                                <div className={`p-4 rounded-lg max-w-2xl text-center ${
+                                <div className={`p-4 rounded-lg max-w-xl text-center ${
                                     isAnnouncement 
                                         ? 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border-2 border-yellow-400 text-yellow-200' 
                                         : 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-400 text-blue-200'

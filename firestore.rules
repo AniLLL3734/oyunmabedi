@@ -1,83 +1,140 @@
-// KURAL DOSYASI: firestore.rules (TÜM İÇERİĞİ BUNUNLA DEĞİŞTİRİN)
-
-rules_version = '2';
+﻿rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- USERS KOLEKSİYONU ---
-    match /users/{userId} {
-      // Kullanıcı bilgilerini okuma izni
-      allow read: if request.auth != null;
-      
-      // Kullanıcının kendi bilgilerini güncelleme izni
-      allow update: if request.auth != null && (
-        // Kullanıcı kendi verilerini güncelleyebilir
-        request.auth.uid == userId ||
-        // Admin tüm kullanıcıları güncelleyebilir
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
-      );
-      
-      // Yeni kullanıcı oluşturma
-      allow create: if request.auth != null && request.auth.uid == userId;
+    // === YARDIMCI FONKSİYONLAR ===
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // --- GAMES & YORUMLAR ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // === USERS KOLEKSİYONU ===
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // === GAMES & YORUMLAR ===
     match /games/{gameId} {
       allow read: if true;
-      allow update: if request.auth != null;
-      allow create, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow update: if isAuthenticated();
+      allow create, delete: if isAdmin();
       
       match /comments/{commentId} {
-          allow read: if true;
-          allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-          allow delete: if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || resource.data.uid == request.auth.uid);
+        allow read: if true;
+        allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isAuthenticated() && (isAdmin() || resource.data.uid == request.auth.uid);
       }
     }
     
-    // --- GERİ BİLDİRİM ---
+    // === GERİ BİLDİRİM ===
     match /feedback/{feedbackId} {
-      allow create: if request.auth != null;
-      allow read, update, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAdmin();
     }
 
-    // --- GENEL SOHBET & META ---
+    // === SOHBET SİSTEMİ ===
     match /chat_meta/{docId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow read, write: if isAuthenticated();
     }
 
     match /messages/{messageId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && (
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (
         request.resource.data.uid == request.auth.uid || 
-        (request.resource.data.uid == 'system' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        (request.resource.data.uid == 'system' && isAdmin())
       );
-      allow delete: if request.auth != null && (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || resource.data.uid == request.auth.uid);
+      allow delete: if isAuthenticated() && (isAdmin() || resource.data.uid == request.auth.uid);
     }
 
-    // ==========================================================
-    //            NİHAİ VE DOĞRU ÇALIŞAN DM KURALLARI
-    // ==========================================================
     match /chats/{chatId} {
-      // Ana sohbet belgesine okuma/yazma izni:
-      // Kural: Giriş yapmış kullanıcının UID'si, belgenin ID'sinin ('chatId') bir parçası olmalıdır.
-      allow read, write: if request.auth != null && request.auth.uid in chatId.split('_');
+      allow read, write: if isAuthenticated() && request.auth.uid in chatId.split('_');
 
-      // 'messages' alt koleksiyonuna erişim izni
       match /messages/{messageId} {
-        
-        // Mesajları okuma izni:
-        allow read: if request.auth != null && request.auth.uid in chatId.split('_');
-        
-        // Mesaj OLUŞTURMA izni (En Güvenli Yöntem):
-        allow create: if request.auth != null
-                      && request.auth.uid in chatId.split('_')
-                      && request.resource.data.senderId == request.auth.uid;
-        
-        // Bu sohbetlerde mesajları düzenleme veya silmeye izin vermiyoruz.
+        allow read: if isAuthenticated() && request.auth.uid in chatId.split('_');
+        allow create: if isAuthenticated()
+                     && request.auth.uid in chatId.split('_')
+                     && request.resource.data.senderId == request.auth.uid;
         allow update, delete: if false;
       }
+    }
+
+    // === ADMIN DM SİSTEMİ ===
+    match /admin_dms/{dmId} {
+      // Ana DM dokümanı için kurallar
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.userId ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Admin DM Mesajları için ayrı koleksiyon
+    match /admin_dms/{dmId}/messages/{messageId} {
+      // Mesajları okuma kuralı
+      allow read: if isAuthenticated() && (
+        request.auth.uid == get(/databases/$(database)/documents/admin_dms/$(dmId)).data.userId ||
+        isAdmin()
+      );
+      
+      // Mesaj gönderme kuralı
+      allow create: if isAuthenticated() && (
+        request.auth.uid == get(/databases/$(database)/documents/admin_dms/$(dmId)).data.userId ||
+        isAdmin()
+      ) && request.resource.data.senderId == request.auth.uid;
+      
+      // Mesaj silme ve güncelleme kuralı
+      allow update, delete: if isAdmin();
+    }
+
+    // === CHAT ROOM SİSTEMİ ===
+    match /chat_rooms/{roomId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isAuthenticated() && (isAdmin() || resource.data.uid == request.auth.uid);
+      }
+    }
+
+    // === ÖZEL ODA MESAJLARI ===
+    match /private_room_messages/{roomId} {
+      allow read: if isAuthenticated() && (
+        resource.data.members[request.auth.uid] == true ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // === SİSTEM KONTROL VE BİLDİRİMLERİ ===
+    match /system/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // === SİSTEM BİLDİRİMLERİ ===
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.type == 'global' ||
+        isAdmin()
+      );
+      allow create: if isAdmin();
+      allow update: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        resource.data.uid == request.auth.uid ||
+        isAdmin()
+      );
     }
   }
 }

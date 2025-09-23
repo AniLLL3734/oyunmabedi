@@ -24,6 +24,7 @@ interface UserProfile {
     messageCount?: number;
     loginStreak?: number;
     lastLogin?: Timestamp;
+    gender?: 'male' | 'female' | 'unspecified' | string;
     inventory?: {
         avatarFrames: string[];
         colorThemes: string[];
@@ -278,7 +279,11 @@ const ProfilePage: React.FC = () => {
                          </div>
                      </div>
                  ) : (
-                     <h1 className="text-4xl md:text-5xl font-heading mt-4">{profile.displayName || 'Anonim'}</h1>
+                    <h1 className="text-4xl md:text-5xl font-heading mt-4 flex items-center justify-center gap-3">
+                        {profile.displayName || 'Anonim'}
+                        {profile.gender === 'male' && <span title="Erkek" className="text-blue-400 text-2xl">♂</span>}
+                        {profile.gender === 'female' && <span title="Kadın" className="text-pink-400 text-2xl">♀</span>}
+                    </h1>
                  )}
 
                  {/* Aktif Unvanlar */}

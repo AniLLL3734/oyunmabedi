@@ -44,7 +44,6 @@ const SignupPage: React.FC = () => {
 
         try {
             setFirebaseError(null);
-            
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const user = userCredential.user;
 
@@ -65,6 +64,7 @@ const SignupPage: React.FC = () => {
                 selectedTitle: null, 
                 avatarUrl: defaultAvatarUrl,
                 unreadChats: [],
+                gender: data.gender || null,
 
                 // --- YENİ EKLENEN ALANLAR ---
                 messageCount: 0,
@@ -104,6 +104,24 @@ const SignupPage: React.FC = () => {
                          className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
                         {errors.username && <p className="text-red-500 text-xs mt-1">{errors.username.message as string}</p>}
                     </div>
+                    <div>
+                        <label className="text-sm font-bold text-cyber-gray block mb-2">Cinsiyet</label>
+                        <div className="flex items-center gap-4">
+                            <label className="inline-flex items-center gap-2">
+                                <input type="radio" value="male" {...register('gender')} className="accent-electric-purple" />
+                                <span>Erkek ♂</span>
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                                <input type="radio" value="female" {...register('gender')} className="accent-electric-purple" />
+                                <span>Kadın ♀</span>
+                            </label>
+                            <label className="inline-flex items-center gap-2">
+                                <input type="radio" value="unspecified" {...register('gender')} className="accent-electric-purple" />
+                                <span>Belirtmek istemiyorum</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="text-sm font-bold text-cyber-gray block mb-2">Şifre</label>
                         <input type="password" {...register('password', { required: 'Şifre zorunludur', minLength: { value: 6, message: 'Şifre en az 6 karakter olmalı' }})} className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>

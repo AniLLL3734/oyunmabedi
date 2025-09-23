@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
-import { LoaderCircle, SendHorizonal, ArrowLeft, User } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, setDoc, getDocs, limit, startAfter, where } from 'firebase/firestore';
+import { LoaderCircle, SendHorizonal, ArrowLeft, User, Download, FileJson } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface Message { 
@@ -24,12 +24,26 @@ const ChatRoomPage: React.FC = () => {
     const [newMessage, setNewMessage] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [otherUserName, setOtherUserName] = useState<string>('Yükleniyor...');
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     useEffect(scrollToBottom, [messages]);
 
     useEffect(() => {
+        // Admin kontrolü
+        const checkAdminStatus = async () => {
+            if (user?.uid) {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userData = userDoc.data();
+                const isAdminUser = userData?.role === 'admin';
+                console.log('Admin kontrolü:', { userRole: userData?.role, isAdmin: isAdminUser });
+                setIsAdmin(isAdminUser);
+            }
+        };
+        checkAdminStatus();
+
         // 1. Hata ayıklama logları ile mevcut durumu kontrol et
         console.log("%c--- Sohbet Odası Yüklendi (ChatRoomPage) ---", "color: orange; font-weight: bold;");
         console.log("URL'den gelen Chat ID:", chatId);
@@ -79,6 +93,70 @@ const ChatRoomPage: React.FC = () => {
         return () => unsubscribe();
     }, [chatId, user, authLoading]);
 
+    const loadAllMessages = async () => {
+        if (!chatId) return;
+        setLoadingMore(true);
+        try {
+            const messagesRef = collection(db, 'chats', chatId, 'messages');
+            const q = query(messagesRef, orderBy('timestamp', 'asc'));
+            const snapshot = await getDocs(q);
+            const allMessages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+            setMessages(allMessages);
+        } catch (error) {
+            console.error("Tüm mesajlar yüklenirken hata:", error);
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    const exportChatHistory = async (onlyToday: boolean = false) => {
+        if (!chatId) return;
+        
+        try {
+            const messagesRef = collection(db, 'chats', chatId, 'messages');
+            let q;
+            
+            if (onlyToday) {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                q = query(messagesRef, 
+                    where('timestamp', '>=', today),
+                    orderBy('timestamp', 'asc')
+                );
+            } else {
+                q = query(messagesRef, orderBy('timestamp', 'asc'));
+            }
+
+            const snapshot = await getDocs(q);
+            const chatHistory = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    messageId: doc.id,
+                    text: data.text,
+                    senderId: data.senderId,
+                    timestamp: data.timestamp?.toDate().toISOString(),
+                };
+            });
+
+            const fileName = onlyToday 
+                ? `chat-history-${chatId}-${new Date().toISOString().split('T')[0]}.json`
+                : `chat-history-${chatId}-full.json`;
+
+            const blob = new Blob([JSON.stringify(chatHistory, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Sohbet geçmişi dışa aktarılırken hata:", error);
+            alert("Sohbet geçmişi dışa aktarılırken bir hata oluştu.");
+        }
+    };
+
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newMessage.trim() === '' || !user || !chatId) return;
@@ -113,12 +191,33 @@ const ChatRoomPage: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-screen bg-space-black text-ghost-white">
-            <header className="flex items-center p-4 border-b border-cyber-gray/50 bg-dark-gray/50 flex-shrink-0">
-                 <button onClick={() => navigate('/messages')} className="mr-4 p-2 rounded-full hover:bg-cyber-gray/50 transition-colors">
-                     <ArrowLeft />
-                 </button>
-                 <User className="w-8 h-8 mr-3 text-cyber-gray" />
-                 <h2 className="text-xl font-bold font-heading">{otherUserName}</h2>
+            <header className="flex flex-col border-b border-cyber-gray/50 bg-dark-gray/50 flex-shrink-0">
+                <div className="flex items-center p-4">
+                    <button onClick={() => navigate('/messages')} className="mr-4 p-2 rounded-full hover:bg-cyber-gray/50 transition-colors">
+                        <ArrowLeft />
+                    </button>
+                    <User className="w-8 h-8 mr-3 text-cyber-gray" />
+                    <h2 className="text-xl font-bold font-heading">{otherUserName}</h2>
+                </div>
+                
+                {user?.uid === "YTi3BnwfhBO1R1MOe1PW9tBkXm02" && (
+                    <div className="flex flex-wrap gap-2 p-2 bg-dark-gray/80 border-t border-cyber-gray/50">
+                        <button
+                            onClick={loadAllMessages}
+                            className="flex-1 px-4 py-2 bg-electric-purple text-white rounded-md hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
+                            disabled={loadingMore}
+                        >
+                            {loadingMore ? <LoaderCircle className="animate-spin" size={16} /> : "Tüm Mesajları Yükle"}
+                        </button>
+                        <button
+                            onClick={() => exportChatHistory(false)}
+                            className="flex-1 px-4 py-2 bg-electric-purple text-white rounded-md hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Download size={16} />
+                            <span>Sohbeti JSON Olarak İndir</span>
+                        </button>
+                    </div>
+                )}
             </header>
             
             <main className="flex-1 overflow-y-auto p-4 space-y-4">

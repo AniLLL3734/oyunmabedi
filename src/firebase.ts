@@ -22,3 +22,4 @@ const app = initializeApp(firebaseConfig);
 // Gerekli servisleri dışa aktar
 export const auth = getAuth(app);
 export const db = getFirestore(app); // Sadece Firestore kullanacağız.
+

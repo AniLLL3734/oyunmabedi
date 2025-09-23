@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+    import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX } from 'lucide-react';
+import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc, getDoc } from 'firebase/firestore';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface UserData {
@@ -34,6 +34,11 @@ interface SystemStats {
     totalGamesPlayed: number;
     gamesLastHour: number;
     systemUptime: string;
+    topChatter?: {
+        displayName: string;
+        messageCount: number;
+        uid: string;
+    };
 }
 
 const MuteModal: React.FC<{
@@ -93,7 +98,7 @@ const AdminPage: React.FC = () => {
             setSystemStats(prev => ({ ...prev, activeUsers: snapshot.size }));
         });
 
-        const unsubscribeMessages = onSnapshot(collection(db, 'messages'), (snapshot) => {
+        const unsubscribeMessages = onSnapshot(collection(db, 'messages'), async (snapshot) => {
             const now = new Date();
             const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
             
@@ -101,6 +106,44 @@ const AdminPage: React.FC = () => {
                 const messageTime = doc.data().createdAt?.toDate();
                 return messageTime && messageTime > oneHourAgo;
             }).length;
+
+            // En çok mesaj atan kullanıcıyı bul
+            const messageCountByUser = snapshot.docs.reduce((acc, doc) => {
+                const uid = doc.data().uid;
+                if (uid && uid !== 'system') {
+                    acc[uid] = (acc[uid] || 0) + 1;
+                }
+                return acc;
+            }, {} as { [key: string]: number });
+
+            let topChatterId = '';
+            let maxMessages = 0;
+
+            Object.entries(messageCountByUser).forEach(([uid, count]) => {
+                if (count > maxMessages) {
+                    maxMessages = count;
+                    topChatterId = uid;
+                }
+            });
+
+            if (topChatterId) {
+                const userDoc = await getDoc(doc(db, 'users', topChatterId));
+                if (userDoc.exists()) {
+                    const userData = userDoc.data();
+                    setSystemStats(prev => ({ 
+                        ...prev, 
+                        totalMessages: snapshot.size, 
+                        messagesLastHour,
+                        topChatter: {
+                            uid: topChatterId,
+                            displayName: userData.displayName,
+                            messageCount: maxMessages
+                        }
+                    }));
+                    return;
+                }
+            }
+
             setSystemStats(prev => ({ ...prev, totalMessages: snapshot.size, messagesLastHour }));
         });
 
@@ -281,6 +324,41 @@ const AdminPage: React.FC = () => {
         } catch (error) { console.error('Temizleme bildirimi gönderilirken hata:', error); }
     };
 
+
+    const exportChatHistory = async () => {
+        try {
+            const messagesRef = collection(db, 'messages');
+            const q = query(messagesRef, orderBy('createdAt', 'asc'));
+            const snapshot = await getDocs(q);
+            
+            const chatHistory = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    messageId: doc.id,
+                    text: data.text,
+                    senderId: data.uid,
+                    senderName: data.displayName,
+                    timestamp: data.createdAt?.toDate().toISOString(),
+                    isSystemMessage: data.isSystemMessage || false
+                };
+            });
+
+            const fileName = `chat-history-${new Date().toISOString().split('T')[0]}.json`;
+            const blob = new Blob([JSON.stringify(chatHistory, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Sohbet geçmişi dışa aktarılırken hata:", error);
+            alert("Sohbet geçmişi dışa aktarılırken bir hata oluştu!");
+        }
+    };
+
     const removeAnnouncement = async () => {
         if (!window.confirm('Duyuruyu kaldırmak istediğinizden emin misiniz?')) return;
         try {
@@ -347,14 +425,34 @@ const AdminPage: React.FC = () => {
                             <div className="flex items-center justify-between"><div><p className="text-cyber-gray text-sm">Oyun Oynanma</p><p className="text-3xl font-bold text-red-400">{systemStats.totalGamesPlayed.toLocaleString()}</p></div><Gamepad2 className="text-red-400" size={32} /></div>
                         </motion.div>
                     </div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Zap className="text-electric-purple" />Sistem Durumu</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Veritabanı: Aktif</span></div>
-                            <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Sohbet: Aktif</span></div>
-                            <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Oyunlar: Aktif</span></div>
-                        </div>
-                    </motion.div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                            <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Zap className="text-electric-purple" />Sistem Durumu</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Veritabanı: Aktif</span></div>
+                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Sohbet: Aktif</span></div>
+                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Oyunlar: Aktif</span></div>
+                            </div>
+                        </motion.div>
+
+                        {systemStats.topChatter && (
+                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-6 rounded-lg border border-blue-500/30">
+                                <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
+                                    <Crown className="text-yellow-400" />
+                                    En Çok Mesaj Atan
+                                </h3>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xl font-bold text-blue-400">{systemStats.topChatter.displayName}</p>
+                                        <p className="text-cyber-gray mt-1">
+                                            {systemStats.topChatter.messageCount.toLocaleString()} mesaj
+                                        </p>
+                                    </div>
+                                    <MessageSquare className="text-blue-400" size={32} />
+                                </div>
+                            </motion.div>
+                        )}
+                    </div>
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
                         <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Clock className="text-electric-purple" />Hızlı İşlemler</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -474,6 +572,22 @@ const AdminPage: React.FC = () => {
                         <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Trash className="text-purple-400" />Sohbet Temizle</h3>
                         <p className="text-cyber-gray mb-4">Sohbete temizleme bildirimi gönderir (mesajlar silinmez).</p>
                         <button onClick={clearChat} className="px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg transition-colors">Temizleme Bildirimi Gönder</button>
+                    </div>
+
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MessageSquare className="text-green-400" />Sohbet Yönetimi</h3>
+                        <div className="flex flex-col gap-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <button
+                                    onClick={() => exportChatHistory()}
+                                    className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Download size={20} />
+                                    <span>Sohbeti JSON Olarak İndir</span>
+                                </button>
+                            </div>
+                            <p className="text-cyber-gray text-sm">Not: Bu özellikler özel sohbet odası içindeyken de kullanılabilir.</p>
+                        </div>
                     </div>
                 </div>
             )}

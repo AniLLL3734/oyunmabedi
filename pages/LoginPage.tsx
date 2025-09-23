@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../src/firebase'; // Değişiklik: db import edildi
+import { auth, db } from '../src/firebase';
 import { motion } from 'framer-motion';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore'; // Değişiklik: firestore importları eklendi
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 
 const LoginPage: React.FC = () => {
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
@@ -30,6 +30,7 @@ const LoginPage: React.FC = () => {
 
     try {
       setFirebaseError(null);
+
       const userCredential = await signInWithEmailAndPassword(auth, email, data.password);
       const user = userCredential.user;
       
@@ -105,6 +106,7 @@ const LoginPage: React.FC = () => {
              {isSubmitting ? 'Giriş Yapılıyor...' : 'Sisteme Sız'}
             </button>
         </form>
+
         <p className="text-center text-cyber-gray">
           Hesabın yok mu?{' '}
           <Link to="/signup" className="font-bold text-electric-purple hover:underline">Yeni Hesap Oluştur</Link>
