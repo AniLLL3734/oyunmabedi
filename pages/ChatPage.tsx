@@ -84,9 +84,21 @@ const ChatPage: React.FC = () => {
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
     const [disclaimerTimer, setDisclaimerTimer] = useState(10);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showSpecialEmojis, setShowSpecialEmojis] = useState(false);
-  const [isSending, setIsSending] = useState(false);
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [showSpecialEmojis, setShowSpecialEmojis] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [chatSettings, setChatSettings] = useState<{
+        chatPaused: boolean;
+        chatPauseReason: string;
+        slowMode: boolean;
+        slowModeDelay: number;
+    }>({
+        chatPaused: false,
+        chatPauseReason: '',
+        slowMode: false,
+        slowModeDelay: 0
+    });
+    const lastMessageTime = useRef<number>(0);
     const lastMessageSpamCheck = useRef(0);
     const [chatError, setChatError] = useState<string | null>(null);
     const [showDisclaimer, setShowDisclaimer] = useState(true);
@@ -102,6 +114,8 @@ const ChatPage: React.FC = () => {
         fetchUsers();
 
         const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
+        const settingsRef = doc(db, 'chat_meta', 'settings');
+        
         const unsubscribePinned = onSnapshot(pinnedMessageRef, (doc) => {
             if (doc.exists()) {
                 setPinnedMessage(doc.data() as PinnedMessage);
@@ -110,8 +124,15 @@ const ChatPage: React.FC = () => {
             }
         });
 
+        const unsubscribeSettings = onSnapshot(settingsRef, (doc) => {
+            if (doc.exists()) {
+                setChatSettings(doc.data() as any);
+            }
+        });
+
         return () => {
             unsubscribePinned();
+            unsubscribeSettings();
         };
     }, []);
 
@@ -332,6 +353,25 @@ const ChatPage: React.FC = () => {
         
         if (newMessage.trim() === '' || !user || !userProfile || isSending || newMessage.length > MAX_CHAR_LIMIT) return;
 
+        if (chatSettings.chatPaused && !isAdmin) {
+            setChatError(chatSettings.chatPauseReason || 'Sohbet şu anda devre dışı.');
+            setTimeout(() => setChatError(null), 3000);
+            return;
+        }
+
+        if (chatSettings.slowMode && !isAdmin) {
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastMessageTime.current;
+            const requiredDelay = chatSettings.slowModeDelay * 1000; // Convert to milliseconds
+
+            if (timeSinceLastMessage < requiredDelay) {
+                const remainingTime = ((requiredDelay - timeSinceLastMessage) / 1000).toFixed(1);
+                setChatError(`Yavaş mod aktif. ${remainingTime} saniye sonra mesaj gönderebilirsiniz.`);
+                setTimeout(() => setChatError(null), 3000);
+                return;
+            }
+        }
+
         const moderationResult = moderateMessage(newMessage, user.uid);
         if (moderationResult.isBlocked) {
             setChatError(moderationResult.reason || 'Mesajınız moderasyon tarafından engellendi.');
@@ -388,6 +428,7 @@ const ChatPage: React.FC = () => {
             await triggerSignal();
             
             lastMessageSpamCheck.current = now;
+            lastMessageTime.current = Date.now();
             
             if (containsProfanity(newMessage)) {
                 const wisdomQuotes = ["Evren, kelimelerimizin yankılarını saklar...", "En güçlü ses...","Bazı kelimeler köprü kurar...","Kelimelerin de bir ağırlığı vardır..."];
@@ -459,6 +500,17 @@ const ChatPage: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[calc(100vh-150px)] max-w-4xl mx-auto">
+            {chatSettings.chatPaused && (
+                <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-red-900/50 border border-red-700/50 rounded-lg text-sm">
+                    <div className="flex items-start gap-3">
+                        <ShieldAlert className="text-red-400 mt-1 flex-shrink-0" size={18}/>
+                        <div>
+                            <p className="font-bold text-red-300">Sohbet Durduruldu</p>
+                            <p className="text-red-200">{chatSettings.chatPauseReason || 'Sohbet şu anda devre dışı.'}</p>
+                        </div>
+                    </div>
+                </motion.div>
+            )}
             {pinnedMessage && (
                 <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-yellow-900/50 border border-yellow-700/50 rounded-lg flex items-start gap-3 text-sm">
                     <Pin className="text-yellow-400 mt-1 flex-shrink-0" size={18}/>
@@ -530,7 +582,7 @@ const ChatPage: React.FC = () => {
             )}
 
 
-            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50">
+            <div ref={chatContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50 ${chatSettings.chatPaused ? 'filter blur-sm' : ''}`}>
                 {hasMore && (
                     <div className="text-center my-4">
                         <button onClick={loadMoreMessages} disabled={loadingMore} className="text-cyber-gray hover:text-electric-purple disabled:text-gray-500 text-sm font-semibold transition-colors">
@@ -721,9 +773,10 @@ const ChatPage: React.FC = () => {
                         <input 
                             value={newMessage} 
                             onChange={(e) => setNewMessage(e.target.value)} 
-                            placeholder="Bir mesaj gönder..." 
+                            placeholder={chatSettings.chatPaused && !isAdmin ? "Sohbet şu anda devre dışı..." : "Bir mesaj gönder..."} 
                             maxLength={MAX_CHAR_LIMIT}
-                            className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"
+                            className={`w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none ${chatSettings.chatPaused && !isAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={chatSettings.chatPaused && !isAdmin}
                         />
                         
                         {showEmojiPicker && (
@@ -783,7 +836,7 @@ const ChatPage: React.FC = () => {
                     
                     <button 
                         type="submit" 
-                        disabled={!newMessage.trim() || isSending || newMessage.length > MAX_CHAR_LIMIT} 
+                        disabled={!newMessage.trim() || isSending || newMessage.length > MAX_CHAR_LIMIT || (chatSettings.chatPaused && !isAdmin)} 
                         className="p-3 bg-electric-purple text-white rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray/50 disabled:cursor-not-allowed"
                     >
                         <Send />

@@ -40,7 +40,8 @@ service cloud.firestore {
 
     // === SOHBET SİSTEMİ ===
     match /chat_meta/{docId} {
-      allow read, write: if isAuthenticated();
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isAdmin();
     }
 
     match /messages/{messageId} {

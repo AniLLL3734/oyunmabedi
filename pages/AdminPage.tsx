@@ -94,6 +94,8 @@ const AdminPage: React.FC = () => {
     const [searchUser, setSearchUser] = useState('');
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
     const [scoreAmount, setScoreAmount] = useState<number>(0);
+    const [slowModeDelay, setSlowModeDelay] = useState('5');
+    const [chatPauseReason, setChatPauseReason] = useState('');
 
     // Skor yönetimi fonksiyonları
     const handleSearchUser = async () => {
@@ -376,6 +378,58 @@ const AdminPage: React.FC = () => {
         } catch (error) { console.error('Temizleme bildirimi gönderilirken hata:', error); }
     };
 
+    const toggleSlowMode = async (enabled: boolean) => {
+        try {
+            // Chat meta dokümanını güncelle
+            await setDoc(doc(db, 'chat_meta', 'settings'), {
+                slowMode: enabled,
+                slowModeDelay: enabled ? parseInt(slowModeDelay) : 0
+            }, { merge: true });
+
+            // Sistem mesajı gönder
+            await addDoc(collection(db, 'messages'), {
+                text: enabled ? 
+                    `⏱️ **Yavaş mod aktif edildi.** Her mesaj arasında ${slowModeDelay} saniye bekleme olacak.` :
+                    '⏱️ **Yavaş mod kapatıldı.**',
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+
+            alert(enabled ? 'Yavaş mod açıldı!' : 'Yavaş mod kapatıldı!');
+        } catch (error) {
+            console.error('Yavaş mod ayarlanırken hata:', error);
+            alert('Yavaş mod ayarlanırken bir hata oluştu!');
+        }
+    };
+
+    const toggleChatPause = async (paused: boolean) => {
+        try {
+            // Chat meta dokümanını güncelle
+            await setDoc(doc(db, 'chat_meta', 'settings'), {
+                chatPaused: paused,
+                chatPauseReason: paused ? chatPauseReason : ''
+            }, { merge: true });
+
+            // Sistem mesajı gönder
+            await addDoc(collection(db, 'messages'), {
+                text: paused ?
+                    `🚫 **Sohbet durduruldu.**\nNeden: ${chatPauseReason}` :
+                    '✅ **Sohbet tekrar aktif.**',
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+
+            alert(paused ? 'Sohbet durduruldu!' : 'Sohbet tekrar aktif!');
+        } catch (error) {
+            console.error('Sohbet durumu ayarlanırken hata:', error);
+            alert('Sohbet durumu ayarlanırken bir hata oluştu!');
+        }
+    };
+
 
     const exportChatHistory = async () => {
         try {
@@ -591,6 +645,73 @@ const AdminPage: React.FC = () => {
                 <div className="space-y-6">
                     <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><Megaphone className="text-electric-purple" />Sistem Komutları</h2>
                     
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Yavaş Mod Kontrolü */}
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                                <Clock className="text-yellow-400" />
+                                Yavaş Mod
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="flex gap-3 items-center">
+                                    <input
+                                        type="number"
+                                        value={slowModeDelay}
+                                        onChange={(e) => setSlowModeDelay(e.target.value)}
+                                        placeholder="Saniye"
+                                        min="1"
+                                        className="w-32 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                    />
+                                    <span className="text-cyber-gray">saniye</span>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => toggleSlowMode(true)}
+                                        className="px-4 py-2 flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Yavaş Modu Aç
+                                    </button>
+                                    <button 
+                                        onClick={() => toggleSlowMode(false)}
+                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Kapat
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sohbet Kontrolü */}
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                                <Zap className="text-red-400" />
+                                Sohbeti Durdur
+                            </h3>
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    value={chatPauseReason}
+                                    onChange={(e) => setChatPauseReason(e.target.value)}
+                                    placeholder="Durdurma nedeni..."
+                                    className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                />
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => toggleChatPause(true)}
+                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Sohbeti Durdur
+                                    </button>
+                                    <button 
+                                        onClick={() => toggleChatPause(false)}
+                                        className="px-4 py-2 flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Devam Et
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50 mb-6">
                         <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Trophy className="text-yellow-400" />Skor Yönetimi</h3>
@@ -685,7 +806,75 @@ const AdminPage: React.FC = () => {
                     <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
                         <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MessageSquare className="text-green-400" />Sohbet Yönetimi</h3>
                         <div className="flex flex-col gap-4">
-                            <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Yavaş Mod Kontrolü */}
+                                <div className="p-4 bg-space-black rounded-lg">
+                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+                                        <Clock className="text-yellow-400" />
+                                        Yavaş Mod
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <div className="flex gap-2 items-center">
+                                            <input
+                                                type="number"
+                                                value={slowModeDelay}
+                                                onChange={(e) => setSlowModeDelay(e.target.value)}
+                                                placeholder="Saniye"
+                                                min="1"
+                                                className="w-24 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                            />
+                                            <span className="text-cyber-gray">saniye</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => toggleSlowMode(true)}
+                                                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Yavaş Modu Aç
+                                            </button>
+                                            <button 
+                                                onClick={() => toggleSlowMode(false)}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Yavaş Modu Kapat
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Sohbet Durdurma Kontrolü */}
+                                <div className="p-4 bg-space-black rounded-lg">
+                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+                                        <Zap className="text-red-400" />
+                                        Sohbet Kontrolü
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="text"
+                                            value={chatPauseReason}
+                                            onChange={(e) => setChatPauseReason(e.target.value)}
+                                            placeholder="Durdurma nedeni..."
+                                            className="w-full p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => toggleChatPause(true)}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Sohbeti Durdur
+                                            </button>
+                                            <button 
+                                                onClick={() => toggleChatPause(false)}
+                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Sohbeti Aç
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
                                 <button
                                     onClick={() => exportChatHistory()}
                                     className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
