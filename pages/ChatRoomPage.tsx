@@ -152,7 +152,7 @@ const ChatRoomPage: React.FC = () => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         } catch (error) {
-            console.error("Sohbet geçmişi dışa aktarılırken hata:", error);
+            console.error("Sohbet geçmişi dışa aktarılırken hata", error);
             alert("Sohbet geçmişi dışa aktarılırken bir hata oluştu.");
         }
     };
