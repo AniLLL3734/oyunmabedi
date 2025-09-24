@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import Terminal from '../components/Terminal';
 import useMatrixRain from '../hooks/useMatrixRain';
-import { Code, Cpu, Database, Brush, Instagram, Mail } from 'lucide-react';
+import { Code, Cpu, Database, Brush, Instagram } from 'lucide-react';
 import { useAuth } from '../src/contexts/AuthContext';
 import { grantAchievement } from '../src/utils/grantAchievement';
 
@@ -85,12 +85,12 @@ const CreatorPage: React.FC = () => {
               Eğer bu satırları okuyorsan, sen de bu evrenin bir parçasısın demektir. Unutma, en büyük macera <code>main()</code> fonksiyonunu çağırmakla başlar.
             </p>
             
-            {/* --- GÜNCELLENMİŞ İLETİŞİM BÖLÜMÜ (LİNK KALDIRILDI) --- */}
+            {/* --- GÜNCELLENMİŞ İLETİŞİM BÖLÜMÜ --- */}
             <div className="mt-6 border-t border-cyber-gray/30 pt-4">
               <p className="text-sm text-cyber-gray mb-2">Sinyallerimi buradan takip et:</p>
               <div className="flex items-center gap-3 bg-space-black p-3 rounded-lg w-fit">
                 <Instagram size={20} className="text-pink-400" />
-                <span className="font-mono text-ghost-white tracking-wider">anil_12833</span>
+                <span className="font-mono text-ghost-white tracking-wider">func_tionexe</span>
               </div>
             </div>
 
