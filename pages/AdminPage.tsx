@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
 import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc, getDoc, where } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus } from 'lucide-react';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface UserData {
@@ -27,6 +27,18 @@ interface FeedbackData {
     message: string;
     isRead: boolean;
     createdAt: any;
+}
+
+interface ReportData {
+    id: string;
+    reportedUserId: string;
+    reporterUserId: string;
+    reason: string;
+    messageId?: string;
+    createdAt: any;
+    status: 'pending' | 'reviewed' | 'resolved';
+    reporterName?: string;
+    reportedUserName?: string;
 }
 interface SystemStats {
     activeUsers: number;
@@ -70,10 +82,11 @@ const MuteModal: React.FC<{
 const AdminPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'commands'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'commands'>('dashboard');
     const [users, setUsers] = useState<UserData[]>([]);
     const [games, setGames] = useState<GameData[]>([]);
     const [feedback, setFeedback] = useState<FeedbackData[]>([]);
+    const [reports, setReports] = useState<ReportData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isMuteModalOpen, setIsMuteModalOpen] = useState(false);
     const [selectedUserForMute, setSelectedUserForMute] = useState<UserData | null>(null);
@@ -230,6 +243,34 @@ const AdminPage: React.FC = () => {
                     const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
                     const querySnapshot = await getDocs(q);
                     setFeedback(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackData)));
+                } else if (view === 'reports') {
+                    const q = query(collection(db, 'user_reports'), orderBy('createdAt', 'desc'));
+                    const querySnapshot = await getDocs(q);
+                    const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReportData));
+                    
+                    // Kullanıcı isimlerini al
+                    const reportsWithNames = await Promise.all(reportsData.map(async (report) => {
+                        try {
+                            const [reporterDoc, reportedDoc] = await Promise.all([
+                                getDoc(doc(db, 'users', report.reporterUserId)),
+                                getDoc(doc(db, 'users', report.reportedUserId))
+                            ]);
+                            
+                            return {
+                                ...report,
+                                reporterName: reporterDoc.data()?.displayName || 'Bilinmeyen',
+                                reportedUserName: reportedDoc.data()?.displayName || 'Bilinmeyen'
+                            };
+                        } catch (error) {
+                            return {
+                                ...report,
+                                reporterName: 'Bilinmeyen',
+                                reportedUserName: 'Bilinmeyen'
+                            };
+                        }
+                    }));
+                    
+                    setReports(reportsWithNames);
                 }
             } catch (error) { console.error("Admin paneli verisi çekilirken hata:", error); } 
             finally { setIsLoading(false); }
@@ -314,6 +355,32 @@ const AdminPage: React.FC = () => {
             } catch (error) {
                 console.error("Geri bildirim silinirken hata:", error);
                 alert("Geri bildirim silinirken bir hata oluştu.");
+            }
+        }
+    };
+
+    // Rapor yönetimi fonksiyonları
+    const handleUpdateReportStatus = async (reportId: string, newStatus: 'pending' | 'reviewed' | 'resolved') => {
+        try {
+            const reportRef = doc(db, 'user_reports', reportId);
+            await updateDoc(reportRef, { status: newStatus });
+            setReports(reports.map(r => r.id === reportId ? { ...r, status: newStatus } : r));
+            alert(`Rapor durumu "${newStatus}" olarak güncellendi.`);
+        } catch (error) {
+            console.error("Rapor durumu güncellenirken hata:", error);
+            alert("Rapor durumu güncellenirken bir hata oluştu.");
+        }
+    };
+
+    const handleDeleteReport = async (reportId: string) => {
+        if (window.confirm("Bu raporu kalıcı olarak silmek istediğinizden emin misiniz?")) {
+            try {
+                await deleteDoc(doc(db, 'user_reports', reportId));
+                setReports(reports.filter(r => r.id !== reportId));
+                alert("Rapor silindi.");
+            } catch (error) {
+                console.error("Rapor silinirken hata:", error);
+                alert("Rapor silinirken bir hata oluştu.");
             }
         }
     };
@@ -512,6 +579,7 @@ const AdminPage: React.FC = () => {
                 <button onClick={() => setView('users')} className={`py-3 px-5 text-lg font-bold ${view === 'users' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Users className="inline-block mr-2" /> Kullanıcılar</button>
                 <button onClick={() => setView('games')} className={`py-3 px-5 text-lg font-bold ${view === 'games' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Gamepad2 className="inline-block mr-2" /> Oyunlar</button>
                 <button onClick={() => setView('feedback')} className={`py-3 px-5 text-lg font-bold relative ${view === 'feedback' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Geri Bildirimler{unreadFeedbackCount > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}</button>
+                <button onClick={() => setView('reports')} className={`py-3 px-5 text-lg font-bold relative ${view === 'reports' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Flag className="inline-block mr-2" /> Raporlar{reports.filter(r => r.status === 'pending').length > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 justify-center items-center text-xs text-white">{reports.filter(r => r.status === 'pending').length}</span></span>}</button>
                 <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Shield className="inline-block mr-2" /> Sistem Komutları</button>
             </div>
 
@@ -638,6 +706,115 @@ const AdminPage: React.FC = () => {
                         </div>
                     </div>
                 ))}
+                </div>
+            )}
+
+            {view === 'reports' && (
+                <div className="space-y-4">
+                    <div className="bg-dark-gray/50 rounded-lg p-4 mb-6">
+                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
+                            <Flag className="text-orange-400" />
+                            Kullanıcı Raporları
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="bg-orange-500/20 border border-orange-500/50 p-4 rounded-lg">
+                                <p className="text-orange-300 font-bold text-lg">{reports.filter(r => r.status === 'pending').length}</p>
+                                <p className="text-orange-200 text-sm">Bekleyen Rapor</p>
+                            </div>
+                            <div className="bg-blue-500/20 border border-blue-500/50 p-4 rounded-lg">
+                                <p className="text-blue-300 font-bold text-lg">{reports.filter(r => r.status === 'reviewed').length}</p>
+                                <p className="text-blue-200 text-sm">İncelenen Rapor</p>
+                            </div>
+                            <div className="bg-green-500/20 border border-green-500/50 p-4 rounded-lg">
+                                <p className="text-green-300 font-bold text-lg">{reports.filter(r => r.status === 'resolved').length}</p>
+                                <p className="text-green-200 text-sm">Çözülen Rapor</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {reports.map(report => (
+                        <div key={report.id} className={`p-4 rounded-lg border ${
+                            report.status === 'pending' 
+                                ? 'bg-orange-900/20 border-orange-500/50' 
+                                : report.status === 'reviewed'
+                                ? 'bg-blue-900/20 border-blue-500/50'
+                                : 'bg-green-900/20 border-green-500/50'
+                        }`}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-4 mb-2">
+                                        <div>
+                                            <p className="font-bold text-ghost-white">
+                                                {report.reportedUserName} rapor edildi
+                                            </p>
+                                            <p className="text-cyber-gray text-sm">
+                                                Rapor eden: {report.reporterName}
+                                            </p>
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                            report.status === 'pending' 
+                                                ? 'bg-orange-500/20 text-orange-300' 
+                                                : report.status === 'reviewed'
+                                                ? 'bg-blue-500/20 text-blue-300'
+                                                : 'bg-green-500/20 text-green-300'
+                                        }`}>
+                                            {report.status === 'pending' && 'Bekliyor'}
+                                            {report.status === 'reviewed' && 'İncelendi'}
+                                            {report.status === 'resolved' && 'Çözüldü'}
+                                        </span>
+                                    </div>
+                                    <p className="text-cyber-gray mt-2 mb-3">{report.reason}</p>
+                                    <div className="flex items-center gap-4 text-xs text-cyber-gray">
+                                        <span>Tarih: {new Date(report.createdAt?.toDate()).toLocaleString('tr-TR')}</span>
+                                        {report.messageId && <span>Mesaj ID: {report.messageId}</span>}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                                    {report.status === 'pending' && (
+                                        <>
+                                            <button 
+                                                onClick={() => handleUpdateReportStatus(report.id, 'reviewed')}
+                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
+                                                title="İncelendi olarak işaretle"
+                                            >
+                                                İncele
+                                            </button>
+                                            <button 
+                                                onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
+                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+                                                title="Çözüldü olarak işaretle"
+                                            >
+                                                Çöz
+                                            </button>
+                                        </>
+                                    )}
+                                    {report.status === 'reviewed' && (
+                                        <button 
+                                            onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
+                                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
+                                            title="Çözüldü olarak işaretle"
+                                        >
+                                            Çöz
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={() => handleDeleteReport(report.id)} 
+                                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
+                                        title="Raporu sil"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {reports.length === 0 && (
+                        <div className="text-center py-12 text-cyber-gray">
+                            <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
+                            <p className="text-lg">Henüz rapor bulunmuyor.</p>
+                        </div>
+                    )}
                 </div>
             )}
 

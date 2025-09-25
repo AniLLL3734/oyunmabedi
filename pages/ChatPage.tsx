@@ -40,6 +40,7 @@ interface Message {
     text: string;
     createdAt: Timestamp; // Sadece Firestore kullandığımız için Timestamp türü en doğrusu.
     replyingTo?: ReplyInfo;
+    seenBy?: { [uid: string]: Timestamp }; // görüldü bilgisi için
 }
 
 interface PinnedMessage extends Message {
@@ -48,6 +49,9 @@ interface PinnedMessage extends Message {
 
 interface UserProfile {
     mutedUntil?: Timestamp;
+    inventory?: any;
+    messageCount?: number;
+    displayName?: string;
 }
 
 const MAX_CHAR_LIMIT = 300;
@@ -136,8 +140,8 @@ const ChatPage: React.FC = () => {
         };
     }, []);
 
-    // Arşiv tarihi - 23 Eylül 2025 18:17'den önceki mesajları arşivle
-    const ARCHIVE_DATE = new Date('2025-09-23T18:17:00');
+    // Arşiv tarihi - 24 Eylül 2025 21:53'ten önceki mesajları arşivle
+    const ARCHIVE_DATE = new Date('2025-09-24T21:53:00');
 
     const syncChat = useCallback(async () => {
         const q = query(
@@ -163,6 +167,46 @@ const ChatPage: React.FC = () => {
         }
         setHasMore(documentSnapshots.docs.length >= PAGE_SIZE);
     }, []);
+
+    // Görüldü bilgisini güncelle
+    const updateSeenStatus = useCallback(async () => {
+        if (!user || messages.length === 0) return;
+        
+        try {
+            // Son 10 okunmamış mesajı güncelle
+            const unreadMessages = messages
+                .filter(msg => msg.uid !== user.uid && (!msg.seenBy || !msg.seenBy[user.uid]))
+                .slice(-10);
+
+            // Batch işlemi kullan
+            for (const msg of unreadMessages) {
+                const messageRef = doc(db, 'messages', msg.id);
+                await updateDoc(messageRef, {
+                    [`seenBy.${user.uid}`]: serverTimestamp()
+                });
+            }
+        } catch (error) {
+            console.error('Görüldü bilgisi güncellenirken hata:', error);
+        }
+    }, [user, messages]);
+
+    // Sayfa görünür olduğunda ve mesajlar değiştiğinde görüldü bilgisini güncelle
+    useEffect(() => {
+        if (document.visibilityState === 'visible') {
+            updateSeenStatus();
+        }
+
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                updateSeenStatus();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [updateSeenStatus]);
 
     // Disclaimer kontrol effect'i
     useEffect(() => {
@@ -251,6 +295,7 @@ const ChatPage: React.FC = () => {
                 syncChat();
             } else {
                 initialLoadDone.current = true;
+                syncChat();
             }
         });
 
@@ -461,12 +506,25 @@ const ChatPage: React.FC = () => {
         }
     };
     
-    const deleteMessage = async (messageId: string) => {
-        if (!isAdmin) return;
+    const handleDeleteMessage = async (message: Message) => {
+        if (!user) return; // Güvenlik kontrolü, kullanıcı giriş yapmış olmalı
+
+        // Silme yetkisi: Yönetici VEYA mesajın sahibi olmalı.
+        const canDelete = isAdmin || message.uid === user.uid;
+
+        if (!canDelete) {
+            console.warn('Yetkisiz silme denemesi engellendi.');
+            return;
+        }
+
         try { 
-            await deleteDoc(doc(db, 'messages', messageId));
-            await triggerSignal();
-        } catch (error) { console.error("Mesaj silinirken hata:", error); }
+            await deleteDoc(doc(db, 'messages', message.id));
+            await triggerSignal(); // Diğer kullanıcıların sohbetini güncellemek için sinyali tetikle.
+        } catch (error) { 
+            console.error("Mesaj silinirken hata:", error); 
+            setChatError("Mesaj silinemedi. Bir hata oluştu.");
+            setTimeout(() => setChatError(null), 3000);
+        }
     };
     
     const getCharCountColor = () => {
@@ -525,7 +583,7 @@ const ChatPage: React.FC = () => {
                     )}
                 </motion.div>
             )}
-                        {/* Sorumluluk Reddi Modalı */}
+
             {showDisclaimer && (
                 <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                     <motion.div 
@@ -581,7 +639,6 @@ const ChatPage: React.FC = () => {
                 </div>
             )}
 
-
             <div ref={chatContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50 ${chatSettings.chatPaused ? 'filter blur-sm' : ''}`}>
                 {hasMore && (
                     <div className="text-center my-4">
@@ -636,7 +693,6 @@ const ChatPage: React.FC = () => {
                                                     : ''
                                             }`}
                                         />
-                                        {/* Aktif çerçeve efekti */}
                                         {allUsers.get(msg.uid)?.inventory?.activeAvatarFrame && (
                                             <div className={`absolute inset-0 rounded-full animate-pulse ${
                                                 allUsers.get(msg.uid)?.inventory?.activeAvatarFrame === 'neon_frame' 
@@ -706,7 +762,11 @@ const ChatPage: React.FC = () => {
                             <div className={`flex gap-2 items-center absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}>
                                 <button onClick={() => handleStartReply(msg)} title="Yanıtla" className="text-cyber-gray hover:text-white"><CornerDownLeft size={16}/></button>
                                 {isAdmin && <button onClick={() => handlePinMessage(msg)} title="Sabitle" className="text-yellow-400 hover:text-yellow-300"><Pin size={16} /></button>}
-                                {isAdmin && <button onClick={() => deleteMessage(msg.id)} title="Mesajı Sil" className="text-red-500 hover:text-red-400"><Trash2 size={16} /></button>}
+                                {(isAdmin || messageIsFromCurrentUser) && 
+                                    <button onClick={() => handleDeleteMessage(msg)} title="Mesajı Sil" className="text-red-500 hover:text-red-400">
+                                        <Trash2 size={16} />
+                                    </button>
+                                }
                             </div>
                         </div>
                     );
@@ -738,7 +798,6 @@ const ChatPage: React.FC = () => {
                         <span>{chatError}</span>
                     </motion.div>
                 )}
-                {/* Özel Emoji Seçici */}
                 {showSpecialEmojis && userProfile?.inventory?.specialEmojis && userProfile.inventory.specialEmojis.length > 0 && (
                     <div className="mb-4 p-4 bg-dark-gray/50 border border-cyber-gray/50 rounded-lg">
                         <div className="flex items-center justify-between mb-3">
@@ -822,7 +881,6 @@ const ChatPage: React.FC = () => {
                         <Smile size={20} />
                     </button>
                     
-                    {/* Özel Emoji Butonu */}
                     {userProfile?.inventory?.specialEmojis && userProfile.inventory.specialEmojis.length > 0 && (
                         <button
                             type="button"

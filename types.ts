@@ -49,3 +49,34 @@ export interface UserInventory {
   activeSpecialTitle?: string;
 }
 
+// === RAPORLAMA SİSTEMİ TYPES ===
+export interface UserReport {
+  id: string;
+  reportedUserId: string;
+  reporterUserId: string;
+  reason: string;
+  messageId?: string;
+  createdAt: Date;
+  status: 'pending' | 'reviewed' | 'resolved';
+}
+
+export interface UserReportStats {
+  userId: string;
+  reportCount: number;
+  lastReportDate?: Date;
+  mutedUntil?: Date;
+  isMuted: boolean;
+}
+
+// === YENİLİKLER SİSTEMİ TYPES ===
+export interface NewsItem {
+  id: string;
+  title: string;
+  description: string;
+  type: 'feature' | 'update' | 'fix' | 'announcement';
+  priority: 'low' | 'medium' | 'high';
+  createdAt: Date;
+  isActive: boolean;
+  icon?: string;
+}
+

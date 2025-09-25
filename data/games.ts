@@ -462,13 +462,54 @@ SPACE: Hızlanmak için basılı tut.`,
   title: 'COLOR TUNNEL',
   description: 'Gözlerini kamaştıran renklerin ve geometrinin ortasında, inanılmaz bir hızla boşluğa doğru süzülüyorsun. Reflekslerin, seni bir sonraki anomaliye taşıyacak tek para birimi. Bu hipnotik tünelde ne kadar süre hayatta kalabilir, ne kadar derine inebilirsin? -FaTaLRhymeR37',
   type: 'HTML5',
-  url: 'https://spectacular-begonia-ea8c12.netlify.app/',
+  url: 'https://tunnelrush-70k.pages.dev/',
   
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/CT1.jpg',
   
   category: 'Beceri',
   tags: 'HTML5, Sonsuz Koşu, 3D, Beceri, Refleks, Hız, Tünel',
   controls: 'Sol/Sağ Yön Tuşları: Yön Değiştir.',
+},
+{
+  id: 'paper-io-2',
+  title: 'PAPER.IO 2',
+  description: 'Boş bir tuvaldesin ve her hareketin ardında bir iz bırakıyor. Bölgeni genişlet, rakiplerinin zayıf anını kolla ve bu pikselli arazinin tek hakimi ol. Unutma, en büyük imparatorluklar bile, savunmasız bir kuyruktan yıkılabilir. -FaTaLRhymeR37',
+  type: 'HTML5',
+  
+  // URL'yi verdiğin gibi ekledim. "https" eklemeyi unutma!
+  url: 'https://paperio-2vg.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/icon512.png',
+  
+  category: 'IO Oyunları',
+  tags: 'HTML5, IO, Çok Oyunculu, Beceri, Strateji, Rekabetçi',
+  controls: 'W,A,S,D / Yön Tuşları / Mouse: Hareket et.',
+},
+{
+  id: 'moto-x3m-2',
+  title: 'MOTO X3M 2',
+  description: 'Zaman ve yer çekimi, sadece aşılması gereken iki küçük engeldir. Dev testereler, patlayan variller ve imkansız rampalar seni bekliyor. Bu arenada stilin, hızından daha önemlidir. En çılgın taklaları at ve zaferin adrenalini hisset. -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://motox3m2.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/icon.jpg',
+  
+  category: 'Yarış',
+  tags: 'HTML5, Yarış, Motor, Beceri, Fizik, Platform, Aksiyon',
+  controls: 'W / Yukarı Ok: Hızlan\nS / Aşağı Ok: Fren\nA / Sol Ok: Geri Yaslan\nD / Sağ Ok: Öne Eğil',
+},
+{
+  id: 'cut-the-rope',
+  title: 'CUT THE ROPE',
+  description: 'Küçük bir canavarın açlığı, fizik yasalarını yeniden yazdırabilir. İpleri doğru zamanda kes, baloncukları patlat ve Om Nom\'u şekerine kavuştur. Her hamle bir bilmece, her bölüm yeni bir zeka testi. En kısa yoldan zafere ulaşabilir misin? -FaTaLRhymeR37',
+  type: 'HTML5',
+  url: 'https://ctr-29l.pages.dev/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/logo.png',
+  
+  category: 'Zeka',
+  tags: 'HTML5, Zeka, Bulmaca, Fizik, Sevimli, Strateji, Klasik',
+  controls: 'Mouse: İpleri kesmek için sürükle.',
 },
 
 
