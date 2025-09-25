@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
+import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
 
 // ==============================================================================
 // GEREKLİ IMPORTLAR
@@ -43,6 +43,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Not: Presence sistemi artık sadece sohbet sayfasında useChatPresence hook'u ile yönetiliyor
 
   useEffect(() => {
     // Auth durumu değiştiğinde dinleyici çalışır
