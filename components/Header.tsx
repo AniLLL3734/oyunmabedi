@@ -86,7 +86,7 @@ const Header: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 bg-dark-gray/70 backdrop-blur-sm border-b border-cyber-gray/50">
       <nav className="container mx-auto flex justify-between items-center p-4">
-        <Link to="/" className="text-2xl font-heading font-bold hover:text-electric-purple transition-colors">TTMTAL <span className="text-electric-purple">GAMES</span></Link>
+        <Link to="/" className="text-2xl font-heading font-bold hover:text-electric-purple transition-colors">Oyun Mabedi</Link>
         
         <ul className="flex items-center space-x-4 md:space-x-6 text-lg">
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sayfa</NavLink></motion.div></li>
@@ -111,10 +111,7 @@ const Header: React.FC = () => {
               <ShoppingBag size={18} className="text-yellow-400" /> Siber Dükkan
             </NavLink></motion.div></li>
           )}
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sohbet Odası</NavLink></motion.div></li>
-          {user && (<li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat-rooms" style={({ isActive }) => (isActive ? activeStyle : {})}>
-            <MessagesSquare size={18} className="inline-block mr-1"/><span className="hidden md:inline">Diğer Odalar</span></NavLink></motion.div></li>
-          )}
+
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/creator" style={({ isActive }) => (isActive ? activeStyle : {})}>Yapımcı</NavLink></motion.div></li>
           
           {isAdmin && (

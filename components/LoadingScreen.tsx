@@ -33,11 +33,8 @@ const LoadingScreen: React.FC = () => {
         transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
       >
         <h1 className="text-4xl md:text-6xl font-heading font-black text-electric-purple tracking-widest">
-          TTMTAL
+          Oyun Mabedi
         </h1>
-        <h2 className="text-2xl md:text-4xl font-heading font-bold text-ghost-white">
-          GAMES
-        </h2>
       </motion.div>
       <motion.p
         key={textIndex}

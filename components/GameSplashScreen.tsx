@@ -111,8 +111,7 @@ const GameSplashScreen: React.FC<GameSplashScreenProps> = ({
             </div>
           </motion.div>
           <motion.div className="mb-8" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6, delay: 0.4 }}>
-            <h1 className="text-3xl md:text-4xl font-heading font-black text-electric-purple tracking-widest">TTMTAL</h1>
-            <h2 className="text-xl md:text-2xl font-heading font-bold text-ghost-white">GAMES</h2>
+            <h1 className="text-3xl md:text-4xl font-heading font-black text-electric-purple tracking-widest">Oyun Mabedi</h1>
           </motion.div>
           <motion.div className="mb-8" initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6, delay: 0.6 }}>
             <AnimatePresence mode="wait">

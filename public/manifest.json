@@ -1,7 +1,7 @@
 {
-  "name": "TTMTAL Games",
-  "short_name": "TTMTAL",
-  "description": "TTMTAL Oyun ve Sohbet Platformu",
+  "name": "Oyun Mabedi",
+  "short_name": "Oyun Mabedi",
+  "description": "Oyun Mabedi Oyun ve Sohbet Platformu",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1a1a2e",

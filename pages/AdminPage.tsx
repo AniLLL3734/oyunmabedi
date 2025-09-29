@@ -109,6 +109,7 @@ const AdminPage: React.FC = () => {
     const [scoreAmount, setScoreAmount] = useState<number>(0);
     const [slowModeDelay, setSlowModeDelay] = useState('5');
     const [chatPauseReason, setChatPauseReason] = useState('');
+    const [gameCommentsEnabled, setGameCommentsEnabled] = useState(true);
 
     // Skor yönetimi fonksiyonları
     const handleSearchUser = async () => {
@@ -160,6 +161,16 @@ const AdminPage: React.FC = () => {
 
     useEffect(() => {
         if (!isAdmin) return;
+
+        // Fetch game comments setting
+        const fetchSettings = async () => {
+            const settingsDoc = await getDoc(doc(db, 'chat_meta', 'settings'));
+            if (settingsDoc.exists()) {
+                const data = settingsDoc.data();
+                setGameCommentsEnabled(data.gameCommentsEnabled !== false); // default true
+            }
+        };
+        fetchSettings();
 
         const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
             setSystemStats(prev => ({ ...prev, activeUsers: snapshot.size }));
@@ -494,6 +505,33 @@ const AdminPage: React.FC = () => {
         } catch (error) {
             console.error('Sohbet durumu ayarlanırken hata:', error);
             alert('Sohbet durumu ayarlanırken bir hata oluştu!');
+        }
+    };
+
+    const toggleGameComments = async (enabled: boolean) => {
+        try {
+            // Chat meta dokümanını güncelle
+            await setDoc(doc(db, 'chat_meta', 'settings'), {
+                gameCommentsEnabled: enabled
+            }, { merge: true });
+
+            setGameCommentsEnabled(enabled);
+
+            // Sistem mesajı gönder
+            await addDoc(collection(db, 'messages'), {
+                text: enabled ?
+                    '💬 **Oyun yorumları aktif edildi.**' :
+                    '🚫 **Oyun yorumları kapatıldı.**',
+                uid: 'system',
+                displayName: 'Sistem',
+                createdAt: new Date(),
+                isSystemMessage: true
+            });
+
+            alert(enabled ? 'Oyun yorumları açıldı!' : 'Oyun yorumları kapatıldı!');
+        } catch (error) {
+            console.error('Oyun yorumları ayarlanırken hata:', error);
+            alert('Oyun yorumları ayarlanırken bir hata oluştu!');
         }
     };
 
@@ -842,13 +880,13 @@ const AdminPage: React.FC = () => {
                                     <span className="text-cyber-gray">saniye</span>
                                 </div>
                                 <div className="flex gap-3">
-                                    <button 
+                                    <button
                                         onClick={() => toggleSlowMode(true)}
                                         className="px-4 py-2 flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
                                     >
                                         Yavaş Modu Aç
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => toggleSlowMode(false)}
                                         className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
                                     >
@@ -873,19 +911,54 @@ const AdminPage: React.FC = () => {
                                     className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
                                 />
                                 <div className="flex gap-3">
-                                    <button 
+                                    <button
                                         onClick={() => toggleChatPause(true)}
                                         className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
                                     >
                                         Sohbeti Durdur
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => toggleChatPause(false)}
                                         className="px-4 py-2 flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
                                     >
                                         Devam Et
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Oyun Yorumları Kontrolü */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <MessageSquare className="text-blue-400" />
+                            Oyun Yorumları
+                        </h3>
+                        <div className="space-y-4">
+                            <p className="text-cyber-gray text-sm">
+                                Oyun oynandıktan sonra otomatik yorumların gönderilmesini kontrol eder.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => toggleGameComments(true)}
+                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
+                                        gameCommentsEnabled
+                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                    }`}
+                                >
+                                    Açık
+                                </button>
+                                <button
+                                    onClick={() => toggleGameComments(false)}
+                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
+                                        !gameCommentsEnabled
+                                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                    }`}
+                                >
+                                    Kapalı
+                                </button>
                             </div>
                         </div>
                     </div>
