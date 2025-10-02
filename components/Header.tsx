@@ -113,6 +113,7 @@ const Header: React.FC = () => {
           )}
 
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/creator" style={({ isActive }) => (isActive ? activeStyle : {})}>Yapımcı</NavLink></motion.div></li>
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/clans" style={({ isActive }) => (isActive ? activeStyle : {})}>Klanlar</NavLink></motion.div></li>
           
           {isAdmin && (
             <>

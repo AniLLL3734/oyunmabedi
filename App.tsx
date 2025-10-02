@@ -28,6 +28,7 @@ const DirectMessagesPage = React.lazy(() => import('./pages/DirectMessagesPage')
 const ChatRoomPage = React.lazy(() => import('./pages/ChatRoomPage'));
 const ShopPage = React.lazy(() => import('./pages/ShopPage'));
 
+
 const PageLoader = () => (
   <div className="flex justify-center items-center h-full py-20">
     <LoaderCircle className="animate-spin text-electric-purple" size={48} />

@@ -17,6 +17,8 @@ interface UserScore {
     role?: 'admin' | 'user';
 }
 
+
+
 // Podyum kartı için küçük bir yardımcı bileşen
 const PodiumCard: React.FC<{ user: UserScore, rank: number, color: string, shadowColor: string, scale?: number }> = ({ user, rank, color, shadowColor, scale = 1 }) => {
     return (
@@ -73,6 +75,31 @@ const LeaderboardPage: React.FC = () => {
                 setIsLoading(false);
             }
         };
+
+        const fetchClanLeaderboard = async () => {
+            const clansRef = collection(db, 'clans');
+            const q = query(clansRef, orderBy('totalScore', 'desc'), limit(100));
+
+            try {
+                const querySnapshot = await getDocs(q);
+                const board: ClanScore[] = [];
+                querySnapshot.forEach(doc => {
+                    const data = doc.data();
+                    board.push({
+                        id: doc.id,
+                        name: data.name,
+                        emblem: data.emblem,
+                        totalScore: data.totalScore || 0,
+                        memberCount: data.memberCount || 0,
+                        level: data.level || 1
+                    });
+                });
+                setClanLeaderboard(board);
+            } catch (error) {
+                console.error("Klan liderlik tablosu çekilirken hata:", error);
+            }
+        };
+
         fetchLeaderboard();
     }, []);
 
@@ -93,41 +120,89 @@ const LeaderboardPage: React.FC = () => {
             <h1 className="text-5xl font-heading mb-4 text-center flex justify-center items-center gap-4">
                 <Trophy size={48} className="text-yellow-400" /> Skorların Efendileri
             </h1>
-            <p className="text-center text-cyber-gray mb-12">Sitede en çok zaman geçiren, piksellere hükmeden efsaneler.</p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-16 text-center items-end">
-                {podium.length > 1 ? (
-                     <PodiumCard user={podium[1]} rank={2} color="bg-gray-400" shadowColor="shadow-gray-400/50" />
-                ) : <div /> }
-                {podium.length > 0 ? (
-                     <PodiumCard user={podium[0]} rank={1} color="bg-gradient-to-t from-yellow-500 to-yellow-300" shadowColor="shadow-yellow-400/50" scale={1.1} />
-                ) : <div />}
-                 {podium.length > 2 ? (
-                     <PodiumCard user={podium[2]} rank={3} color="bg-yellow-700" shadowColor="shadow-yellow-700/50" />
-                 ): <div />}
+
+            <div className="flex justify-center mb-8">
+                <div className="flex bg-dark-gray/50 rounded-lg p-1">
+                    <button
+                        onClick={() => setActiveTab('users')}
+                        className={`px-6 py-2 rounded-md transition-all ${activeTab === 'users' ? 'bg-electric-purple text-white' : 'text-cyber-gray hover:text-ghost-white'}`}
+                    >
+                        Oyuncular
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('clans')}
+                        className={`px-6 py-2 rounded-md transition-all ${activeTab === 'clans' ? 'bg-electric-purple text-white' : 'text-cyber-gray hover:text-ghost-white'}`}
+                    >
+                        Klanlar
+                    </button>
+                </div>
             </div>
 
-             <div className="max-w-4xl mx-auto">
-                 {others.map((player, index) => (
-                     <motion.div 
-                        key={player.uid} 
-                        className={`flex items-center p-4 my-2 bg-dark-gray/60 rounded-lg border transition-all hover:bg-dark-gray ${player.uid === user?.uid ? 'border-electric-purple ring-2 ring-electric-purple/50' : 'border-cyber-gray/20'}`}
-                        initial={{ opacity: 0, x: -50 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.5, delay: index * 0.05}}
-                     >
-                        <span className="text-xl font-bold text-cyber-gray w-12 flex-shrink-0">{index + 4}.</span>
-                        <img src={player.avatarUrl} alt={player.displayName} className="w-10 h-10 rounded-full bg-dark-gray object-cover mr-4"/>
-                        <div className="flex-grow">
-                            {player.role === 'admin' ? 
-                                <AdminTag name={player.displayName} className="text-lg" /> :
-                                <Link to={`/profile/${player.uid}`} className="text-lg font-bold text-ghost-white hover:text-electric-purple">{player.displayName}</Link>
-                            }
-                        </div>
-                        <span className="text-xl font-heading font-black text-electric-purple">{player.score.toLocaleString()} SKOR</span>
-                     </motion.div>
-                 ))}
-             </div>
+            {activeTab === 'users' ? (
+                <>
+                    <p className="text-center text-cyber-gray mb-12">Sitede en çok zaman geçiren, piksellere hükmeden efsaneler.</p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8 mb-16 text-center items-end">
+                        {podium.length > 1 ? (
+                             <PodiumCard user={podium[1]} rank={2} color="bg-gray-400" shadowColor="shadow-gray-400/50" />
+                        ) : <div /> }
+                        {podium.length > 0 ? (
+                             <PodiumCard user={podium[0]} rank={1} color="bg-gradient-to-t from-yellow-500 to-yellow-300" shadowColor="shadow-yellow-400/50" scale={1.1} />
+                        ) : <div />}
+                         {podium.length > 2 ? (
+                             <PodiumCard user={podium[2]} rank={3} color="bg-yellow-700" shadowColor="shadow-yellow-700/50" />
+                         ): <div />}
+                    </div>
+
+                     <div className="max-w-4xl mx-auto">
+                         {others.map((player, index) => (
+                             <motion.div
+                                key={player.uid}
+                                className={`flex items-center p-4 my-2 bg-dark-gray/60 rounded-lg border transition-all hover:bg-dark-gray ${player.uid === user?.uid ? 'border-electric-purple ring-2 ring-electric-purple/50' : 'border-cyber-gray/20'}`}
+                                initial={{ opacity: 0, x: -50 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.5, delay: index * 0.05}}
+                             >
+                                <span className="text-xl font-bold text-cyber-gray w-12 flex-shrink-0">{index + 4}.</span>
+                                <img src={player.avatarUrl} alt={player.displayName} className="w-10 h-10 rounded-full bg-dark-gray object-cover mr-4"/>
+                                <div className="flex-grow">
+                                    {player.role === 'admin' ?
+                                        <AdminTag name={player.displayName} className="text-lg" /> :
+                                        <Link to={`/profile/${player.uid}`} className="text-lg font-bold text-ghost-white hover:text-electric-purple">{player.displayName}</Link>
+                                    }
+                                </div>
+                                <span className="text-xl font-heading font-black text-electric-purple">{player.score.toLocaleString()} SKOR</span>
+                             </motion.div>
+                         ))}
+                     </div>
+                </>
+            ) : (
+                <>
+                    <p className="text-center text-cyber-gray mb-12">En güçlü klanlar, toplu skorlarıyla rekabet ediyor.</p>
+
+                    <div className="max-w-4xl mx-auto">
+                        {clanLeaderboard.map((clan, index) => (
+                            <motion.div
+                                key={clan.id}
+                                className={`flex items-center p-4 my-2 bg-dark-gray/60 rounded-lg border transition-all hover:bg-dark-gray ${userProfile?.clanId === clan.id ? 'border-electric-purple ring-2 ring-electric-purple/50' : 'border-cyber-gray/20'}`}
+                                initial={{ opacity: 0, x: -50 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.5, delay: index * 0.05}}
+                            >
+                                <span className="text-xl font-bold text-cyber-gray w-12 flex-shrink-0">{index + 1}.</span>
+                                <div className="w-10 h-10 bg-cyber-gray rounded-full flex items-center justify-center text-lg font-bold text-electric-purple mr-4">
+                                    {clan.emblem[0].toUpperCase()}
+                                </div>
+                                <div className="flex-grow">
+                                    <Link to={`/clan/${clan.id}`} className="text-lg font-bold text-ghost-white hover:text-electric-purple">{clan.name}</Link>
+                                    <p className="text-sm text-cyber-gray">{clan.memberCount} üye • Seviye {clan.level}</p>
+                                </div>
+                                <span className="text-xl font-heading font-black text-electric-purple">{clan.totalScore.toLocaleString()} TOPLAM SKOR</span>
+                            </motion.div>
+                        ))}
+                    </div>
+                </>
+            )}
         </motion.div>
     );
 };

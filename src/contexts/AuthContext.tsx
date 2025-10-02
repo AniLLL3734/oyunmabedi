@@ -19,7 +19,9 @@ export interface UserProfileData {
     bio?: string;
     avatarUrl?: string;
     achievements?: string[];
-    [key:string]: any; 
+    clanId?: string;
+    clanRole?: 'leader' | 'co-leader' | 'member';
+    [key:string]: any;
 }
 
 interface AuthContextType {

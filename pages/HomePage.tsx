@@ -32,6 +32,7 @@ const HomePage: React.FC = () => {
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
+  const [feedbackError, setFeedbackError] = useState('');
   const [showAdminMessagePopup, setShowAdminMessagePopup] = useState(false);
   const [showGuestWarning, setShowGuestWarning] = useState(false);
 
@@ -111,6 +112,7 @@ const HomePage: React.FC = () => {
     e.preventDefault();
     if (feedbackMessage.trim() === '' || !user) return;
     setIsSending(true);
+    setFeedbackError('');
     try {
         await addDoc(collection(db, 'feedback'), {
             uid: user.uid,
@@ -124,6 +126,7 @@ const HomePage: React.FC = () => {
         setTimeout(() => setFeedbackSent(false), 5000);
     } catch (error) {
         console.error("Geri bildirim gönderilemedi:", error);
+        setFeedbackError('Geri bildirim gönderilemedi. Lütfen tekrar deneyin.');
     } finally {
         setIsSending(false);
     }
@@ -234,19 +237,26 @@ const HomePage: React.FC = () => {
                             <p>Mesajın evrenin mimarına başarıyla ulaştı. Teşekkürler.</p>
                         </div>
                     ) : (
-                        <form onSubmit={handleSendFeedback} className="flex flex-col md:flex-row gap-4">
-                            <textarea
-                                value={feedbackMessage}
-                                onChange={(e) => setFeedbackMessage(e.target.value)}
-                                placeholder={`${user.displayName} olarak mesajını yaz...`}
-                                className="flex-1 p-3 bg-space-black h-24 md:h-auto text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple"
-                                required
-                                maxLength={500}
-                            />
-                            <button type="submit" disabled={isSending} className="flex items-center justify-center gap-2 p-3 bg-electric-purple text-white font-bold rounded-md disabled:bg-cyber-gray">
-                                {isSending ? 'Gönderiliyor...' : <>Sinyal Gönder <SendHorizonal size={18} /></>}
-                            </button>
-                        </form>
+                        <>
+                            {feedbackError && (
+                                <div className="p-4 bg-red-900/50 border border-red-700/50 rounded-lg text-red-300 mb-4">
+                                    <p>{feedbackError}</p>
+                                </div>
+                            )}
+                            <form onSubmit={handleSendFeedback} className="flex flex-col md:flex-row gap-4">
+                                <textarea
+                                    value={feedbackMessage}
+                                    onChange={(e) => setFeedbackMessage(e.target.value)}
+                                    placeholder={`${user.displayName} olarak mesajını yaz...`}
+                                    className="flex-1 p-3 bg-space-black h-24 md:h-auto text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple"
+                                    required
+                                    maxLength={500}
+                                />
+                                <button type="submit" disabled={isSending} className="flex items-center justify-center gap-2 p-3 bg-electric-purple text-white font-bold rounded-md disabled:bg-cyber-gray">
+                                    {isSending ? 'Gönderiliyor...' : <>Sinyal Gönder <SendHorizonal size={18} /></>}
+                                </button>
+                            </form>
+                        </>
                     )}
                 </motion.div>
             ) : (
