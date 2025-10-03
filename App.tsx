@@ -1,4 +1,4 @@
-// DOSYA: App.tsx (YAZIM HATASI DÜZELTİLMİŞ NİHAİ VERSİYON)
+// DOSYA: App.tsx
 
 import React, { Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
@@ -10,7 +10,7 @@ import { useScoreSystem } from './hooks/useScoreSystem';
 import { usePresence } from './hooks/usePresence';
 import { useDailyRewards } from './hooks/useDailyRewards';
 
-// Sayfaların Lazy Import'ları
+// Sayfaların Lazy Import'ları (ClanDetailPage buraya eklendi)
 const HomePage = React.lazy(() => import('./pages/HomePage'));
 const GamePage = React.lazy(() => import('./pages/GamePage'));
 const CreatorPage = React.lazy(() => import('./pages/CreatorPage'));
@@ -27,15 +27,19 @@ const AuthlessChatPage = React.lazy(() => import('./pages/AuthlessChatPage'));
 const DirectMessagesPage = React.lazy(() => import('./pages/DirectMessagesPage'));
 const ChatRoomPage = React.lazy(() => import('./pages/ChatRoomPage'));
 const ShopPage = React.lazy(() => import('./pages/ShopPage'));
+const ClanPage = React.lazy(() => import('./pages/ClanPage'));
+// DÜZELTME 1: ClanDetailPage de lazy import ile yüklenecek
+const ClanDetailPage = React.lazy(() => import('./pages/ClanDetailPage'));
+// Admin Chat Page
+const AdminChatPage = React.lazy(() => import('./pages/AdminChatPage'));
 
 
 const PageLoader = () => (
-  <div className="flex justify-center items-center h-full py-20">
+  <div className="flex justify-center items-center h-full min-h-screen">
     <LoaderCircle className="animate-spin text-electric-purple" size={48} />
   </div>
 );
 
-// AFK Uyarı Ekranı Component'i
 const AfkWarning = () => (
     <motion.div 
         id="afk-warning-overlay" 
@@ -52,7 +56,6 @@ const AfkWarning = () => (
     </motion.div>
 );
 
-// Hile Engelleme Uyarısı Ekranı Component'i
 const BlockedWarning = () => (
     <motion.div 
         className="fixed inset-0 bg-red-900/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-8 z-[9999]"
@@ -85,6 +88,8 @@ const App: React.FC = () => {
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/signup" element={<SignupPage />} />
                         <Route path="/all-users" element={<AllUsersPage />} />
+
+                        {/* Giriş Gerektiren Sayfalar (Private Routes) */}
                         <Route path="/shop" element={<PrivateRoute><ShopPage /></PrivateRoute>} />
                         <Route path="/edit-profile" element={<PrivateRoute><EditProfilePage /></PrivateRoute>} />
                         <Route path="/chat" element={<PrivateRoute><ChatPage /></PrivateRoute>} />
@@ -93,6 +98,13 @@ const App: React.FC = () => {
                         <Route path="/chat/:serverId" element={<PrivateRoute><AuthlessChatPage /></PrivateRoute>} />
                         <Route path="/messages" element={<PrivateRoute><DirectMessagesPage /></PrivateRoute>} />
                         <Route path="/dm/:chatId" element={<PrivateRoute><ChatRoomPage /></PrivateRoute>} />
+                        <Route path="/clans" element={<PrivateRoute><ClanPage /></PrivateRoute>} />
+                        <Route path="/admin-chat/:roomId" element={<PrivateRoute><AdminChatPage /></PrivateRoute>} />
+                        
+                        {/* DÜZELTME 2: /clan/:clanId için eksik olan rota eklendi. */}
+                        {/* Klanları görmek için giriş yapmak gerektiğinden bunu da PrivateRoute içine alıyoruz. */}
+                        <Route path="/clan/:clanId" element={<PrivateRoute><ClanDetailPage /></PrivateRoute>} />
+                        
                     </Routes>
                 </AnimatePresence>
             </Suspense> 

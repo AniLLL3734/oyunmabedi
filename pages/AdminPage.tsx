@@ -1,9 +1,24 @@
-    import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, doc, deleteDoc, updateDoc, Timestamp, onSnapshot, getDocs, addDoc, setDoc, getDoc, where } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, AlertTriangle } from 'lucide-react';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  doc, 
+  deleteDoc, 
+  updateDoc, 
+  Timestamp, 
+  onSnapshot, 
+  getDocs, 
+  addDoc, 
+  setDoc, 
+  getDoc, 
+  where,
+  writeBatch
+} from 'firebase/firestore';
+import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, AlertTriangle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface UserData {
@@ -54,6 +69,15 @@ interface SystemStats {
     };
 }
 
+interface ChatRoom {
+    id: string;
+    name: string;
+    participants: string[];
+    createdBy: string;
+    createdAt: Timestamp;
+    isActive: boolean;
+}
+
 const MuteModal: React.FC<{
     user: UserData;
     onClose: () => void;
@@ -63,7 +87,7 @@ const MuteModal: React.FC<{
         { label: '5 Dakika', value: 5 * 60 * 1000 },
         { label: '1 Saat', value: 60 * 60 * 1000 },
         { label: '1 Gün', value: 24 * 60 * 60 * 1000 },
-        { label: 'Kalıcı (10 Yıl)', value: 365 * 24 * 60 * 60 * 1000 * 10 },
+        { label: 'Kalıcı (10 Yıl)', value: 365 * 24 * 60 * 60 * 10 },
     ];
     const isCurrentlyMuted = user.mutedUntil && user.mutedUntil.toDate() > new Date();
 
@@ -79,10 +103,151 @@ const MuteModal: React.FC<{
     );
 };
 
+const UserSelectionModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    availableUsers: UserData[];
+    selectedUsers: UserData[];
+    onUserToggle: (user: UserData) => void;
+    onCreateRoom: () => void;
+    roomName: string;
+    setRoomName: (name: string) => void;
+}> = ({ isOpen, onClose, availableUsers, selectedUsers, onUserToggle, onCreateRoom, roomName, setRoomName }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+
+    // Filter users based on search term - daha esnek arama
+    const filteredUsers = searchTerm.trim() === '' 
+        ? availableUsers 
+        : availableUsers.filter(user => 
+            user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            user.uid.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
+            <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-2xl max-h-[80vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+            >
+                <h3 className="text-2xl font-heading mb-6 text-center text-electric-purple">
+                    Sohbet Odası Oluştur
+                </h3>
+
+                <div className="mb-6">
+                    <label className="block text-cyber-gray mb-2">Oda Adı</label>
+                    <input
+                        type="text"
+                        value={roomName}
+                        onChange={(e) => setRoomName(e.target.value)}
+                        placeholder="Oda adını girin..."
+                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                        autoFocus
+                    />
+                </div>
+
+                <div className="mb-6">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-lg font-bold text-ghost-white">Katılımcıları Seçin</h4>
+                        <span className="text-cyber-gray text-sm">
+                            {selectedUsers.length} kullanıcı seçildi
+                        </span>
+                    </div>
+                    
+                    {/* Search input for users */}
+                    <div className="mb-4">
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    // Enter tuşuna basıldığında ilk kullanıcıyı seç
+                                    if (filteredUsers.length > 0 && searchTerm.trim() !== '') {
+                                        e.preventDefault();
+                                        onUserToggle(filteredUsers[0]);
+                                        // Arama terimini temizle
+                                        setSearchTerm('');
+                                    }
+                                }
+                            }}
+                            placeholder="Kullanıcı ara... (Enter ile ilk sonucu seç)"
+                            className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                            autoFocus
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                        {filteredUsers.map(user => (
+                            <div
+                                key={user.uid}
+                                onClick={() => onUserToggle(user)}
+                                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                                    selectedUsers.some(u => u.uid === user.uid)
+                                        ? 'bg-electric-purple/20 border-electric-purple'
+                                        : 'bg-dark-gray/50 border-cyber-gray/50 hover:bg-dark-gray/70'
+                                }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-4 h-4 rounded border-2 ${
+                                        selectedUsers.some(u => u.uid === user.uid)
+                                            ? 'bg-electric-purple border-electric-purple'
+                                            : 'border-cyber-gray'
+                                    }`}>
+                                        {selectedUsers.some(u => u.uid === user.uid) && (
+                                            <div className="w-full h-full rounded-sm bg-electric-purple"></div>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className="font-bold text-ghost-white truncate">{user.displayName}</p>
+                                        <p className="text-sm text-cyber-gray truncate">{user.email}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        
+                        {filteredUsers.length === 0 && searchTerm && (
+                            <div className="col-span-2 text-center py-4 text-cyber-gray">
+                                Kullanıcı bulunamadı
+                            </div>
+                        )}
+                        
+                        {filteredUsers.length === 0 && !searchTerm && (
+                            <div className="col-span-2 text-center py-4 text-cyber-gray">
+                                Kullanıcı listesi yükleniyor...
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex gap-4">
+                    <button
+                        onClick={onCreateRoom}
+                        disabled={!roomName.trim() || selectedUsers.length === 0}
+                        className="flex-1 px-6 py-3 bg-electric-purple hover:bg-electric-purple/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors"
+                    >
+                        Oda Oluştur ({selectedUsers.length} katılımcı)
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+                    >
+                        İptal
+                    </button>
+                </div>
+            </motion.div>
+        </div>
+    );
+};
+
 const AdminPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'commands'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatroom' | 'commands' | 'privateChat'>('dashboard');
     const [users, setUsers] = useState<UserData[]>([]);
     const [games, setGames] = useState<GameData[]>([]);
     const [feedback, setFeedback] = useState<FeedbackData[]>([]);
@@ -110,6 +275,841 @@ const AdminPage: React.FC = () => {
     const [slowModeDelay, setSlowModeDelay] = useState('5');
     const [chatPauseReason, setChatPauseReason] = useState('');
     const [gameCommentsEnabled, setGameCommentsEnabled] = useState(true);
+
+    // Chat room state
+    const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+    const [isUserSelectionModalOpen, setIsUserSelectionModalOpen] = useState(false);
+    const [selectedUsersForRoom, setSelectedUsersForRoom] = useState<UserData[]>([]);
+    const [newRoomName, setNewRoomName] = useState('');
+    const [availableUsers, setAvailableUsers] = useState<UserData[]>([]);
+
+    // Private chat room state
+    const [privateChatRooms, setPrivateChatRooms] = useState<any[]>([]);
+    const [privateChatRoomName, setPrivateChatRoomName] = useState('');
+
+    // Chat room functions
+    const handleUserToggle = (user: UserData) => {
+        setSelectedUsersForRoom(prev =>
+            prev.some(u => u.uid === user.uid)
+                ? prev.filter(u => u.uid !== user.uid)
+                : [...prev, user]
+        );
+    };
+
+    const handleCreateChatRoom = async () => {
+        if (!newRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
+
+        try {
+            const roomId = `room_${Date.now()}`;
+            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
+
+            await setDoc(doc(db, 'chat_rooms', roomId), {
+                id: roomId,
+                name: newRoomName.trim(),
+                participants,
+                createdBy: user.uid,
+                createdAt: Timestamp.now(),
+                isActive: true
+            });
+
+            // Add system message to the room (separate this operation)
+            try {
+                await addDoc(collection(db, 'chat_rooms', roomId, 'messages'), {
+                    text: `🆕 **Sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
+                    uid: 'system',
+                    displayName: 'Sistem',
+                    createdAt: Timestamp.now(),
+                    isSystemMessage: true
+                });
+            } catch (messageError) {
+                console.error('Sistem mesajı oluşturulurken hata:', messageError);
+                // Continue even if message creation fails
+            }
+
+            setNewRoomName('');
+            setSelectedUsersForRoom([]);
+            setIsUserSelectionModalOpen(false);
+            alert('Sohbet odası başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Sohbet odası oluşturma hatası:', error);
+            alert('Sohbet odası oluşturulurken bir hata oluştu.');
+        }
+    };
+
+    // Private chat room functions
+    const handleCreatePrivateChatRoom = async () => {
+        if (!privateChatRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
+
+        // Admin kontrolü
+        try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (!userDoc.exists()) {
+                console.error('Kullanıcı belgesi bulunamadı');
+                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
+                return;
+            }
+            
+            const userData = userDoc.data();
+            if (userData?.role !== 'admin') {
+                console.error('Kullanıcı admin değil:', userData?.role);
+                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
+                return;
+            }
+        } catch (error) {
+            console.error('Admin kontrolü sırasında hata:', error);
+            alert('Yetki kontrolü sırasında bir hata oluştu.');
+            return;
+        }
+
+        try {
+            // Create the private chat room
+            const roomId = `private_${Date.now()}`;
+            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
+
+            // Remove the 'id' field as it might be causing issues
+            await setDoc(doc(db, 'private_chat_rooms', roomId), {
+                name: privateChatRoomName.trim(),
+                participants,
+                createdBy: user.uid,
+                createdAt: Timestamp.now(),
+                isActive: true
+            });
+
+            // Create notification for each participant
+            for (const participant of selectedUsersForRoom) {
+                const notificationData = {
+                    userId: participant.uid,
+                    type: 'private_chat_invite',
+                    title: 'Özel Sohbet Odası Daveti',
+                    message: `"${privateChatRoomName.trim()}" adlı özel sohbet odasına davet edildiniz!`,
+                    roomId: roomId,
+                    roomName: privateChatRoomName.trim(),
+                    senderId: user.uid,
+                    senderName: user.displayName || 'Admin',
+                    createdAt: Timestamp.now(),
+                    isRead: false
+                };
+                
+                console.log('Creating notification for user:', participant.uid, notificationData);
+                
+                try {
+                    await addDoc(collection(db, 'notifications'), notificationData);
+                    console.log('Notification created successfully for user:', participant.uid);
+                } catch (notificationError) {
+                    console.error('Failed to create notification for user:', participant.uid, notificationError);
+                }
+            }
+
+            // Add system message to the room (separate this operation)
+            try {
+                await addDoc(collection(db, 'private_chat_rooms', roomId, 'messages'), {
+                    text: `🆕 **Özel sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
+                    uid: 'system',
+                    displayName: 'Sistem',
+                    createdAt: Timestamp.now(),
+                    isSystemMessage: true
+                });
+            } catch (messageError) {
+                console.error('Sistem mesajı oluşturulurken hata:', messageError);
+                // Continue even if message creation fails
+            }
+
+            setPrivateChatRoomName('');
+            setSelectedUsersForRoom([]);
+            setIsUserSelectionModalOpen(false);
+            alert('Özel sohbet odası başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Özel sohbet odası oluşturma hatası:', error);
+            alert('Özel sohbet odası oluşturulurken bir hata oluştu.');
+        }
+    };
+
+    useEffect(() => {
+        if (!isAdmin) {
+            navigate('/');
+            return;
+        }
+
+        const fetchUsers = async () => {
+            try {
+                const q = query(collection(db, 'users'), orderBy('displayName'));
+                const querySnapshot = await getDocs(q);
+                const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setUsers(usersData);
+            } catch (error) {
+                console.error('Kullanıcıları alırken hata:', error);
+            }
+        };
+
+        const fetchGames = async () => {
+            try {
+                const q = query(collection(db, 'games'), orderBy('title'));
+                const querySnapshot = await getDocs(q);
+                const gamesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setGames(gamesData);
+            } catch (error) {
+                console.error('Oyunları alırken hata:', error);
+            }
+        };
+
+        const fetchFeedback = async () => {
+            try {
+                const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                const feedbackData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setFeedback(feedbackData);
+            } catch (error) {
+                console.error('Geri bildirimleri alırken hata:', error);
+            }
+        };
+
+        const fetchReports = async () => {
+            try {
+                const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setReports(reportsData);
+            } catch (error) {
+                console.error('Raporları alırken hata:', error);
+            }
+        };
+
+        const fetchSystemStats = async () => {
+            try {
+                const docRef = doc(db, 'system_stats', 'stats');
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    setSystemStats(docSnap.data() as SystemStats);
+                } else {
+                    console.error('Sistem istatistikleri bulunamadı');
+                }
+            } catch (error) {
+                console.error('Sistem istatistiklerini alırken hata:', error);
+            }
+        };
+
+        const fetchChatRooms = async () => {
+            try {
+                const q = query(collection(db, 'chat_rooms'), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                const chatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setChatRooms(chatRoomsData);
+            } catch (error) {
+                console.error('Sohbet odalarını alırken hata:', error);
+            }
+        };
+
+        const fetchPrivateChatRooms = async () => {
+            try {
+                const q = query(collection(db, 'private_chat_rooms'), orderBy('createdAt', 'desc'));
+                const querySnapshot = await getDocs(q);
+                const privateChatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setPrivateChatRooms(privateChatRoomsData);
+            } catch (error) {
+                console.error('Özel sohbet odalarını alırken hata:', error);
+            }
+        };
+
+        const fetchAvailableUsers = async () => {
+            try {
+                const q = query(collection(db, 'users'), orderBy('displayName'));
+                const querySnapshot = await getDocs(q);
+                const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setAvailableUsers(usersData);
+            } catch (error) {
+                console.error('Kullanıcıları alırken hata:', error);
+            }
+        };
+
+        fetchUsers();
+        fetchGames();
+        fetchFeedback();
+        fetchReports();
+        fetchSystemStats();
+        fetchChatRooms();
+        fetchPrivateChatRooms();
+        fetchAvailableUsers();
+
+        setIsLoading(false);
+    }, [isAdmin, navigate]);
+
+    const handleMute = async (uid: string, durationMs: number) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+                const userData = userDoc.data() as UserData;
+                const muteUntil = durationMs === 0 ? null : Timestamp.fromMillis(Date.now() + durationMs);
+
+                await updateDoc(userRef, {
+                    mutedUntil: muteUntil
+                });
+
+                setSelectedUserForMute(null);
+                setIsMuteModalOpen(false);
+                alert(`Kullanıcı ${durationMs === 0 ? 'susturuldu' : 'susturuldu'}`);
+            } else {
+                console.error('Kullanıcı bulunamadı');
+                alert('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcıyı sustururken hata:', error);
+            alert('Kullanıcıyı sustururken bir hata oluştu.');
+        }
+    };
+
+    const handleKick = async (uid: string) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+                await deleteDoc(userRef);
+
+                setSelectedUser(null);
+                alert('Kullanıcı başarıyla atıldı.');
+            } else {
+                console.error('Kullanıcı bulunamadı');
+                alert('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcıyı atarken hata:', error);
+            alert('Kullanıcıyı atarken bir hata oluştu.');
+        }
+    };
+
+    const handleAnnouncement = async () => {
+        if (!announcementText.trim()) return;
+
+        try {
+            await addDoc(collection(db, 'announcements'), {
+                text: announcementText.trim(),
+                createdAt: Timestamp.now()
+            });
+
+            setAnnouncementText('');
+            alert('Duyuru başarıyla yayınlandı!');
+        } catch (error) {
+            console.error('Duyuru yayınlarken hata:', error);
+            alert('Duyuru yayınlarken bir hata oluştu.');
+        }
+    };
+
+    const handlePin = async () => {
+        if (!pinText.trim()) return;
+
+        try {
+            await addDoc(collection(db, 'pins'), {
+                text: pinText.trim(),
+                createdAt: Timestamp.now()
+            });
+
+            setPinText('');
+            alert('Pin başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Pin oluştururken hata:', error);
+            alert('Pin oluştururken bir hata oluştu.');
+        }
+    };
+
+    const handleScoreChange = async (uid: string, amount: number) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+                const userData = userDoc.data() as UserData;
+                const newScore = (userData.score || 0) + amount;
+
+                await updateDoc(userRef, {
+                    score: newScore
+                });
+
+                setSelectedUser(null);
+                alert(`Kullanıcının puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}`);
+            } else {
+                console.error('Kullanıcı bulunamadı');
+                alert('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
+            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
+        }
+    };
+
+    // Private chat room functions
+    const handleCreatePrivateChatRoom = async () => {
+                createdAt: Timestamp.now()
+            });
+
+            setPinText('');
+            alert('Pin başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Pin oluştururken hata:', error);
+            alert('Pin oluştururken bir hata oluştu.');
+        }
+    };
+
+    const handleScoreChange = async (uid: string, amount: number) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userDoc = await getDoc(userRef);
+
+            if (userDoc.exists()) {
+                const userData = userDoc.data() as UserData;
+                const newScore = (userData.score || 0) + amount;
+
+                await updateDoc(userRef, {
+                    score: newScore
+                });
+
+                setSelectedUser(null);
+                alert(`Kullanıcının puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}`);
+            } else {
+                console.error('Kullanıcı bulunamadı');
+                alert('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
+            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
+        }
+    };
+
+    // Private chat room functions
+    const handleCreatePrivateChatRoom = async () => {
+        if (!privateChatRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
+
+        // Admin kontrolü
+        try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (!userDoc.exists()) {
+                console.error('Kullanıcı belgesi bulunamadı');
+                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
+                return;
+            }
+            
+            const userData = userDoc.data();
+            if (userData?.role !== 'admin') {
+                console.error('Kullanıcı admin değil:', userData?.role);
+                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
+                return;
+            }
+        } catch (error) {
+            console.error('Admin kontrolü sırasında hata:', error);
+            alert('Yetki kontrolü sırasında bir hata oluştu.');
+            return;
+        }
+
+        try {
+            // Create the private chat room
+            const roomId = `private_${Date.now()}`;
+            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
+
+            // Remove the 'id' field as it might be causing issues
+            await setDoc(doc(db, 'private_chat_rooms', roomId), {
+                name: privateChatRoomName.trim(),
+                participants,
+                createdBy: user.uid,
+                createdAt: Timestamp.now(),
+                isActive: true
+            });
+
+            // Create notification for each participant
+            for (const participant of selectedUsersForRoom) {
+                const notificationData = {
+                    userId: participant.uid,
+                    type: 'private_chat_invite',
+                    title: 'Özel Sohbet Odası Daveti',
+                    message: `"${privateChatRoomName.trim()}" adlı özel sohbet odasına davet edildiniz!`,
+                    roomId: roomId,
+                    roomName: privateChatRoomName.trim(),
+                    senderId: user.uid,
+                    senderName: user.displayName || 'Admin',
+                    createdAt: Timestamp.now(),
+                    isRead: false
+                };
+                
+                console.log('Creating notification for user:', participant.uid, notificationData);
+                
+                try {
+                    await addDoc(collection(db, 'notifications'), notificationData);
+                    console.log('Notification created successfully for user:', participant.uid);
+                } catch (notificationError) {
+                    console.error('Failed to create notification for user:', participant.uid, notificationError);
+                }
+            }
+
+            // Add system message to the room (separate this operation)
+            try {
+                await addDoc(collection(db, 'private_chat_rooms', roomId, 'messages'), {
+                    text: `🆕 **Özel sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
+                    uid: 'system',
+                    displayName: 'Sistem',
+                    createdAt: Timestamp.now(),
+                    isSystemMessage: true
+                });
+            } catch (messageError) {
+                console.error('Sistem mesajı oluşturulurken hata:', messageError);
+                // Continue even if message creation fails
+            }
+
+            setPrivateChatRoomName('');
+            setSelectedUsersForRoom([]);
+            setIsUserSelectionModalOpen(false);
+            alert('Özel sohbet odası başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Özel sohbet odası oluşturma hatası:', error);
+            alert('Özel sohbet odası oluşturulurken bir hata oluştu.');
+        }
+    };
+
+    useEffect(() => {
+        if (!isAdmin) {
+            navigate('/');
+            return;
+        }
+
+        const fetchUsers = async () => {
+            const q = query(collection(db, 'users'), orderBy('displayName'));
+            const querySnapshot = await getDocs(q);
+            const usersData = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserData));
+            setUsers(usersData);
+        };
+
+        const fetchGames = async () => {
+            const q = query(collection(db, 'games'), orderBy('title'));
+            const querySnapshot = await getDocs(q);
+            const gamesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameData));
+            setGames(gamesData);
+        };
+
+        const fetchFeedback = async () => {
+            const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const feedbackData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackData));
+            setFeedback(feedbackData);
+        };
+
+        const fetchReports = async () => {
+            const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReportData));
+            setReports(reportsData);
+        };
+
+        const fetchSystemStats = async () => {
+            const docRef = doc(db, 'system_stats', 'stats');
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                setSystemStats(docSnap.data() as SystemStats);
+            } else {
+                console.error('Sistem istatistikleri bulunamadı.');
+            }
+        };
+
+        const fetchChatRooms = async () => {
+            const q = query(collection(db, 'chat_rooms'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const chatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatRoom));
+            setChatRooms(chatRoomsData);
+        };
+
+        const fetchPrivateChatRooms = async () => {
+            const q = query(collection(db, 'private_chat_rooms'), orderBy('createdAt', 'desc'));
+            const querySnapshot = await getDocs(q);
+            const privateChatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setPrivateChatRooms(privateChatRoomsData);
+        };
+
+        fetchUsers();
+        fetchGames();
+        fetchFeedback();
+        fetchReports();
+        fetchSystemStats();
+        fetchChatRooms();
+        fetchPrivateChatRooms();
+
+        setIsLoading(false);
+    }, [isAdmin, navigate]);
+
+    const handleMute = async (uid: string, durationMs: number) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as UserData;
+                const muteUntil = durationMs === 0 ? null : Timestamp.fromMillis(Date.now() + durationMs);
+
+                await updateDoc(userRef, { mutedUntil: muteUntil });
+
+                if (durationMs === 0) {
+                    alert(`${userData.displayName} susturması kaldırıldı.`);
+                } else {
+                    alert(`${userData.displayName} ${durationMs / 1000 / 60} dakika susturuldu.`);
+                }
+
+                setIsMuteModalOpen(false);
+                setSelectedUserForMute(null);
+            } else {
+                console.error('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcı susturulurken hata oluştu:', error);
+            alert('Kullanıcı susturulurken hata oluştu.');
+        }
+    };
+
+    const handleKick = async (uid: string) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as UserData;
+
+                await deleteDoc(userRef);
+
+                alert(`${userData.displayName} sunucudan atıldı.`);
+            } else {
+                console.error('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcı atılırken hata oluştu:', error);
+            alert('Kullanıcı atılırken hata oluştu.');
+        }
+    };
+
+    const handleAnnouncement = async () => {
+        try {
+            const announcementRef = doc(db, 'announcements', 'current');
+            await setDoc(announcementRef, {
+                text: announcementText,
+                createdAt: Timestamp.now()
+            });
+
+            alert('Duyuru başarıyla yayınlandı!');
+            setAnnouncementText('');
+        } catch (error) {
+            console.error('Duyuru yayınlanırken hata oluştu:', error);
+            alert('Duyuru yayınlanırken hata oluştu.');
+        }
+    };
+
+    const handlePin = async () => {
+        try {
+            const pinRef = doc(db, 'pins', 'current');
+            await setDoc(pinRef, {
+                text: pinText,
+                createdAt: Timestamp.now()
+            });
+
+            alert('Pin başarıyla oluşturuldu!');
+            setPinText('');
+        } catch (error) {
+            console.error('Pin oluşturulurken hata oluştu:', error);
+            alert('Pin oluşturulurken hata oluştu.');
+        }
+    };
+
+    const handleScoreChange = async (uid: string, amount: number) => {
+        try {
+            const userRef = doc(db, 'users', uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+                const userData = userSnap.data() as UserData;
+                const newScore = (userData.score || 0) + amount;
+
+                await updateDoc(userRef, { score: newScore });
+
+                alert(`${userData.displayName} puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}. Yeni puan: ${newScore}`);
+            } else {
+                console.error('Kullanıcı bulunamadı.');
+            }
+        } catch (error) {
+            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
+            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
+        }
+    };
+
+    const handleSlowMode = async (delay: number) => {
+        try {
+            const slowModeRef = doc(db, 'settings', 'slow_mode');
+            await setDoc(slowModeRef, {
+                delay: delay
+            });
+
+            alert('Yavaş mod ayarı başarıyla güncellendi!');
+            setSlowModeDelay(delay.toString());
+        } catch (error) {
+            console.error('Yavaş mod ayarı güncellenirken hata oluştu:', error);
+            alert('Yavaş mod ayarı güncellenirken hata oluştu.');
+        }
+    };
+
+    const handleChatPause = async (reason: string) => {
+        try {
+            const chatPauseRef = doc(db, 'settings', 'chat_pause');
+            await setDoc(chatPauseRef, {
+                reason: reason,
+                isActive: true
+            });
+
+            alert('Sohbet başarıyla duraklatıldı!');
+            setChatPauseReason(reason);
+        } catch (error) {
+            console.error('Sohbet duraklatılırken hata oluştu:', error);
+            alert('Sohbet duraklatılırken hata oluştu.');
+        }
+    };
+
+    const handleChatResume = async () => {
+        try {
+            const chatPauseRef = doc(db, 'settings', 'chat_pause');
+            await setDoc(chatPauseRef, {
+                reason: '',
+                isActive: false
+            });
+
+            alert('Sohbet başarıyla devam ettirildi!');
+            setChatPauseReason('');
+        } catch (error) {
+            console.error('Sohbet devam ettirilirken hata oluştu:', error);
+            alert('Sohbet devam ettirilirken hata oluştu.');
+        }
+    };
+
+    const handleGameCommentsToggle = async (isEnabled: boolean) => {
+        try {
+            const gameCommentsRef = doc(db, 'settings', 'game_comments');
+            await setDoc(gameCommentsRef, {
+                isEnabled: isEnabled
+            });
+        } catch (error) {
+            console.error('Sohbet odası oluşturma hatası:', error);
+            alert('Sohbet odası oluşturulurken bir hata oluştu.');
+        }
+    };
+
+    const openUserSelectionModal = () => {
+        // Tüm kullanıcıları çek ve modal için ayarla
+        const fetchAllUsers = async () => {
+            try {
+                const q = query(collection(db, 'users'), orderBy('displayName'));
+                const querySnapshot = await getDocs(q);
+                const allUsers = querySnapshot.docs.map(doc => ({
+                    uid: doc.id,
+                    ...doc.data()
+                } as UserData));
+                
+                // Mevcut kullanıcıyı filtrele
+                setAvailableUsers(allUsers.filter(u => u.uid !== user?.uid));
+                setIsUserSelectionModalOpen(true);
+            } catch (error) {
+                console.error('Kullanıcılar çekilirken hata:', error);
+                alert('Kullanıcılar yüklenirken bir hata oluştu.');
+            }
+        };
+        
+        fetchAllUsers();
+    };
+
+    const closeUserSelectionModal = () => {
+        setIsUserSelectionModalOpen(false);
+        setSelectedUsersForRoom([]);
+        setNewRoomName('');
+    };
+
+    // Fetch private chat rooms
+    useEffect(() => {
+        if (!isAdmin) return;
+        
+        const unsubscribe = onSnapshot(collection(db, 'private_chat_rooms'), (snapshot) => {
+            const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setPrivateChatRooms(rooms);
+        });
+        
+        return () => unsubscribe();
+    }, [isAdmin]);
+
+    const handleClosePrivateChatRoom = async (roomId: string, roomName: string) => {
+        if (!user) return;
+        
+        // Admin kontrolü
+        try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (!userDoc.exists()) {
+                console.error('Kullanıcı belgesi bulunamadı');
+                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
+                return;
+            }
+            
+            const userData = userDoc.data();
+            if (userData?.role !== 'admin') {
+                console.error('Kullanıcı admin değil:', userData?.role);
+                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
+                return;
+            }
+        } catch (error) {
+            console.error('Admin kontrolü sırasında hata:', error);
+            alert('Yetki kontrolü sırasında bir hata oluştu.');
+            return;
+        }
+        
+        if (window.confirm(`"${roomName}" adlı özel sohbet odasını kapatmak istediğinizden emin misiniz?`)) {
+            try {
+                // Get room participants
+                const roomDoc = await getDoc(doc(db, 'private_chat_rooms', roomId));
+                if (!roomDoc.exists()) return;
+                
+                const roomData = roomDoc.data();
+                const participants = roomData.participants || [];
+
+                // Update room status to inactive
+                await updateDoc(doc(db, 'private_chat_rooms', roomId), {
+                    isActive: false,
+                    closedAt: Timestamp.now(),
+                    closedBy: user.uid
+                });
+
+                // Create notification for each participant
+                for (const participantId of participants) {
+                    if (participantId !== user.uid) {
+                        const notificationData = {
+                            userId: participantId,
+                            type: 'private_chat_closed',
+                            title: 'Özel Sohbet Odası Kapatıldı',
+                            message: `"${roomName}" adlı özel sohbet odası yönetici tarafından kapatıldı. Ana sayfaya yönlendiriliyorsunuz.`,
+                            roomId: roomId,
+                            roomName: roomName,
+                            senderId: user.uid,
+                            senderName: user.displayName || 'Admin',
+                            createdAt: Timestamp.now(),
+                            isRead: false
+                        };
+                        
+                        console.log('Creating close notification for user:', participantId, notificationData);
+                        
+                        try {
+                            await addDoc(collection(db, 'notifications'), notificationData);
+                            console.log('Close notification created successfully for user:', participantId);
+                        } catch (notificationError) {
+                            console.error('Failed to create close notification for user:', participantId, notificationError);
+                        }
+                    }
+                }
+
+                alert('Özel sohbet odası başarıyla kapatıldı!');
+            } catch (error) {
+                console.error('Özel sohbet odası kapatma hatası:', error);
+                alert('Özel sohbet odası kapatılırken bir hata oluştu: ' + (error as Error).message);
+            }
+        }
+    };
 
     // Skor yönetimi fonksiyonları
     const handleSearchUser = async () => {
@@ -611,6 +1611,19 @@ const AdminPage: React.FC = () => {
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
             {isMuteModalOpen && selectedUserForMute && (<MuteModal user={selectedUserForMute} onClose={closeMuteModal} onMute={handleMuteUser} />)}
+            
+            {/* User Selection Modal for Private Chat Rooms */}
+            <UserSelectionModal 
+                isOpen={isUserSelectionModalOpen}
+                onClose={closeUserSelectionModal}
+                availableUsers={availableUsers}
+                selectedUsers={selectedUsersForRoom}
+                onUserToggle={handleUserToggle}
+                onCreateRoom={handleCreatePrivateChatRoom}
+                roomName={privateChatRoomName}
+                setRoomName={setPrivateChatRoomName}
+            />
+            
             <h1 className="text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             <div className="flex flex-wrap gap-4 mb-8 border-b border-cyber-gray/50">
                 <button onClick={() => setView('dashboard')} className={`py-3 px-5 text-lg font-bold ${view === 'dashboard' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Activity className="inline-block mr-2" /> Dashboard</button>
@@ -618,6 +1631,8 @@ const AdminPage: React.FC = () => {
                 <button onClick={() => setView('games')} className={`py-3 px-5 text-lg font-bold ${view === 'games' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Gamepad2 className="inline-block mr-2" /> Oyunlar</button>
                 <button onClick={() => setView('feedback')} className={`py-3 px-5 text-lg font-bold relative ${view === 'feedback' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Geri Bildirimler{unreadFeedbackCount > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}</button>
                 <button onClick={() => setView('reports')} className={`py-3 px-5 text-lg font-bold relative ${view === 'reports' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Flag className="inline-block mr-2" /> Raporlar{reports.filter(r => r.status === 'pending').length > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 justify-center items-center text-xs text-white">{reports.filter(r => r.status === 'pending').length}</span></span>}</button>
+                <button onClick={() => setView('chatroom')} className={`py-3 px-5 text-lg font-bold ${view === 'chatroom' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Sohbet Odası</button>
+                <button onClick={() => setView('privateChat')} className={`py-3 px-5 text-lg font-bold ${view === 'privateChat' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Özel Sohbet Odaları</button>
                 <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Shield className="inline-block mr-2" /> Sistem Komutları</button>
             </div>
 
@@ -813,7 +1828,7 @@ const AdminPage: React.FC = () => {
                                             <button 
                                                 onClick={() => handleUpdateReportStatus(report.id, 'reviewed')}
                                                 className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
-                                                title="İncelendi olarak işaretle"
+                                                title="İnceleme olarak işaretle"
                                             >
                                                 İncele
                                             </button>
@@ -851,6 +1866,293 @@ const AdminPage: React.FC = () => {
                         <div className="text-center py-12 text-cyber-gray">
                             <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
                             <p className="text-lg">Henüz rapor bulunmuyor.</p>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {view === 'chatroom' && (
+                <div className="space-y-6">
+                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><MessageSquare className="text-electric-purple" />Sohbet Odası Yönetimi</h2>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Yavaş Mod Kontrolü */}
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                                <Clock className="text-yellow-400" />
+                                Yavaş Mod
+                            </h3>
+                            <div className="space-y-4">
+                                <div className="flex gap-3 items-center">
+                                    <input
+                                        type="number"
+                                        value={slowModeDelay}
+                                        onChange={(e) => setSlowModeDelay(e.target.value)}
+                                        placeholder="Saniye"
+                                        min="1"
+                                        className="w-32 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                    />
+                                    <span className="text-cyber-gray">saniye</span>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => toggleSlowMode(true)}
+                                        className="px-4 py-2 flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Yavaş Modu Aç
+                                    </button>
+                                    <button
+                                        onClick={() => toggleSlowMode(false)}
+                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Kapat
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Sohbet Kontrolü */}
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                                <Zap className="text-red-400" />
+                                Sohbeti Durdur
+                            </h3>
+                            <div className="space-y-4">
+                                <input
+                                    type="text"
+                                    value={chatPauseReason}
+                                    onChange={(e) => setChatPauseReason(e.target.value)}
+                                    placeholder="Durdurma nedeni..."
+                                    className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                />
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => toggleChatPause(true)}
+                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Sohbeti Durdur
+                                    </button>
+                                    <button
+                                        onClick={() => toggleChatPause(false)}
+                                        className="px-4 py-2 flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
+                                    >
+                                        Devam Et
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Oyun Yorumları Kontrolü */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <MessageSquare className="text-blue-400" />
+                            Oyun Yorumları
+                        </h3>
+                        <div className="space-y-4">
+                            <p className="text-cyber-gray text-sm">
+                                Oyun oynandıktan sonra otomatik yorumların gönderilmesini kontrol eder.
+                            </p>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => toggleGameComments(true)}
+                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
+                                        gameCommentsEnabled
+                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                    }`}
+                                >
+                                    Açık
+                                </button>
+                                <button
+                                    onClick={() => toggleGameComments(false)}
+                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
+                                        !gameCommentsEnabled
+                                            ? 'bg-red-600 hover:bg-red-700 text-white'
+                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
+                                    }`}
+                                >
+                                    Kapalı
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MessageSquare className="text-green-400" />Sohbet Yönetimi</h3>
+                        <div className="flex flex-col gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Yavaş Mod Kontrolü */}
+                                <div className="p-4 bg-space-black rounded-lg">
+                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+                                        <Clock className="text-yellow-400" />
+                                        Yavaş Mod
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <div className="flex gap-2 items-center">
+                                            <input
+                                                type="number"
+                                                value={slowModeDelay}
+                                                onChange={(e) => setSlowModeDelay(e.target.value)}
+                                                placeholder="Saniye"
+                                                min="1"
+                                                className="w-24 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                            />
+                                            <span className="text-cyber-gray">saniye</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => toggleSlowMode(true)}
+                                                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Yavaş Modu Aç
+                                            </button>
+                                            <button
+                                                onClick={() => toggleSlowMode(false)}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Yavaş Modu Kapat
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Sohbet Durdurma Kontrolü */}
+                                <div className="p-4 bg-space-black rounded-lg">
+                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
+                                        <Zap className="text-red-400" />
+                                        Sohbet Kontrolü
+                                    </h4>
+                                    <div className="space-y-3">
+                                        <input
+                                            type="text"
+                                            value={chatPauseReason}
+                                            onChange={(e) => setChatPauseReason(e.target.value)}
+                                            placeholder="Durdurma nedeni..."
+                                            className="w-full p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                        />
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => toggleChatPause(true)}
+                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Sohbeti Durdur
+                                            </button>
+                                            <button
+                                                onClick={() => toggleChatPause(false)}
+                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
+                                            >
+                                                Sohbeti Aç
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => exportChatHistory()}
+                                    className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <Download size={20} />
+                                    <span>Sohbeti JSON Olarak İndir</span>
+                                </button>
+                            </div>
+                            <p className="text-cyber-gray text-sm">Not: Bu özellikler özel sohbet odası içindeyken de kullanılabilir.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {view === 'privateChat' && (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-3xl font-heading mb-6 flex items-center gap-2">
+                            <MessageSquare className="text-electric-purple" />
+                            Özel Sohbet Odaları
+                        </h2>
+                        <button 
+                            onClick={openUserSelectionModal}
+                            className="px-4 py-2 bg-electric-purple hover:bg-electric-purple/80 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <Plus size={18} />
+                            Yeni Özel Oda Oluştur
+                        </button>
+                    </div>
+
+                    {privateChatRooms.length === 0 ? (
+                        <div className="text-center py-12 text-cyber-gray">
+                            <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
+                            <p className="text-lg">Henüz özel sohbet odası oluşturulmamış.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {privateChatRooms.map((room: any) => (
+                                <div key={room.id} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-ghost-white">{room.name}</h3>
+                                            <p className="text-cyber-gray text-sm mt-1">
+                                                Oluşturan: {room.createdBy === user?.uid ? 'Siz' : users.find(u => u.uid === room.createdBy)?.displayName || 'Bilinmeyen'}
+                                            </p>
+                                        </div>
+                                        {room.isActive && (
+                                            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-bold rounded-full">
+                                                Aktif
+                                            </span>
+                                        )}
+                                        {!room.isActive && (
+                                            <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-full">
+                                                Kapalı
+                                            </span>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="mb-4">
+                                        <p className="text-cyber-gray text-sm mb-2">Katılımcılar:</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {room.participants?.map((participantId: string) => {
+                                                const participant = users.find(u => u.uid === participantId);
+                                                return (
+                                                    <span 
+                                                        key={participantId} 
+                                                        className={`px-2 py-1 rounded-full text-xs ${
+                                                            participantId === user?.uid 
+                                                                ? 'bg-electric-purple/20 text-electric-purple' 
+                                                                : 'bg-cyber-gray/20 text-ghost-white'
+                                                        }`}
+                                                    >
+                                                        {participantId === user?.uid 
+                                                            ? 'Siz' 
+                                                            : participant?.displayName || 'Bilinmeyen'}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-end gap-2">
+                                        {room.isActive && (
+                                            <>
+                                                <button
+                                                    onClick={() => navigate(`/admin-chat/${room.id}`)}
+                                                    className="px-3 py-1 bg-electric-purple hover:bg-electric-purple/80 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    <MessageSquare size={14} />
+                                                    Sohbete Gir
+                                                </button>
+                                                <button
+                                                    onClick={() => handleClosePrivateChatRoom(room.id, room.name)}
+                                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
+                                                >
+                                                    <X size={14} />
+                                                    Kapat
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

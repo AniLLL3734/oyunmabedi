@@ -73,19 +73,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 // 2. YENİ KULLANICI İLK DEFA GİRİŞ YAPIYORSA
                 // =====================================================================
                 
+                // Admin kontrolü: Eğer email admin email ise, admin rolü ver
+                const isAdminUser = currentUser.email === 'fatalrhymer37@ttmtal.com';
+
                 // Yeni kullanıcı için varsayılan bir profil nesnesi oluştur
                 const newUserProfile: UserProfileData = {
                     uid: currentUser.uid,
-                    displayName: currentUser.displayName || `Gezgin#${Math.floor(Math.random() * 9000) + 1000}`,
+                    displayName: isAdminUser ? 'FaTaLRhymeR37' : (currentUser.displayName || `Gezgin#${Math.floor(Math.random() * 9000) + 1000}`),
                     email: currentUser.email || '',
-                    role: 'user',
-                    score: 0,
-                    bio: 'Bu dijital evrendeki yolculuğuma yeni başladım!',
+                    role: isAdminUser ? 'admin' : 'user',
+                    score: isAdminUser ? 405000 : 0,
+                    highestScore: isAdminUser ? 405000 : 0,
+                    bio: isAdminUser ? 'Bu dijital evrenin yaratıcısı. Kurallar benim tarafından yazılır.' : 'Bu dijital evrendeki yolculuğuma yeni başladım!',
                     avatarUrl: currentUser.photoURL || defaultAvatarUrl,
-                    achievements: [],
-                    joinDate: new Date(),
-                    messageCount: 0,
-                    playedGames: []
+                    achievements: isAdminUser ? [
+                        'first_login',
+                        'pixel_whisper',
+                        'chat_initiate',
+                        'frequency_echo',
+                        'interdimensional_traveler',
+                        'scholar_of_the_code',
+                        'time_lord',
+                        'void_caller',
+                        'legend_of_ttmtal',
+                        'architect_title'
+                    ] : [],
+                    joinDate: isAdminUser ? new Date('2023-01-01') : new Date(),
+                    messageCount: isAdminUser ? 5000 : 0,
+                    playedGames: isAdminUser ? ['game1', 'game2'] : [],
+                    level: isAdminUser ? 100 : undefined,
+                    experience: isAdminUser ? 1000000 : undefined,
+                    totalPlayTime: isAdminUser ? 100000 : undefined,
+                    favoriteGame: isAdminUser ? 'Retro Games' : undefined,
+                    lastLogin: new Date(),
+                    isOnline: false,
+                    friends: [],
+                    blockedUsers: [],
+                    notificationsEnabled: true,
+                    theme: 'dark',
+                    language: 'tr'
                 };
 
                 // Asenkron işlemleri yönetmek için IIFE (Immediately Invoked Function Expression) kullan

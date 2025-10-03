@@ -17,7 +17,14 @@ interface UserScore {
     role?: 'admin' | 'user';
 }
 
-
+interface ClanScore {
+    id: string;
+    name: string;
+    emblem: string;
+    totalScore: number;
+    memberCount: number;
+    level: number;
+}
 
 // Podyum kartı için küçük bir yardımcı bileşen
 const PodiumCard: React.FC<{ user: UserScore, rank: number, color: string, shadowColor: string, scale?: number }> = ({ user, rank, color, shadowColor, scale = 1 }) => {
@@ -43,9 +50,11 @@ const PodiumCard: React.FC<{ user: UserScore, rank: number, color: string, shado
 };
 
 const LeaderboardPage: React.FC = () => {
-    const { user } = useAuth();
+    const { user, userProfile } = useAuth();
     const [leaderboard, setLeaderboard] = useState<UserScore[]>([]);
+    const [clanLeaderboard, setClanLeaderboard] = useState<ClanScore[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'users' | 'clans'>('users');
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
@@ -101,6 +110,7 @@ const LeaderboardPage: React.FC = () => {
         };
 
         fetchLeaderboard();
+        fetchClanLeaderboard();
     }, []);
 
     if (isLoading) {
@@ -184,7 +194,7 @@ const LeaderboardPage: React.FC = () => {
                         {clanLeaderboard.map((clan, index) => (
                             <motion.div
                                 key={clan.id}
-                                className={`flex items-center p-4 my-2 bg-dark-gray/60 rounded-lg border transition-all hover:bg-dark-gray ${userProfile?.clanId === clan.id ? 'border-electric-purple ring-2 ring-electric-purple/50' : 'border-cyber-gray/20'}`}
+                                className={`flex items-center p-4 my-2 bg-dark-gray/60 rounded-lg border transition-all hover:bg-dark-gray ${userProfile?.clanId === clan.id ? 'border-electric-purple ring-2 ring-electric-purple/50' : 'text-cyber-gray/20'}`}
                                 initial={{ opacity: 0, x: -50 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ duration: 0.5, delay: index * 0.05}}

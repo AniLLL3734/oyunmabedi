@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth, UserProfileData } from '../src/contexts/AuthContext'; // UserProfile'ı UserProfileData olarak düzelttim, seninkine göre ayarla
+import { useAuth, UserProfileData } from '../src/contexts/AuthContext';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
-import { collection, query, where, onSnapshot, doc, limit } from 'firebase/firestore';
-import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag } from 'lucide-react'; 
+import { collection, query, where, onSnapshot, doc, limit, orderBy, getDocs, writeBatch } from 'firebase/firestore';
+import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X } from 'lucide-react'; 
+import toast from 'react-hot-toast';
 
 const Header: React.FC = () => {
   const { user, isAdmin, userProfile } = useAuth();
@@ -13,6 +14,8 @@ const Header: React.FC = () => {
   
   const [hasUnreadAdminMessage, setHasUnreadAdminMessage] = useState(false);
   const [hasUnreadDmsForAdmin, setHasUnreadDmsForAdmin] = useState(false);
+  const [hasPrivateChatNotification, setHasPrivateChatNotification] = useState(false);
+  const [privateChatRoomId, setPrivateChatRoomId] = useState<string | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -27,6 +30,7 @@ const Header: React.FC = () => {
   useEffect(() => {
     // Aktif olan dinleyiciyi (unsubscribe fonksiyonunu) tutacak TEK bir değişken tanımla.
     let unsubscribe: (() => void) | null = null;
+    let notificationsUnsubscribe: (() => void) | null = null;
     
     if (user) {
         if (isAdmin) {
@@ -47,19 +51,149 @@ const Header: React.FC = () => {
         } else {
             // --- KULLANICI DİNLEYİCİSİ ---
             const userDocRef = doc(db, 'users', user.uid);
-            unsubscribe = onSnapshot(userDocRef, (doc) => {
-                if (doc.exists()) {
-                    const data = doc.data() as UserProfileData;
+            unsubscribe = onSnapshot(userDocRef, (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.data() as UserProfileData;
                     setHasUnreadAdminMessage(data?.unreadAdminMessage === true);
                 }
             }, (error) => {
                 console.error("Kullanıcı bildirim dinleyicisinde hata:", error);
+            });
+            
+            // --- ÖZEL SOHBET ODASI BİLDİRİMLERİ ---
+            const notificationsQuery = query(
+                collection(db, 'notifications'),
+                where('userId', '==', user.uid),
+                where('isRead', '==', false),
+                where('type', 'in', ['private_chat_invite', 'private_chat_closed']),
+                orderBy('createdAt', 'desc')
+            );
+            
+            notificationsUnsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
+                console.log('Notification snapshot:', snapshot.size, snapshot.docs.map(doc => doc.data()));
+                
+                if (!snapshot.empty) {
+                    // Process all notifications, not just the first one
+                    snapshot.docChanges().forEach((change) => {
+                        if (change.type === 'added') {
+                            const notification = change.doc.data();
+                            console.log('Processing notification:', notification);
+                            
+                            setHasPrivateChatNotification(true);
+                            setPrivateChatRoomId(notification.roomId);
+                            
+                            // Show toast notification
+                            if (notification.type === 'private_chat_invite') {
+                                const toastId = toast.custom((t) => (
+                                    <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-dark-gray shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-electric-purple ring-opacity-5`}>
+                                        <div className="flex-1 w-0 p-4">
+                                            <div className="flex items-start">
+                                                <div className="flex-shrink-0 pt-0.5">
+                                                    <MessageSquare className="h-6 w-6 text-electric-purple" />
+                                                </div>
+                                                <div className="ml-3 flex-1">
+                                                    <p className="text-sm font-medium text-ghost-white">
+                                                        {notification.title}
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-cyber-gray">
+                                                        {notification.message}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex border-l border-cyber-gray/50">
+                                            <button
+                                                onClick={() => {
+                                                    toast.dismiss(t.id);
+                                                    // Mark as read and navigate to chat room
+                                                    markNotificationAsRead(notification.roomId);
+                                                    navigate(`/admin-chat/${notification.roomId}`);
+                                                }}
+                                                className="flex items-center justify-center px-4 py-4 rounded-r-lg text-sm font-medium text-electric-purple hover:text-electric-purple/80"
+                                            >
+                                                Katıl
+                                            </button>
+                                        </div>
+                                    </div>
+                                ), { duration: 10000 });
+                                
+                                // Automatically navigate to chat room after 3 seconds
+                                const redirectTimer = setTimeout(() => {
+                                    // Dismiss the toast and navigate
+                                    toast.dismiss(toastId);
+                                    markNotificationAsRead(notification.roomId);
+                                    navigate(`/admin-chat/${notification.roomId}`);
+                                }, 3000);
+                                
+                                // Clear the timer if the toast is dismissed manually
+                                const clearTimer = () => clearTimeout(redirectTimer);
+                                // Store timer ID for cleanup
+                                (window as any).toastTimers = (window as any).toastTimers || {};
+                                (window as any).toastTimers[toastId] = clearTimer;
+                            } else if (notification.type === 'private_chat_closed') {
+                                const toastId = toast.custom((t) => (
+                                    <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-dark-gray shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-red-500 ring-opacity-5`}>
+                                        <div className="flex-1 w-0 p-4">
+                                            <div className="flex items-start">
+                                                <div className="flex-shrink-0 pt-0.5">
+                                                    <X className="h-6 w-6 text-red-500" />
+                                                </div>
+                                                <div className="ml-3 flex-1">
+                                                    <p className="text-sm font-medium text-ghost-white">
+                                                        {notification.title}
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-cyber-gray">
+                                                        {notification.message}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex border-l border-cyber-gray/50">
+                                            <button
+                                                onClick={() => {
+                                                    toast.dismiss(t.id);
+                                                    // Mark as read and navigate to home
+                                                    markNotificationAsRead(notification.roomId);
+                                                    navigate('/');
+                                                }}
+                                                className="flex items-center justify-center px-4 py-4 rounded-r-lg text-sm font-medium text-red-500 hover:text-red-400"
+                                            >
+                                                Tamam
+                                            </button>
+                                        </div>
+                                    </div>
+                                ), { duration: 10000 });
+                                
+                                // Automatically navigate to home after 3 seconds
+                                const redirectTimer = setTimeout(() => {
+                                    // Dismiss the toast and navigate
+                                    toast.dismiss(toastId);
+                                    markNotificationAsRead(notification.roomId);
+                                    navigate('/');
+                                }, 3000);
+                                
+                                // Clear the timer if the toast is dismissed manually
+                                const clearTimer = () => clearTimeout(redirectTimer);
+                                // Store timer ID for cleanup
+                                (window as any).toastTimers = (window as any).toastTimers || {};
+                                (window as any).toastTimers[toastId] = clearTimer;
+                            }
+                        }
+                    });
+                } else {
+                    setHasPrivateChatNotification(false);
+                    setPrivateChatRoomId(null);
+                }
+            }, (error) => {
+                console.error("Özel sohbet bildirim dinleyicisinde hata:", error);
             });
         }
     } else {
         // Kullanıcı yoksa tüm bildirimleri temizle.
         setHasUnreadAdminMessage(false);
         setHasUnreadDmsForAdmin(false);
+        setHasPrivateChatNotification(false);
+        setPrivateChatRoomId(null);
     }
     
     // TEMİZLİK FONKSİYONU: useEffect'in sonunda SADECE BİR KERE çağrılır.
@@ -69,8 +203,35 @@ const Header: React.FC = () => {
       if (unsubscribe) {
         unsubscribe();
       }
+      if (notificationsUnsubscribe) {
+        notificationsUnsubscribe();
+      }
     };
   }, [user, isAdmin]); // Bağımlılıklar doğru.
+
+  const markNotificationAsRead = async (roomId: string) => {
+    if (!user) return;
+    
+    try {
+      const notificationsQuery = query(
+        collection(db, 'notifications'),
+        where('userId', '==', user.uid),
+        where('roomId', '==', roomId),
+        where('isRead', '==', false)
+      );
+      
+      const snapshot = await getDocs(notificationsQuery);
+      const batch = writeBatch(db);
+      
+      snapshot.forEach((docSnapshot) => {
+        batch.update(docSnapshot.ref, { isRead: true });
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      console.error("Bildirim okundu olarak işaretlenirken hata:", error);
+    }
+  };
 
   // "Adminle Sohbet" butonu (kullanıcı için)
   const handleGoToAdminChat = () => {
@@ -99,6 +260,28 @@ const Header: React.FC = () => {
                       {hasUnreadAdminMessage && (
                         <span className="absolute -top-1 -right-2 flex h-3 w-3"><span className="animate-ping absolute h-full w-full rounded-full bg-electric-purple opacity-75"></span><span className="relative inline-flex rounded-full h-3 w-3 bg-electric-purple"></span></span>
                       )}
+                  </button>
+                </motion.div>
+             </li>
+          )}
+          
+          {user && !isAdmin && hasPrivateChatNotification && (
+             <li>
+                <motion.div variants={navItemVariants} whileHover="hover" className="relative">
+                  <button 
+                    onClick={() => {
+                      if (privateChatRoomId) {
+                        markNotificationAsRead(privateChatRoomId);
+                        navigate(`/admin-chat/${privateChatRoomId}`);
+                      }
+                    }}
+                    className="flex items-center gap-1 hover:text-electric-purple transition-colors"
+                  >
+                      <MessageSquare size={18} /> Özel Sohbet
+                      <span className="absolute -top-1 -right-2 flex h-3 w-3">
+                        <span className="animate-ping absolute h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      </span>
                   </button>
                 </motion.div>
              </li>
