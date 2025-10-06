@@ -15,12 +15,17 @@ import {
   addDoc, 
   setDoc, 
   getDoc, 
-  where,
-  writeBatch
+  where
 } from 'firebase/firestore';
-import { LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, AlertTriangle, X } from 'lucide-react';
+import { 
+  LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, 
+  Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, 
+  UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, 
+  AlertTriangle, X 
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// INTERFACE TANIMLAMALARI
 interface UserData {
     uid: string;
     displayName: string;
@@ -43,7 +48,6 @@ interface FeedbackData {
     isRead: boolean;
     createdAt: any;
 }
-
 interface ReportData {
     id: string;
     reportedUserId: string;
@@ -61,14 +65,12 @@ interface SystemStats {
     messagesLastHour: number;
     totalGamesPlayed: number;
     gamesLastHour: number;
-    systemUptime: string;
     topChatter?: {
         displayName: string;
         messageCount: number;
         uid: string;
     };
 }
-
 interface ChatRoom {
     id: string;
     name: string;
@@ -78,6 +80,7 @@ interface ChatRoom {
     isActive: boolean;
 }
 
+// MUTE MODAL COMPONENT'İ
 const MuteModal: React.FC<{
     user: UserData;
     onClose: () => void;
@@ -87,7 +90,7 @@ const MuteModal: React.FC<{
         { label: '5 Dakika', value: 5 * 60 * 1000 },
         { label: '1 Saat', value: 60 * 60 * 1000 },
         { label: '1 Gün', value: 24 * 60 * 60 * 1000 },
-        { label: 'Kalıcı (10 Yıl)', value: 365 * 24 * 60 * 60 * 10 },
+        { label: 'Kalıcı (10 Yıl)', value: 10 * 365 * 24 * 60 * 60 * 1000 },
     ];
     const isCurrentlyMuted = user.mutedUntil && user.mutedUntil.toDate() > new Date();
 
@@ -103,6 +106,7 @@ const MuteModal: React.FC<{
     );
 };
 
+// USER SELECTION MODAL COMPONENT'İ
 const UserSelectionModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -113,9 +117,9 @@ const UserSelectionModal: React.FC<{
     roomName: string;
     setRoomName: (name: string) => void;
 }> = ({ isOpen, onClose, availableUsers, selectedUsers, onUserToggle, onCreateRoom, roomName, setRoomName }) => {
+    if (!isOpen) return null;
     const [searchTerm, setSearchTerm] = useState('');
-
-    // Filter users based on search term - daha esnek arama
+    
     const filteredUsers = searchTerm.trim() === '' 
         ? availableUsers 
         : availableUsers.filter(user => 
@@ -124,130 +128,55 @@ const UserSelectionModal: React.FC<{
             user.uid.toLowerCase().includes(searchTerm.toLowerCase())
         );
 
-    if (!isOpen) return null;
-
     return (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={onClose}>
             <motion.div
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-2xl max-h-[80vh] overflow-y-auto"
+                className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-2xl max-h-[80vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
             >
-                <h3 className="text-2xl font-heading mb-6 text-center text-electric-purple">
-                    Sohbet Odası Oluştur
-                </h3>
-
+                <h3 className="text-2xl font-heading mb-6 text-center text-electric-purple">Sohbet Odası Oluştur</h3>
                 <div className="mb-6">
                     <label className="block text-cyber-gray mb-2">Oda Adı</label>
-                    <input
-                        type="text"
-                        value={roomName}
-                        onChange={(e) => setRoomName(e.target.value)}
-                        placeholder="Oda adını girin..."
-                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
-                        autoFocus
-                    />
+                    <input type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="Oda adını girin..." className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray" autoFocus />
                 </div>
-
-                <div className="mb-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h4 className="text-lg font-bold text-ghost-white">Katılımcıları Seçin</h4>
-                        <span className="text-cyber-gray text-sm">
-                            {selectedUsers.length} kullanıcı seçildi
-                        </span>
-                    </div>
-                    
-                    {/* Search input for users */}
-                    <div className="mb-4">
-                        <input
-                            type="text"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                    // Enter tuşuna basıldığında ilk kullanıcıyı seç
-                                    if (filteredUsers.length > 0 && searchTerm.trim() !== '') {
-                                        e.preventDefault();
-                                        onUserToggle(filteredUsers[0]);
-                                        // Arama terimini temizle
-                                        setSearchTerm('');
-                                    }
-                                }
-                            }}
-                            placeholder="Kullanıcı ara... (Enter ile ilk sonucu seç)"
-                            className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
-                            autoFocus
-                        />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-60 overflow-y-auto">
+                <div className="mb-6 flex-1 min-h-0 flex flex-col">
+                    <h4 className="text-lg font-bold text-ghost-white mb-2">Katılımcıları Seçin</h4>
+                     <input
+                        type="text"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        placeholder="Kullanıcı ara..."
+                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray mb-4"
+                    />
+                    <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-3 pr-2">
                         {filteredUsers.map(user => (
-                            <div
-                                key={user.uid}
-                                onClick={() => onUserToggle(user)}
-                                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                                    selectedUsers.some(u => u.uid === user.uid)
-                                        ? 'bg-electric-purple/20 border-electric-purple'
-                                        : 'bg-dark-gray/50 border-cyber-gray/50 hover:bg-dark-gray/70'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-4 h-4 rounded border-2 ${
-                                        selectedUsers.some(u => u.uid === user.uid)
-                                            ? 'bg-electric-purple border-electric-purple'
-                                            : 'border-cyber-gray'
-                                    }`}>
-                                        {selectedUsers.some(u => u.uid === user.uid) && (
-                                            <div className="w-full h-full rounded-sm bg-electric-purple"></div>
-                                        )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <p className="font-bold text-ghost-white truncate">{user.displayName}</p>
-                                        <p className="text-sm text-cyber-gray truncate">{user.email}</p>
-                                    </div>
-                                </div>
+                            <div key={user.uid} onClick={() => onUserToggle(user)} className={`p-3 rounded-lg border cursor-pointer transition-colors ${selectedUsers.some(u => u.uid === user.uid) ? 'bg-electric-purple/20 border-electric-purple' : 'bg-dark-gray/50 border-cyber-gray/50 hover:bg-dark-gray/70'}`}>
+                                <p className="font-bold text-ghost-white truncate">{user.displayName}</p>
+                                <p className="text-sm text-cyber-gray truncate">{user.email}</p>
                             </div>
                         ))}
-                        
-                        {filteredUsers.length === 0 && searchTerm && (
-                            <div className="col-span-2 text-center py-4 text-cyber-gray">
-                                Kullanıcı bulunamadı
-                            </div>
-                        )}
-                        
-                        {filteredUsers.length === 0 && !searchTerm && (
-                            <div className="col-span-2 text-center py-4 text-cyber-gray">
-                                Kullanıcı listesi yükleniyor...
-                            </div>
-                        )}
+                         {filteredUsers.length === 0 && <div className="col-span-2 text-center py-4 text-cyber-gray">Kullanıcı bulunamadı</div>}
                     </div>
                 </div>
-
-                <div className="flex gap-4">
-                    <button
-                        onClick={onCreateRoom}
-                        disabled={!roomName.trim() || selectedUsers.length === 0}
-                        className="flex-1 px-6 py-3 bg-electric-purple hover:bg-electric-purple/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors"
-                    >
-                        Oda Oluştur ({selectedUsers.length} katılımcı)
-                    </button>
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
-                    >
-                        İptal
-                    </button>
+                <div className="flex gap-4 mt-auto pt-4 border-t border-cyber-gray/50">
+                    <button onClick={onCreateRoom} disabled={!roomName.trim() || selectedUsers.length === 0} className="flex-1 px-6 py-3 bg-electric-purple hover:bg-electric-purple/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors">Oda Oluştur ({selectedUsers.length} katılımcı)</button>
+                    <button onClick={onClose} className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors">İptal</button>
                 </div>
             </motion.div>
         </div>
     );
 };
 
+
+// ANA ADMIN PAGE COMPONENT'İ
 const AdminPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatroom' | 'commands' | 'privateChat'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatroom' | 'privateChat' | 'commands'>('dashboard');
+    
+    // STATE TANIMLAMALARI
     const [users, setUsers] = useState<UserData[]>([]);
     const [games, setGames] = useState<GameData[]>([]);
     const [feedback, setFeedback] = useState<FeedbackData[]>([]);
@@ -255,991 +184,63 @@ const AdminPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isMuteModalOpen, setIsMuteModalOpen] = useState(false);
     const [selectedUserForMute, setSelectedUserForMute] = useState<UserData | null>(null);
-    const [systemStats, setSystemStats] = useState<SystemStats>({
-        activeUsers: 0,
-        totalMessages: 0,
-        messagesLastHour: 0,
-        totalGamesPlayed: 0,
-        gamesLastHour: 0,
-        systemUptime: '0d 0h 0m'
-    });
+    const [systemStats, setSystemStats] = useState<SystemStats>({ activeUsers: 0, totalMessages: 0, messagesLastHour: 0, totalGamesPlayed: 0, gamesLastHour: 0 });
     
+    // KOMUTLAR İÇİN STATE'LER
     const [announcementText, setAnnouncementText] = useState('');
     const [pinText, setPinText] = useState('');
     const [muteUsername, setMuteUsername] = useState('');
-    const [muteDuration, setMuteDuration] = useState('1h');
+    const [muteDuration, setMuteDuration] = useState('5m');
     const [kickUsername, setKickUsername] = useState('');
-    const [searchUser, setSearchUser] = useState('');
-    const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
-    const [scoreAmount, setScoreAmount] = useState<number>(0);
     const [slowModeDelay, setSlowModeDelay] = useState('5');
     const [chatPauseReason, setChatPauseReason] = useState('');
     const [gameCommentsEnabled, setGameCommentsEnabled] = useState(true);
 
-    // Chat room state
-    const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
+    // SKOR YÖNETİMİ İÇİN STATE'LER
+    const [searchUser, setSearchUser] = useState('');
+    const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
+    const [scoreAmount, setScoreAmount] = useState<number>(0);
+    
+    // ÖZEL SOHBET ODALARI İÇİN STATE'LER
     const [isUserSelectionModalOpen, setIsUserSelectionModalOpen] = useState(false);
-    const [selectedUsersForRoom, setSelectedUsersForRoom] = useState<UserData[]>([]);
-    const [newRoomName, setNewRoomName] = useState('');
     const [availableUsers, setAvailableUsers] = useState<UserData[]>([]);
-
-    // Private chat room state
-    const [privateChatRooms, setPrivateChatRooms] = useState<any[]>([]);
+    const [selectedUsersForRoom, setSelectedUsersForRoom] = useState<UserData[]>([]);
     const [privateChatRoomName, setPrivateChatRoomName] = useState('');
+    const [privateChatRooms, setPrivateChatRooms] = useState<any[]>([]);
 
-    // Chat room functions
-    const handleUserToggle = (user: UserData) => {
-        setSelectedUsersForRoom(prev =>
-            prev.some(u => u.uid === user.uid)
-                ? prev.filter(u => u.uid !== user.uid)
-                : [...prev, user]
-        );
-    };
-
-    const handleCreateChatRoom = async () => {
-        if (!newRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
-
-        try {
-            const roomId = `room_${Date.now()}`;
-            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
-
-            await setDoc(doc(db, 'chat_rooms', roomId), {
-                id: roomId,
-                name: newRoomName.trim(),
-                participants,
-                createdBy: user.uid,
-                createdAt: Timestamp.now(),
-                isActive: true
-            });
-
-            // Add system message to the room (separate this operation)
-            try {
-                await addDoc(collection(db, 'chat_rooms', roomId, 'messages'), {
-                    text: `🆕 **Sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
-                    uid: 'system',
-                    displayName: 'Sistem',
-                    createdAt: Timestamp.now(),
-                    isSystemMessage: true
-                });
-            } catch (messageError) {
-                console.error('Sistem mesajı oluşturulurken hata:', messageError);
-                // Continue even if message creation fails
-            }
-
-            setNewRoomName('');
-            setSelectedUsersForRoom([]);
-            setIsUserSelectionModalOpen(false);
-            alert('Sohbet odası başarıyla oluşturuldu!');
-        } catch (error) {
-            console.error('Sohbet odası oluşturma hatası:', error);
-            alert('Sohbet odası oluşturulurken bir hata oluştu.');
-        }
-    };
-
-    // Private chat room functions
-    const handleCreatePrivateChatRoom = async () => {
-        if (!privateChatRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
-
-        // Admin kontrolü
-        try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (!userDoc.exists()) {
-                console.error('Kullanıcı belgesi bulunamadı');
-                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
-                return;
-            }
-            
-            const userData = userDoc.data();
-            if (userData?.role !== 'admin') {
-                console.error('Kullanıcı admin değil:', userData?.role);
-                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
-                return;
-            }
-        } catch (error) {
-            console.error('Admin kontrolü sırasında hata:', error);
-            alert('Yetki kontrolü sırasında bir hata oluştu.');
-            return;
-        }
-
-        try {
-            // Create the private chat room
-            const roomId = `private_${Date.now()}`;
-            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
-
-            // Remove the 'id' field as it might be causing issues
-            await setDoc(doc(db, 'private_chat_rooms', roomId), {
-                name: privateChatRoomName.trim(),
-                participants,
-                createdBy: user.uid,
-                createdAt: Timestamp.now(),
-                isActive: true
-            });
-
-            // Create notification for each participant
-            for (const participant of selectedUsersForRoom) {
-                const notificationData = {
-                    userId: participant.uid,
-                    type: 'private_chat_invite',
-                    title: 'Özel Sohbet Odası Daveti',
-                    message: `"${privateChatRoomName.trim()}" adlı özel sohbet odasına davet edildiniz!`,
-                    roomId: roomId,
-                    roomName: privateChatRoomName.trim(),
-                    senderId: user.uid,
-                    senderName: user.displayName || 'Admin',
-                    createdAt: Timestamp.now(),
-                    isRead: false
-                };
-                
-                console.log('Creating notification for user:', participant.uid, notificationData);
-                
-                try {
-                    await addDoc(collection(db, 'notifications'), notificationData);
-                    console.log('Notification created successfully for user:', participant.uid);
-                } catch (notificationError) {
-                    console.error('Failed to create notification for user:', participant.uid, notificationError);
-                }
-            }
-
-            // Add system message to the room (separate this operation)
-            try {
-                await addDoc(collection(db, 'private_chat_rooms', roomId, 'messages'), {
-                    text: `🆕 **Özel sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
-                    uid: 'system',
-                    displayName: 'Sistem',
-                    createdAt: Timestamp.now(),
-                    isSystemMessage: true
-                });
-            } catch (messageError) {
-                console.error('Sistem mesajı oluşturulurken hata:', messageError);
-                // Continue even if message creation fails
-            }
-
-            setPrivateChatRoomName('');
-            setSelectedUsersForRoom([]);
-            setIsUserSelectionModalOpen(false);
-            alert('Özel sohbet odası başarıyla oluşturuldu!');
-        } catch (error) {
-            console.error('Özel sohbet odası oluşturma hatası:', error);
-            alert('Özel sohbet odası oluşturulurken bir hata oluştu.');
-        }
-    };
-
+    
+    // YETKİ KONTROLÜ VE VERİ ÇEKME İŞLEMLERİ
     useEffect(() => {
+        if (authLoading) return;
         if (!isAdmin) {
             navigate('/');
             return;
         }
 
-        const fetchUsers = async () => {
+        const fetchAllUsersForModal = async () => {
             try {
                 const q = query(collection(db, 'users'), orderBy('displayName'));
                 const querySnapshot = await getDocs(q);
-                const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setUsers(usersData);
+                const allUsers = querySnapshot.docs
+                    .map(doc => ({ uid: doc.id, ...doc.data() } as UserData))
+                    .filter(u => u.uid !== user?.uid);
+                setAvailableUsers(allUsers);
             } catch (error) {
-                console.error('Kullanıcıları alırken hata:', error);
+                console.error("Modal için kullanıcılar çekilirken hata:", error);
             }
         };
 
-        const fetchGames = async () => {
-            try {
-                const q = query(collection(db, 'games'), orderBy('title'));
-                const querySnapshot = await getDocs(q);
-                const gamesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setGames(gamesData);
-            } catch (error) {
-                console.error('Oyunları alırken hata:', error);
-            }
-        };
+        fetchAllUsersForModal();
+    }, [isAdmin, authLoading, navigate, user?.uid]);
 
-        const fetchFeedback = async () => {
-            try {
-                const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const feedbackData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setFeedback(feedbackData);
-            } catch (error) {
-                console.error('Geri bildirimleri alırken hata:', error);
-            }
-        };
-
-        const fetchReports = async () => {
-            try {
-                const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setReports(reportsData);
-            } catch (error) {
-                console.error('Raporları alırken hata:', error);
-            }
-        };
-
-        const fetchSystemStats = async () => {
-            try {
-                const docRef = doc(db, 'system_stats', 'stats');
-                const docSnap = await getDoc(docRef);
-
-                if (docSnap.exists()) {
-                    setSystemStats(docSnap.data() as SystemStats);
-                } else {
-                    console.error('Sistem istatistikleri bulunamadı');
-                }
-            } catch (error) {
-                console.error('Sistem istatistiklerini alırken hata:', error);
-            }
-        };
-
-        const fetchChatRooms = async () => {
-            try {
-                const q = query(collection(db, 'chat_rooms'), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const chatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setChatRooms(chatRoomsData);
-            } catch (error) {
-                console.error('Sohbet odalarını alırken hata:', error);
-            }
-        };
-
-        const fetchPrivateChatRooms = async () => {
-            try {
-                const q = query(collection(db, 'private_chat_rooms'), orderBy('createdAt', 'desc'));
-                const querySnapshot = await getDocs(q);
-                const privateChatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setPrivateChatRooms(privateChatRoomsData);
-            } catch (error) {
-                console.error('Özel sohbet odalarını alırken hata:', error);
-            }
-        };
-
-        const fetchAvailableUsers = async () => {
-            try {
-                const q = query(collection(db, 'users'), orderBy('displayName'));
-                const querySnapshot = await getDocs(q);
-                const usersData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setAvailableUsers(usersData);
-            } catch (error) {
-                console.error('Kullanıcıları alırken hata:', error);
-            }
-        };
-
-        fetchUsers();
-        fetchGames();
-        fetchFeedback();
-        fetchReports();
-        fetchSystemStats();
-        fetchChatRooms();
-        fetchPrivateChatRooms();
-        fetchAvailableUsers();
-
-        setIsLoading(false);
-    }, [isAdmin, navigate]);
-
-    const handleMute = async (uid: string, durationMs: number) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userDoc = await getDoc(userRef);
-
-            if (userDoc.exists()) {
-                const userData = userDoc.data() as UserData;
-                const muteUntil = durationMs === 0 ? null : Timestamp.fromMillis(Date.now() + durationMs);
-
-                await updateDoc(userRef, {
-                    mutedUntil: muteUntil
-                });
-
-                setSelectedUserForMute(null);
-                setIsMuteModalOpen(false);
-                alert(`Kullanıcı ${durationMs === 0 ? 'susturuldu' : 'susturuldu'}`);
-            } else {
-                console.error('Kullanıcı bulunamadı');
-                alert('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcıyı sustururken hata:', error);
-            alert('Kullanıcıyı sustururken bir hata oluştu.');
-        }
-    };
-
-    const handleKick = async (uid: string) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userDoc = await getDoc(userRef);
-
-            if (userDoc.exists()) {
-                await deleteDoc(userRef);
-
-                setSelectedUser(null);
-                alert('Kullanıcı başarıyla atıldı.');
-            } else {
-                console.error('Kullanıcı bulunamadı');
-                alert('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcıyı atarken hata:', error);
-            alert('Kullanıcıyı atarken bir hata oluştu.');
-        }
-    };
-
-    const handleAnnouncement = async () => {
-        if (!announcementText.trim()) return;
-
-        try {
-            await addDoc(collection(db, 'announcements'), {
-                text: announcementText.trim(),
-                createdAt: Timestamp.now()
-            });
-
-            setAnnouncementText('');
-            alert('Duyuru başarıyla yayınlandı!');
-        } catch (error) {
-            console.error('Duyuru yayınlarken hata:', error);
-            alert('Duyuru yayınlarken bir hata oluştu.');
-        }
-    };
-
-    const handlePin = async () => {
-        if (!pinText.trim()) return;
-
-        try {
-            await addDoc(collection(db, 'pins'), {
-                text: pinText.trim(),
-                createdAt: Timestamp.now()
-            });
-
-            setPinText('');
-            alert('Pin başarıyla oluşturuldu!');
-        } catch (error) {
-            console.error('Pin oluştururken hata:', error);
-            alert('Pin oluştururken bir hata oluştu.');
-        }
-    };
-
-    const handleScoreChange = async (uid: string, amount: number) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userDoc = await getDoc(userRef);
-
-            if (userDoc.exists()) {
-                const userData = userDoc.data() as UserData;
-                const newScore = (userData.score || 0) + amount;
-
-                await updateDoc(userRef, {
-                    score: newScore
-                });
-
-                setSelectedUser(null);
-                alert(`Kullanıcının puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}`);
-            } else {
-                console.error('Kullanıcı bulunamadı');
-                alert('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
-            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
-        }
-    };
-
-    // Private chat room functions
-    const handleCreatePrivateChatRoom = async () => {
-                createdAt: Timestamp.now()
-            });
-
-            setPinText('');
-            alert('Pin başarıyla oluşturuldu!');
-        } catch (error) {
-            console.error('Pin oluştururken hata:', error);
-            alert('Pin oluştururken bir hata oluştu.');
-        }
-    };
-
-    const handleScoreChange = async (uid: string, amount: number) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userDoc = await getDoc(userRef);
-
-            if (userDoc.exists()) {
-                const userData = userDoc.data() as UserData;
-                const newScore = (userData.score || 0) + amount;
-
-                await updateDoc(userRef, {
-                    score: newScore
-                });
-
-                setSelectedUser(null);
-                alert(`Kullanıcının puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}`);
-            } else {
-                console.error('Kullanıcı bulunamadı');
-                alert('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
-            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
-        }
-    };
-
-    // Private chat room functions
-    const handleCreatePrivateChatRoom = async () => {
-        if (!privateChatRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
-
-        // Admin kontrolü
-        try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (!userDoc.exists()) {
-                console.error('Kullanıcı belgesi bulunamadı');
-                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
-                return;
-            }
-            
-            const userData = userDoc.data();
-            if (userData?.role !== 'admin') {
-                console.error('Kullanıcı admin değil:', userData?.role);
-                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
-                return;
-            }
-        } catch (error) {
-            console.error('Admin kontrolü sırasında hata:', error);
-            alert('Yetki kontrolü sırasında bir hata oluştu.');
-            return;
-        }
-
-        try {
-            // Create the private chat room
-            const roomId = `private_${Date.now()}`;
-            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
-
-            // Remove the 'id' field as it might be causing issues
-            await setDoc(doc(db, 'private_chat_rooms', roomId), {
-                name: privateChatRoomName.trim(),
-                participants,
-                createdBy: user.uid,
-                createdAt: Timestamp.now(),
-                isActive: true
-            });
-
-            // Create notification for each participant
-            for (const participant of selectedUsersForRoom) {
-                const notificationData = {
-                    userId: participant.uid,
-                    type: 'private_chat_invite',
-                    title: 'Özel Sohbet Odası Daveti',
-                    message: `"${privateChatRoomName.trim()}" adlı özel sohbet odasına davet edildiniz!`,
-                    roomId: roomId,
-                    roomName: privateChatRoomName.trim(),
-                    senderId: user.uid,
-                    senderName: user.displayName || 'Admin',
-                    createdAt: Timestamp.now(),
-                    isRead: false
-                };
-                
-                console.log('Creating notification for user:', participant.uid, notificationData);
-                
-                try {
-                    await addDoc(collection(db, 'notifications'), notificationData);
-                    console.log('Notification created successfully for user:', participant.uid);
-                } catch (notificationError) {
-                    console.error('Failed to create notification for user:', participant.uid, notificationError);
-                }
-            }
-
-            // Add system message to the room (separate this operation)
-            try {
-                await addDoc(collection(db, 'private_chat_rooms', roomId, 'messages'), {
-                    text: `🆕 **Özel sohbet odası oluşturuldu!**\nKatılımcılar: ${[user.displayName, ...selectedUsersForRoom.map(u => u.displayName)].join(', ')}`,
-                    uid: 'system',
-                    displayName: 'Sistem',
-                    createdAt: Timestamp.now(),
-                    isSystemMessage: true
-                });
-            } catch (messageError) {
-                console.error('Sistem mesajı oluşturulurken hata:', messageError);
-                // Continue even if message creation fails
-            }
-
-            setPrivateChatRoomName('');
-            setSelectedUsersForRoom([]);
-            setIsUserSelectionModalOpen(false);
-            alert('Özel sohbet odası başarıyla oluşturuldu!');
-        } catch (error) {
-            console.error('Özel sohbet odası oluşturma hatası:', error);
-            alert('Özel sohbet odası oluşturulurken bir hata oluştu.');
-        }
-    };
 
     useEffect(() => {
         if (!isAdmin) {
-            navigate('/');
+            setIsLoading(false);
             return;
         }
-
-        const fetchUsers = async () => {
-            const q = query(collection(db, 'users'), orderBy('displayName'));
-            const querySnapshot = await getDocs(q);
-            const usersData = querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserData));
-            setUsers(usersData);
-        };
-
-        const fetchGames = async () => {
-            const q = query(collection(db, 'games'), orderBy('title'));
-            const querySnapshot = await getDocs(q);
-            const gamesData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as GameData));
-            setGames(gamesData);
-        };
-
-        const fetchFeedback = async () => {
-            const q = query(collection(db, 'feedback'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const feedbackData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackData));
-            setFeedback(feedbackData);
-        };
-
-        const fetchReports = async () => {
-            const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReportData));
-            setReports(reportsData);
-        };
-
-        const fetchSystemStats = async () => {
-            const docRef = doc(db, 'system_stats', 'stats');
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                setSystemStats(docSnap.data() as SystemStats);
-            } else {
-                console.error('Sistem istatistikleri bulunamadı.');
-            }
-        };
-
-        const fetchChatRooms = async () => {
-            const q = query(collection(db, 'chat_rooms'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const chatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatRoom));
-            setChatRooms(chatRoomsData);
-        };
-
-        const fetchPrivateChatRooms = async () => {
-            const q = query(collection(db, 'private_chat_rooms'), orderBy('createdAt', 'desc'));
-            const querySnapshot = await getDocs(q);
-            const privateChatRoomsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setPrivateChatRooms(privateChatRoomsData);
-        };
-
-        fetchUsers();
-        fetchGames();
-        fetchFeedback();
-        fetchReports();
-        fetchSystemStats();
-        fetchChatRooms();
-        fetchPrivateChatRooms();
-
-        setIsLoading(false);
-    }, [isAdmin, navigate]);
-
-    const handleMute = async (uid: string, durationMs: number) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userSnap = await getDoc(userRef);
-
-            if (userSnap.exists()) {
-                const userData = userSnap.data() as UserData;
-                const muteUntil = durationMs === 0 ? null : Timestamp.fromMillis(Date.now() + durationMs);
-
-                await updateDoc(userRef, { mutedUntil: muteUntil });
-
-                if (durationMs === 0) {
-                    alert(`${userData.displayName} susturması kaldırıldı.`);
-                } else {
-                    alert(`${userData.displayName} ${durationMs / 1000 / 60} dakika susturuldu.`);
-                }
-
-                setIsMuteModalOpen(false);
-                setSelectedUserForMute(null);
-            } else {
-                console.error('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcı susturulurken hata oluştu:', error);
-            alert('Kullanıcı susturulurken hata oluştu.');
-        }
-    };
-
-    const handleKick = async (uid: string) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userSnap = await getDoc(userRef);
-
-            if (userSnap.exists()) {
-                const userData = userSnap.data() as UserData;
-
-                await deleteDoc(userRef);
-
-                alert(`${userData.displayName} sunucudan atıldı.`);
-            } else {
-                console.error('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcı atılırken hata oluştu:', error);
-            alert('Kullanıcı atılırken hata oluştu.');
-        }
-    };
-
-    const handleAnnouncement = async () => {
-        try {
-            const announcementRef = doc(db, 'announcements', 'current');
-            await setDoc(announcementRef, {
-                text: announcementText,
-                createdAt: Timestamp.now()
-            });
-
-            alert('Duyuru başarıyla yayınlandı!');
-            setAnnouncementText('');
-        } catch (error) {
-            console.error('Duyuru yayınlanırken hata oluştu:', error);
-            alert('Duyuru yayınlanırken hata oluştu.');
-        }
-    };
-
-    const handlePin = async () => {
-        try {
-            const pinRef = doc(db, 'pins', 'current');
-            await setDoc(pinRef, {
-                text: pinText,
-                createdAt: Timestamp.now()
-            });
-
-            alert('Pin başarıyla oluşturuldu!');
-            setPinText('');
-        } catch (error) {
-            console.error('Pin oluşturulurken hata oluştu:', error);
-            alert('Pin oluşturulurken hata oluştu.');
-        }
-    };
-
-    const handleScoreChange = async (uid: string, amount: number) => {
-        try {
-            const userRef = doc(db, 'users', uid);
-            const userSnap = await getDoc(userRef);
-
-            if (userSnap.exists()) {
-                const userData = userSnap.data() as UserData;
-                const newScore = (userData.score || 0) + amount;
-
-                await updateDoc(userRef, { score: newScore });
-
-                alert(`${userData.displayName} puanı ${amount > 0 ? 'arttırıldı' : 'azaltıldı'}. Yeni puan: ${newScore}`);
-            } else {
-                console.error('Kullanıcı bulunamadı.');
-            }
-        } catch (error) {
-            console.error('Kullanıcı puanı değiştirilirken hata oluştu:', error);
-            alert('Kullanıcı puanı değiştirilirken hata oluştu.');
-        }
-    };
-
-    const handleSlowMode = async (delay: number) => {
-        try {
-            const slowModeRef = doc(db, 'settings', 'slow_mode');
-            await setDoc(slowModeRef, {
-                delay: delay
-            });
-
-            alert('Yavaş mod ayarı başarıyla güncellendi!');
-            setSlowModeDelay(delay.toString());
-        } catch (error) {
-            console.error('Yavaş mod ayarı güncellenirken hata oluştu:', error);
-            alert('Yavaş mod ayarı güncellenirken hata oluştu.');
-        }
-    };
-
-    const handleChatPause = async (reason: string) => {
-        try {
-            const chatPauseRef = doc(db, 'settings', 'chat_pause');
-            await setDoc(chatPauseRef, {
-                reason: reason,
-                isActive: true
-            });
-
-            alert('Sohbet başarıyla duraklatıldı!');
-            setChatPauseReason(reason);
-        } catch (error) {
-            console.error('Sohbet duraklatılırken hata oluştu:', error);
-            alert('Sohbet duraklatılırken hata oluştu.');
-        }
-    };
-
-    const handleChatResume = async () => {
-        try {
-            const chatPauseRef = doc(db, 'settings', 'chat_pause');
-            await setDoc(chatPauseRef, {
-                reason: '',
-                isActive: false
-            });
-
-            alert('Sohbet başarıyla devam ettirildi!');
-            setChatPauseReason('');
-        } catch (error) {
-            console.error('Sohbet devam ettirilirken hata oluştu:', error);
-            alert('Sohbet devam ettirilirken hata oluştu.');
-        }
-    };
-
-    const handleGameCommentsToggle = async (isEnabled: boolean) => {
-        try {
-            const gameCommentsRef = doc(db, 'settings', 'game_comments');
-            await setDoc(gameCommentsRef, {
-                isEnabled: isEnabled
-            });
-        } catch (error) {
-            console.error('Sohbet odası oluşturma hatası:', error);
-            alert('Sohbet odası oluşturulurken bir hata oluştu.');
-        }
-    };
-
-    const openUserSelectionModal = () => {
-        // Tüm kullanıcıları çek ve modal için ayarla
-        const fetchAllUsers = async () => {
-            try {
-                const q = query(collection(db, 'users'), orderBy('displayName'));
-                const querySnapshot = await getDocs(q);
-                const allUsers = querySnapshot.docs.map(doc => ({
-                    uid: doc.id,
-                    ...doc.data()
-                } as UserData));
-                
-                // Mevcut kullanıcıyı filtrele
-                setAvailableUsers(allUsers.filter(u => u.uid !== user?.uid));
-                setIsUserSelectionModalOpen(true);
-            } catch (error) {
-                console.error('Kullanıcılar çekilirken hata:', error);
-                alert('Kullanıcılar yüklenirken bir hata oluştu.');
-            }
-        };
-        
-        fetchAllUsers();
-    };
-
-    const closeUserSelectionModal = () => {
-        setIsUserSelectionModalOpen(false);
-        setSelectedUsersForRoom([]);
-        setNewRoomName('');
-    };
-
-    // Fetch private chat rooms
-    useEffect(() => {
-        if (!isAdmin) return;
-        
-        const unsubscribe = onSnapshot(collection(db, 'private_chat_rooms'), (snapshot) => {
-            const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setPrivateChatRooms(rooms);
-        });
-        
-        return () => unsubscribe();
-    }, [isAdmin]);
-
-    const handleClosePrivateChatRoom = async (roomId: string, roomName: string) => {
-        if (!user) return;
-        
-        // Admin kontrolü
-        try {
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (!userDoc.exists()) {
-                console.error('Kullanıcı belgesi bulunamadı');
-                alert('Kullanıcı bilgileri alınamadı. Lütfen tekrar giriş yapın.');
-                return;
-            }
-            
-            const userData = userDoc.data();
-            if (userData?.role !== 'admin') {
-                console.error('Kullanıcı admin değil:', userData?.role);
-                alert('Bu işlemi gerçekleştirmek için admin yetkisine sahip olmalısınız.');
-                return;
-            }
-        } catch (error) {
-            console.error('Admin kontrolü sırasında hata:', error);
-            alert('Yetki kontrolü sırasında bir hata oluştu.');
-            return;
-        }
-        
-        if (window.confirm(`"${roomName}" adlı özel sohbet odasını kapatmak istediğinizden emin misiniz?`)) {
-            try {
-                // Get room participants
-                const roomDoc = await getDoc(doc(db, 'private_chat_rooms', roomId));
-                if (!roomDoc.exists()) return;
-                
-                const roomData = roomDoc.data();
-                const participants = roomData.participants || [];
-
-                // Update room status to inactive
-                await updateDoc(doc(db, 'private_chat_rooms', roomId), {
-                    isActive: false,
-                    closedAt: Timestamp.now(),
-                    closedBy: user.uid
-                });
-
-                // Create notification for each participant
-                for (const participantId of participants) {
-                    if (participantId !== user.uid) {
-                        const notificationData = {
-                            userId: participantId,
-                            type: 'private_chat_closed',
-                            title: 'Özel Sohbet Odası Kapatıldı',
-                            message: `"${roomName}" adlı özel sohbet odası yönetici tarafından kapatıldı. Ana sayfaya yönlendiriliyorsunuz.`,
-                            roomId: roomId,
-                            roomName: roomName,
-                            senderId: user.uid,
-                            senderName: user.displayName || 'Admin',
-                            createdAt: Timestamp.now(),
-                            isRead: false
-                        };
-                        
-                        console.log('Creating close notification for user:', participantId, notificationData);
-                        
-                        try {
-                            await addDoc(collection(db, 'notifications'), notificationData);
-                            console.log('Close notification created successfully for user:', participantId);
-                        } catch (notificationError) {
-                            console.error('Failed to create close notification for user:', participantId, notificationError);
-                        }
-                    }
-                }
-
-                alert('Özel sohbet odası başarıyla kapatıldı!');
-            } catch (error) {
-                console.error('Özel sohbet odası kapatma hatası:', error);
-                alert('Özel sohbet odası kapatılırken bir hata oluştu: ' + (error as Error).message);
-            }
-        }
-    };
-
-    // Skor yönetimi fonksiyonları
-    const handleSearchUser = async () => {
-        if (!searchUser.trim()) return;
-        
-        try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('displayName', '==', searchUser.trim()));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-                const userData = querySnapshot.docs[0].data() as UserData;
-                setSelectedUser({
-                    ...userData,
-                    uid: querySnapshot.docs[0].id,
-                    score: userData.score || 0
-                });
-            } else {
-                setSelectedUser(null);
-                alert('Kullanıcı bulunamadı');
-            }
-        } catch (error) {
-            console.error('Kullanıcı arama hatası:', error);
-            alert('Kullanıcı aranırken bir hata oluştu');
-        }
-    };
-
-    const handleUpdateScore = async (increment: boolean) => {
-        if (!selectedUser || !scoreAmount) return;
-        
-        try {
-            const userRef = doc(db, 'users', selectedUser.uid);
-            const userDoc = await getDoc(userRef);
-            const currentScore = userDoc.data()?.score || 0;
-            
-            const newScore = increment ? 
-                currentScore + Math.abs(scoreAmount) : 
-                Math.max(0, currentScore - Math.abs(scoreAmount));
-            
-            await updateDoc(userRef, { score: newScore });
-            
-            setSelectedUser(prev => prev ? {...prev, score: newScore} : null);
-            alert(`${selectedUser.displayName} kullanıcısının skoru ${newScore} olarak güncellendi`);
-        } catch (error) {
-            console.error('Skor güncelleme hatası:', error);
-            alert('Skor güncellenirken bir hata oluştu');
-        }
-    };
-
-    useEffect(() => {
-        if (!isAdmin) return;
-
-        // Fetch game comments setting
-        const fetchSettings = async () => {
-            const settingsDoc = await getDoc(doc(db, 'chat_meta', 'settings'));
-            if (settingsDoc.exists()) {
-                const data = settingsDoc.data();
-                setGameCommentsEnabled(data.gameCommentsEnabled !== false); // default true
-            }
-        };
-        fetchSettings();
-
-        const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
-            setSystemStats(prev => ({ ...prev, activeUsers: snapshot.size }));
-        });
-
-        const unsubscribeMessages = onSnapshot(collection(db, 'messages'), async (snapshot) => {
-            const now = new Date();
-            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-            
-            const messagesLastHour = snapshot.docs.filter(doc => {
-                const messageTime = doc.data().createdAt?.toDate();
-                return messageTime && messageTime > oneHourAgo;
-            }).length;
-
-            // En çok mesaj atan kullanıcıyı bul
-            const messageCountByUser = snapshot.docs.reduce((acc, doc) => {
-                const uid = doc.data().uid;
-                if (uid && uid !== 'system') {
-                    acc[uid] = (acc[uid] || 0) + 1;
-                }
-                return acc;
-            }, {} as { [key: string]: number });
-
-            let topChatterId = '';
-            let maxMessages = 0;
-
-            Object.entries(messageCountByUser).forEach(([uid, count]) => {
-                if (count > maxMessages) {
-                    maxMessages = count;
-                    topChatterId = uid;
-                }
-            });
-
-            if (topChatterId) {
-                const userDoc = await getDoc(doc(db, 'users', topChatterId));
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    setSystemStats(prev => ({ 
-                        ...prev, 
-                        totalMessages: snapshot.size, 
-                        messagesLastHour,
-                        topChatter: {
-                            uid: topChatterId,
-                            displayName: userData.displayName,
-                            messageCount: maxMessages
-                        }
-                    }));
-                    return;
-                }
-            }
-
-            setSystemStats(prev => ({ ...prev, totalMessages: snapshot.size, messagesLastHour }));
-        });
-
-        const unsubscribeGames = onSnapshot(collection(db, 'games'), (snapshot) => {
-            const totalGamesPlayed = snapshot.docs.reduce((sum, doc) => sum + (doc.data().playCount || 0), 0);
-            setSystemStats(prev => ({ ...prev, totalGamesPlayed }));
-        });
-
-        return () => {
-            unsubscribeUsers();
-            unsubscribeMessages();
-            unsubscribeGames();
-        };
-    }, [isAdmin]);
-
-    useEffect(() => {
-        if (!isAdmin) { setIsLoading(false); return; }
-        const fetchData = async () => {
+    
+        const fetchDataForView = async () => {
             setIsLoading(true);
             try {
                 if (view === 'users') {
@@ -1259,79 +260,120 @@ const AdminPage: React.FC = () => {
                     const querySnapshot = await getDocs(q);
                     const reportsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ReportData));
                     
-                    // Kullanıcı isimlerini al
                     const reportsWithNames = await Promise.all(reportsData.map(async (report) => {
                         try {
                             const [reporterDoc, reportedDoc] = await Promise.all([
                                 getDoc(doc(db, 'users', report.reporterUserId)),
                                 getDoc(doc(db, 'users', report.reportedUserId))
                             ]);
-                            
-                            return {
-                                ...report,
-                                reporterName: reporterDoc.data()?.displayName || 'Bilinmeyen',
-                                reportedUserName: reportedDoc.data()?.displayName || 'Bilinmeyen'
-                            };
-                        } catch (error) {
-                            return {
-                                ...report,
-                                reporterName: 'Bilinmeyen',
-                                reportedUserName: 'Bilinmeyen'
-                            };
+                            return { ...report, reporterName: reporterDoc.data()?.displayName || 'Bilinmeyen', reportedUserName: reportedDoc.data()?.displayName || 'Bilinmeyen' };
+                        } catch {
+                            return { ...report, reporterName: 'Bilinmeyen', reportedUserName: 'Bilinmeyen' };
                         }
                     }));
-                    
                     setReports(reportsWithNames);
+                } else if (view === 'privateChat') {
+                     const q = query(collection(db, 'private_chat_rooms'), orderBy('createdAt', 'desc'));
+                     onSnapshot(q, (snapshot) => {
+                        const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setPrivateChatRooms(rooms);
+                     });
                 }
-            } catch (error) { console.error("Admin paneli verisi çekilirken hata:", error); } 
-            finally { setIsLoading(false); }
+            } catch (error) { 
+                console.error("Admin paneli verisi çekilirken hata:", error);
+            } finally {
+                setIsLoading(false);
+            }
         };
-        fetchData();
+
+        fetchDataForView();
+
     }, [view, isAdmin]);
 
-    const startDmWithUser = async (targetUser: UserData) => {
-        if (!user || !targetUser.uid) {
-            alert("Sohbet başlatılamıyor: Kullanıcı bilgileri eksik.");
-            return;
-        }
-        
-        const sortedUIDs = [user.uid, targetUser.uid].sort();
-        const chatId = sortedUIDs.join('_');
 
-        const chatRef = doc(db, 'chats', chatId);
-        const targetUserRef = doc(db, 'users', targetUser.uid);
-        
-        try {
-            await setDoc(chatRef, { 
-                users: sortedUIDs, 
-                userNames: [user.displayName, targetUser.displayName]
-            }, { merge: true });
+    useEffect(() => {
+        if (!isAdmin) return;
 
-            await updateDoc(targetUserRef, { unreadAdminMessage: true });
+        // Ayarları Çek
+        const fetchSettings = async () => {
+            const settingsDoc = await getDoc(doc(db, 'chat_meta', 'settings'));
+            if (settingsDoc.exists()) {
+                const data = settingsDoc.data();
+                setGameCommentsEnabled(data.gameCommentsEnabled !== false); // default true
+            }
+        };
+        fetchSettings();
+
+        // İSTATİSTİKLER İÇİN SNAPSHOT LISTENER'LAR
+        const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+            setSystemStats(prev => ({ ...prev, activeUsers: snapshot.size }));
+        });
+
+        const unsubMessages = onSnapshot(collection(db, 'messages'), async (snapshot) => {
+            const now = new Date();
+            const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
             
-            navigate(`/dm/${chatId}`);
-        } catch(error) {
-             console.error("DM başlatılırken Firestore hatası:", error);
-             alert("Özel sohbet başlatılırken bir hata oluştu.");
-        }
-    };
+            const messagesLastHour = snapshot.docs.filter(doc => doc.data().createdAt?.toDate() > oneHourAgo).length;
+
+            const messageCountByUser = snapshot.docs.reduce((acc, doc) => {
+                const uid = doc.data().uid;
+                if (uid && uid !== 'system') { acc[uid] = (acc[uid] || 0) + 1; }
+                return acc;
+            }, {} as { [key: string]: number });
+
+            let topChatterId = '';
+            let maxMessages = 0;
+            Object.entries(messageCountByUser).forEach(([uid, count]) => {
+                if (count > maxMessages) { maxMessages = count; topChatterId = uid; }
+            });
+
+            let topChatterData;
+            if (topChatterId) {
+                const userDoc = await getDoc(doc(db, 'users', topChatterId));
+                if (userDoc.exists()) {
+                    topChatterData = {
+                        uid: topChatterId,
+                        displayName: userDoc.data().displayName,
+                        messageCount: maxMessages
+                    };
+                }
+            }
+            
+            setSystemStats(prev => ({ ...prev, totalMessages: snapshot.size, messagesLastHour, topChatter: topChatterData }));
+        });
+
+        const unsubGames = onSnapshot(collection(db, 'games'), (snapshot) => {
+            const totalGamesPlayed = snapshot.docs.reduce((sum, doc) => sum + (doc.data().playCount || 0), 0);
+            setSystemStats(prev => ({ ...prev, totalGamesPlayed }));
+        });
+
+        return () => {
+            unsubUsers();
+            unsubMessages();
+            unsubGames();
+        };
+    }, [isAdmin]);
     
+    // FONKSİYONLAR
+
+    // Modal Fonksiyonları
+    const openMuteModal = (userToMute: UserData) => { setSelectedUserForMute(userToMute); setIsMuteModalOpen(true); };
+    const closeMuteModal = () => { setSelectedUserForMute(null); setIsMuteModalOpen(false); };
+    
+    // Kullanıcı Yönetim Fonksiyonları
     const handleMuteUser = async (uid: string, durationMs: number) => {
         const userRef = doc(db, 'users', uid);
         try {
             const expiryDate = durationMs > 0 ? Timestamp.fromDate(new Date(Date.now() + durationMs)) : null;
             await updateDoc(userRef, { mutedUntil: expiryDate });
             setUsers(users.map(u => u.uid === uid ? { ...u, mutedUntil: expiryDate || undefined } : u));
-            alert("Kullanıcının susturma durumu güncellendi.");
+            alert(`Kullanıcının susturma durumu güncellendi: ${durationMs > 0 ? (durationMs / 60000) + ' dakika' : 'Susturma kaldırıldı'}.`);
         } catch (error) {
             console.error("Kullanıcı susturulurken hata:", error);
         } finally {
             closeMuteModal();
         }
     };
-    
-    const openMuteModal = (userToMute: UserData) => { setSelectedUserForMute(userToMute); setIsMuteModalOpen(true); };
-    const closeMuteModal = () => { setSelectedUserForMute(null); setIsMuteModalOpen(false); };
     
     const handleDeleteUser = async (userToDelete: UserData) => {
         if (window.confirm(`${userToDelete.displayName} adlı kullanıcıyı kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
@@ -1345,16 +387,34 @@ const AdminPage: React.FC = () => {
             }
         }
     };
-    
+
+    const startDmWithUser = async (targetUser: UserData) => {
+        if (!user || !targetUser.uid) {
+            alert("Sohbet başlatılamıyor: Kullanıcı bilgileri eksik.");
+            return;
+        }
+        const sortedUIDs = [user.uid, targetUser.uid].sort();
+        const chatId = sortedUIDs.join('_');
+        try {
+            await setDoc(doc(db, 'chats', chatId), { 
+                users: sortedUIDs, 
+                userNames: [userProfile?.displayName || user.displayName, targetUser.displayName]
+            }, { merge: true });
+            navigate(`/dm/${chatId}`);
+        } catch(error) {
+             console.error("DM başlatılırken Firestore hatası:", error);
+             alert("Özel sohbet başlatılırken bir hata oluştu.");
+        }
+    };
+
+    // Feedback Yönetim Fonksiyonları
     const toggleFeedbackRead = async (feedbackItem: FeedbackData) => {
         const feedbackRef = doc(db, 'feedback', feedbackItem.id);
         try {
             const newReadState = !feedbackItem.isRead;
             await updateDoc(feedbackRef, { isRead: newReadState });
             setFeedback(feedback.map(fb => fb.id === feedbackItem.id ? { ...fb, isRead: newReadState } : fb));
-        } catch (error) {
-            console.error("Geri bildirim durumu güncellenirken hata:", error);
-        }
+        } catch (error) { console.error("Geri bildirim durumu güncellenirken hata:", error); }
     };
     
     const handleDeleteFeedback = async (feedbackId: string) => {
@@ -1363,24 +423,17 @@ const AdminPage: React.FC = () => {
                 await deleteDoc(doc(db, 'feedback', feedbackId));
                 setFeedback(feedback.filter(fb => fb.id !== feedbackId));
                 alert("Geri bildirim silindi.");
-            } catch (error) {
-                console.error("Geri bildirim silinirken hata:", error);
-                alert("Geri bildirim silinirken bir hata oluştu.");
-            }
+            } catch (error) { console.error("Geri bildirim silinirken hata:", error); }
         }
     };
 
-    // Rapor yönetimi fonksiyonları
+    // Rapor Yönetim Fonksiyonları
     const handleUpdateReportStatus = async (reportId: string, newStatus: 'pending' | 'reviewed' | 'resolved') => {
         try {
-            const reportRef = doc(db, 'user_reports', reportId);
-            await updateDoc(reportRef, { status: newStatus });
+            await updateDoc(doc(db, 'user_reports', reportId), { status: newStatus });
             setReports(reports.map(r => r.id === reportId ? { ...r, status: newStatus } : r));
             alert(`Rapor durumu "${newStatus}" olarak güncellendi.`);
-        } catch (error) {
-            console.error("Rapor durumu güncellenirken hata:", error);
-            alert("Rapor durumu güncellenirken bir hata oluştu.");
-        }
+        } catch (error) { console.error("Rapor durumu güncellenirken hata:", error); }
     };
 
     const handleDeleteReport = async (reportId: string) => {
@@ -1389,198 +442,57 @@ const AdminPage: React.FC = () => {
                 await deleteDoc(doc(db, 'user_reports', reportId));
                 setReports(reports.filter(r => r.id !== reportId));
                 alert("Rapor silindi.");
+            } catch (error) { console.error("Rapor silinirken hata:", error); }
+        }
+    };
+
+    // Özel Sohbet Odası Fonksiyonları
+    const handleUserToggle = (user: UserData) => {
+        setSelectedUsersForRoom(prev =>
+            prev.some(u => u.uid === user.uid)
+                ? prev.filter(u => u.uid !== user.uid)
+                : [...prev, user]
+        );
+    };
+
+    const openUserSelectionModal = () => setIsUserSelectionModalOpen(true);
+    const closeUserSelectionModal = () => { setIsUserSelectionModalOpen(false); setSelectedUsersForRoom([]); setPrivateChatRoomName(''); };
+
+    const handleCreatePrivateChatRoom = async () => {
+        if (!privateChatRoomName.trim() || selectedUsersForRoom.length === 0 || !user) return;
+        try {
+            const roomId = `private_${Date.now()}`;
+            const participants = [user.uid, ...selectedUsersForRoom.map(u => u.uid)];
+            await setDoc(doc(db, 'private_chat_rooms', roomId), {
+                name: privateChatRoomName.trim(), participants, createdBy: user.uid,
+                createdAt: Timestamp.now(), isActive: true
+            });
+            await addDoc(collection(db, 'private_chat_rooms', roomId, 'messages'), {
+                text: `🆕 **Özel sohbet odası oluşturuldu!**`, uid: 'system',
+                displayName: 'Sistem', createdAt: Timestamp.now(), isSystemMessage: true
+            });
+            closeUserSelectionModal();
+            alert('Özel sohbet odası başarıyla oluşturuldu!');
+        } catch (error) {
+            console.error('Özel sohbet odası oluşturma hatası:', error);
+            alert('Özel sohbet odası oluşturulurken bir hata oluştu.');
+        }
+    };
+
+    const handleClosePrivateChatRoom = async (roomId: string, roomName: string) => {
+         if (window.confirm(`"${roomName}" adlı odayı kapatmak istediğinizden emin misiniz?`)) {
+            try {
+                await updateDoc(doc(db, 'private_chat_rooms', roomId), {
+                    isActive: false, closedAt: Timestamp.now(), closedBy: user?.uid
+                });
+                alert('Özel sohbet odası başarıyla kapatıldı!');
             } catch (error) {
-                console.error("Rapor silinirken hata:", error);
-                alert("Rapor silinirken bir hata oluştu.");
+                console.error('Özel sohbet odası kapatma hatası:', error);
             }
         }
     };
 
-    const sendAnnouncement = async () => {
-        if (!announcementText.trim()) return;
-        try {
-            await addDoc(collection(db, 'messages'), {
-                text: `📢 **DUYURU:** ${announcementText}`,
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isAnnouncement: true
-            });
-            setAnnouncementText(''); alert('Duyuru gönderildi!');
-        } catch (error) { console.error('Duyuru gönderilirken hata:', error); }
-    };
-
-    const pinMessage = async () => {
-        if (!pinText.trim()) return;
-        try {
-            await setDoc(doc(db, 'chat_meta', 'pinned_message'), {
-                text: pinText, pinnedBy: userProfile?.displayName || user?.displayName || 'Admin', pinnedAt: new Date()
-            });
-            await addDoc(collection(db, 'messages'), {
-                text: `📌 **Mesaj sabitlendi:** ${pinText}`,
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
-            });
-            setPinText(''); alert('Mesaj sabitlendi!');
-        } catch (error) { console.error('Mesaj sabitlenirken hata:', error); }
-    };
-
-    const muteUser = async () => {
-        if (!muteUsername.trim()) return;
-        try {
-            const durationMs = parseDuration(muteDuration);
-            if (durationMs === 0) return;
-            await addDoc(collection(db, 'messages'), {
-                text: `🔇 **${muteUsername}** susturuldu. Süre: ${formatDuration(durationMs)} (Sadece bildirim)`,
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
-            });
-            setMuteUsername(''); alert('Susturma bildirimi gönderildi!');
-        } catch (error) { console.error('Susturma bildirimi gönderilirken hata:', error); }
-    };
-
-    const kickUser = async () => {
-        if (!kickUsername.trim()) return;
-        try {
-            await addDoc(collection(db, 'messages'), {
-                text: `👢 **${kickUsername}** sohbetten atıldı. (Sadece bildirim)`,
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
-            });
-            setKickUsername(''); alert('Atma bildirimi gönderildi!');
-        } catch (error) { console.error('Atma bildirimi gönderilirken hata:', error); }
-    };
-
-    const clearChat = async () => {
-        if (!window.confirm('Sohbeti temizlemek istediğinizden emin misiniz?')) return;
-        try {
-            await addDoc(collection(db, 'messages'), {
-                text: '🧹 **Sohbet temizlendi.** (Sadece bildirim - Mesajlar silinmedi)',
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
-            });
-            alert('Temizleme bildirimi gönderildi!');
-        } catch (error) { console.error('Temizleme bildirimi gönderilirken hata:', error); }
-    };
-
-    const toggleSlowMode = async (enabled: boolean) => {
-        try {
-            // Chat meta dokümanını güncelle
-            await setDoc(doc(db, 'chat_meta', 'settings'), {
-                slowMode: enabled,
-                slowModeDelay: enabled ? parseInt(slowModeDelay) : 0
-            }, { merge: true });
-
-            // Sistem mesajı gönder
-            await addDoc(collection(db, 'messages'), {
-                text: enabled ? 
-                    `⏱️ **Yavaş mod aktif edildi.** Her mesaj arasında ${slowModeDelay} saniye bekleme olacak.` :
-                    '⏱️ **Yavaş mod kapatıldı.**',
-                uid: 'system',
-                displayName: 'Sistem',
-                createdAt: new Date(),
-                isSystemMessage: true
-            });
-
-            alert(enabled ? 'Yavaş mod açıldı!' : 'Yavaş mod kapatıldı!');
-        } catch (error) {
-            console.error('Yavaş mod ayarlanırken hata:', error);
-            alert('Yavaş mod ayarlanırken bir hata oluştu!');
-        }
-    };
-
-    const toggleChatPause = async (paused: boolean) => {
-        try {
-            // Chat meta dokümanını güncelle
-            await setDoc(doc(db, 'chat_meta', 'settings'), {
-                chatPaused: paused,
-                chatPauseReason: paused ? chatPauseReason : ''
-            }, { merge: true });
-
-            // Sistem mesajı gönder
-            await addDoc(collection(db, 'messages'), {
-                text: paused ?
-                    `🚫 **Sohbet durduruldu.**\nNeden: ${chatPauseReason}` :
-                    '✅ **Sohbet tekrar aktif.**',
-                uid: 'system',
-                displayName: 'Sistem',
-                createdAt: new Date(),
-                isSystemMessage: true
-            });
-
-            alert(paused ? 'Sohbet durduruldu!' : 'Sohbet tekrar aktif!');
-        } catch (error) {
-            console.error('Sohbet durumu ayarlanırken hata:', error);
-            alert('Sohbet durumu ayarlanırken bir hata oluştu!');
-        }
-    };
-
-    const toggleGameComments = async (enabled: boolean) => {
-        try {
-            // Chat meta dokümanını güncelle
-            await setDoc(doc(db, 'chat_meta', 'settings'), {
-                gameCommentsEnabled: enabled
-            }, { merge: true });
-
-            setGameCommentsEnabled(enabled);
-
-            // Sistem mesajı gönder
-            await addDoc(collection(db, 'messages'), {
-                text: enabled ?
-                    '💬 **Oyun yorumları aktif edildi.**' :
-                    '🚫 **Oyun yorumları kapatıldı.**',
-                uid: 'system',
-                displayName: 'Sistem',
-                createdAt: new Date(),
-                isSystemMessage: true
-            });
-
-            alert(enabled ? 'Oyun yorumları açıldı!' : 'Oyun yorumları kapatıldı!');
-        } catch (error) {
-            console.error('Oyun yorumları ayarlanırken hata:', error);
-            alert('Oyun yorumları ayarlanırken bir hata oluştu!');
-        }
-    };
-
-
-    const exportChatHistory = async () => {
-        try {
-            const messagesRef = collection(db, 'messages');
-            const q = query(messagesRef, orderBy('createdAt', 'asc'));
-            const snapshot = await getDocs(q);
-            
-            const chatHistory = snapshot.docs.map(doc => {
-                const data = doc.data();
-                return {
-                    messageId: doc.id,
-                    text: data.text,
-                    senderId: data.uid,
-                    senderName: data.displayName,
-                    timestamp: data.createdAt?.toDate().toISOString(),
-                    isSystemMessage: data.isSystemMessage || false
-                };
-            });
-
-            const fileName = `chat-history-${new Date().toISOString().split('T')[0]}.json`;
-            const blob = new Blob([JSON.stringify(chatHistory, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } catch (error) {
-            console.error("Sohbet geçmişi dışa aktarılırken hata:", error);
-            alert("Sohbet geçmişi dışa aktarılırken bir hata oluştu!");
-        }
-    };
-
-    const removeAnnouncement = async () => {
-        if (!window.confirm('Duyuruyu kaldırmak istediğinizden emin misiniz?')) return;
-        try {
-            await addDoc(collection(db, 'messages'), {
-                text: '📢 **Duyuru kaldırıldı.**',
-                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
-            });
-            alert('Duyuru kaldırma bildirimi gönderildi!');
-        } catch (error) { console.error('Duyuru kaldırma bildirimi gönderilirken hata:', error); }
-    };
-
+    // Komut Fonksiyonları
     const parseDuration = (duration: string): number => {
         const match = duration.match(/^(\d+)([mhd])$/);
         if (!match) return 0;
@@ -1593,51 +505,179 @@ const AdminPage: React.FC = () => {
             default: return 0;
         }
     };
+    
+    const sendAnnouncement = async () => {
+        if (!announcementText.trim()) return;
+        try {
+            await addDoc(collection(db, 'messages'), {
+                text: `📢 **DUYURU:** ${announcementText}`,
+                uid: 'system', displayName: 'Sistem', createdAt: new Date(), isAnnouncement: true
+            });
+            setAnnouncementText(''); alert('Duyuru gönderildi!');
+        } catch (error) { console.error('Duyuru gönderilirken hata:', error); }
+    };
 
-    const formatDuration = (ms: number): string => {
-        const days = Math.floor(ms / (24 * 60 * 60 * 1000));
-        if (days > 0) return `${days} gün`;
-        const hours = Math.floor(ms / (60 * 60 * 1000));
-        if (hours > 0) return `${hours} saat`;
-        const minutes = Math.floor(ms / (60 * 1000));
-        return `${minutes} dakika`;
+    const removeAnnouncement = async () => {
+        try {
+             await setDoc(doc(db, 'chat_meta', 'pinned_message'), { text: "" }); // Bu duyuruyu nasıl kaldırdığınıza bağlı
+             alert('Duyuru kaldırıldı!');
+        } catch (error) { console.error('Duyuru kaldırılırken hata:', error); }
     };
     
-    if (authLoading || isLoading) { return <div className="flex justify-center items-center h-full py-20"><LoaderCircle className="animate-spin text-electric-purple" size={48} /><p className="ml-4 text-cyber-gray">Yükleniyor...</p></div>; }
+    const pinMessage = async () => {
+        if (!pinText.trim()) return;
+        try {
+            await setDoc(doc(db, 'chat_meta', 'pinned_message'), {
+                text: pinText, pinnedBy: userProfile?.displayName || 'Admin', pinnedAt: new Date()
+            });
+            setPinText(''); alert('Mesaj sabitlendi!');
+        } catch (error) { console.error('Mesaj sabitlenirken hata:', error); }
+    };
+    
+    const muteUser = async () => {
+        if (!muteUsername.trim()) return;
+        try {
+            // Gerçek mute işlemi için kullanıcıyı bulup güncellemek gerekir.
+            // Bu sadece bir bildirim gönderir. Gerçek Mute için `handleMuteUser` kullanılmalı.
+            await addDoc(collection(db, 'messages'), {
+                text: `🔇 **${muteUsername}** susturuldu. (Bildirim)`, uid: 'system',
+                displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
+            });
+            setMuteUsername(''); alert('Susturma bildirimi gönderildi!');
+        } catch (error) { console.error('Susturma bildirimi gönderilirken hata:', error); }
+    };
+    
+    const kickUser = async () => {
+        if (!kickUsername.trim()) return;
+        try {
+            // Gerçek kick işlemi için kullanıcıyı silmek gerekir.
+            // Bu sadece bir bildirim gönderir. Gerçek Kick için `handleDeleteUser` kullanılmalı.
+            await addDoc(collection(db, 'messages'), {
+                text: `👢 **${kickUsername}** atıldı. (Bildirim)`, uid: 'system',
+                displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true
+            });
+            setKickUsername(''); alert('Atma bildirimi gönderildi!');
+        } catch (error) { console.error('Atma bildirimi gönderilirken hata:', error); }
+    };
+    
+    const clearChat = async () => {
+        if (window.confirm('Bu sadece bir temizleme bildirimi gönderir, mesajları silmez. Emin misiniz?')) {
+             try {
+                await addDoc(collection(db, 'messages'), { text: '🧹 **Sohbet temizlendi.**', uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true });
+                alert('Temizleme bildirimi gönderildi!');
+             } catch (error) { console.error('Temizleme bildirimi gönderilirken hata:', error); }
+        }
+    };
+    
+    const toggleChatSetting = async (setting: object, message: string, alertMsg: string) => {
+        try {
+            await setDoc(doc(db, 'chat_meta', 'settings'), setting, { merge: true });
+            await addDoc(collection(db, 'messages'), { text: message, uid: 'system', displayName: 'Sistem', createdAt: new Date(), isSystemMessage: true });
+            alert(alertMsg);
+        } catch (error) { console.error(`Ayar değiştirilirken hata: ${alertMsg}`, error); }
+    };
+    
+    const toggleSlowMode = (enabled: boolean) => {
+        const delay = parseInt(slowModeDelay);
+        toggleChatSetting(
+            { slowMode: enabled, slowModeDelay: enabled ? delay : 0 },
+            enabled ? `⏱️ **Yavaş mod aktif.** (${delay} sn)` : '⏱️ **Yavaş mod kapatıldı.**',
+            enabled ? 'Yavaş mod açıldı!' : 'Yavaş mod kapatıldı!'
+        );
+    };
+    
+    const toggleChatPause = (paused: boolean) => {
+        toggleChatSetting(
+            { chatPaused: paused, chatPauseReason: paused ? chatPauseReason : '' },
+            paused ? `🚫 **Sohbet durduruldu.** Neden: ${chatPauseReason}` : '✅ **Sohbet tekrar aktif.**',
+            paused ? 'Sohbet durduruldu!' : 'Sohbet tekrar aktif!'
+        );
+    };
+
+    const toggleGameComments = (enabled: boolean) => {
+        setGameCommentsEnabled(enabled);
+        toggleChatSetting(
+            { gameCommentsEnabled: enabled },
+            enabled ? '💬 **Oyun yorumları aktif.**' : '🚫 **Oyun yorumları kapatıldı.**',
+            enabled ? 'Oyun yorumları açıldı!' : 'Oyun yorumları kapatıldı!'
+        );
+    };
+    
+    const exportChatHistory = async () => {
+        try {
+            const q = query(collection(db, 'messages'), orderBy('createdAt', 'asc'));
+            const snapshot = await getDocs(q);
+            const chatHistory = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            const blob = new Blob([JSON.stringify(chatHistory, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat-history-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (error) { console.error("Sohbet geçmişi dışa aktarılırken hata:", error); }
+    };
+    
+    const handleSearchUser = async () => {
+        if (!searchUser.trim()) return;
+        try {
+            const q = query(collection(db, 'users'), where('displayName', '==', searchUser.trim()));
+            const querySnapshot = await getDocs(q);
+            if (!querySnapshot.empty) {
+                const doc = querySnapshot.docs[0];
+                setSelectedUser({ uid: doc.id, ...doc.data() } as UserData);
+            } else {
+                setSelectedUser(null);
+                alert('Kullanıcı bulunamadı');
+            }
+        } catch (error) { console.error('Kullanıcı arama hatası:', error); }
+    };
+    
+    const handleUpdateScore = async (increment: boolean) => {
+        if (!selectedUser) return;
+        try {
+            const userRef = doc(db, 'users', selectedUser.uid);
+            const currentScore = selectedUser.score || 0;
+            const newScore = increment ? currentScore + Math.abs(scoreAmount) : Math.max(0, currentScore - Math.abs(scoreAmount));
+            await updateDoc(userRef, { score: newScore });
+            setSelectedUser(prev => prev ? {...prev, score: newScore} : null);
+            alert(`${selectedUser.displayName} kullanıcısının skoru ${newScore} olarak güncellendi`);
+        } catch (error) { console.error('Skor güncelleme hatası:', error); }
+    };
+    
+
+    // RENDER
+    if (authLoading || isLoading) { return <div className="flex justify-center items-center h-screen"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>; }
     if (!isAdmin) { return <div className="text-center text-red-500 py-20"><h1>ERİŞİM REDDEDİLDİ.</h1></div>; }
     
     const unreadFeedbackCount = feedback.filter(fb => !fb.isRead).length;
+    const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
 
     return (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 md:p-8">
             {isMuteModalOpen && selectedUserForMute && (<MuteModal user={selectedUserForMute} onClose={closeMuteModal} onMute={handleMuteUser} />)}
+            <UserSelectionModal isOpen={isUserSelectionModalOpen} onClose={closeUserSelectionModal} availableUsers={availableUsers} selectedUsers={selectedUsersForRoom} onUserToggle={handleUserToggle} onCreateRoom={handleCreatePrivateChatRoom} roomName={privateChatRoomName} setRoomName={setPrivateChatRoomName}/>
             
-            {/* User Selection Modal for Private Chat Rooms */}
-            <UserSelectionModal 
-                isOpen={isUserSelectionModalOpen}
-                onClose={closeUserSelectionModal}
-                availableUsers={availableUsers}
-                selectedUsers={selectedUsersForRoom}
-                onUserToggle={handleUserToggle}
-                onCreateRoom={handleCreatePrivateChatRoom}
-                roomName={privateChatRoomName}
-                setRoomName={setPrivateChatRoomName}
-            />
+            <h1 className="text-4xl md:text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             
-            <h1 className="text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
-            <div className="flex flex-wrap gap-4 mb-8 border-b border-cyber-gray/50">
-                <button onClick={() => setView('dashboard')} className={`py-3 px-5 text-lg font-bold ${view === 'dashboard' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Activity className="inline-block mr-2" /> Dashboard</button>
-                <button onClick={() => setView('users')} className={`py-3 px-5 text-lg font-bold ${view === 'users' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Users className="inline-block mr-2" /> Kullanıcılar</button>
-                <button onClick={() => setView('games')} className={`py-3 px-5 text-lg font-bold ${view === 'games' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Gamepad2 className="inline-block mr-2" /> Oyunlar</button>
-                <button onClick={() => setView('feedback')} className={`py-3 px-5 text-lg font-bold relative ${view === 'feedback' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Geri Bildirimler{unreadFeedbackCount > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}</button>
-                <button onClick={() => setView('reports')} className={`py-3 px-5 text-lg font-bold relative ${view === 'reports' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Flag className="inline-block mr-2" /> Raporlar{reports.filter(r => r.status === 'pending').length > 0 && <span className="absolute top-2 right-2 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 justify-center items-center text-xs text-white">{reports.filter(r => r.status === 'pending').length}</span></span>}</button>
-                <button onClick={() => setView('chatroom')} className={`py-3 px-5 text-lg font-bold ${view === 'chatroom' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Sohbet Odası</button>
-                <button onClick={() => setView('privateChat')} className={`py-3 px-5 text-lg font-bold ${view === 'privateChat' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><MessageSquare className="inline-block mr-2" /> Özel Sohbet Odaları</button>
-                <button onClick={() => setView('commands')} className={`py-3 px-5 text-lg font-bold ${view === 'commands' ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray'}`}><Shield className="inline-block mr-2" /> Sistem Komutları</button>
+            <div className="flex flex-wrap gap-2 md:gap-4 mb-8 border-b border-cyber-gray/50">
+                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'privateChat', 'commands'] as const).map(tab => {
+                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, privateChat: MessageSquare, commands: Shield };
+                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', privateChat: 'Özel Odalar', commands: 'Komutlar' };
+                    const Icon = icons[tab];
+                    return (
+                        <button key={tab} onClick={() => setView(tab)} className={`py-3 px-3 md:px-5 text-sm md:text-lg font-bold relative transition-colors ${view === tab ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray hover:text-white'}`}>
+                            <Icon className="inline-block mr-2" /> {labels[tab]}
+                            {tab === 'feedback' && unreadFeedbackCount > 0 && <span className="absolute top-2 right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}
+                            {tab === 'reports' && pendingReportsCount > 0 && <span className="absolute top-2 right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 justify-center items-center text-xs text-white">{pendingReportsCount}</span></span>}
+                        </button>
+                    );
+                })}
             </div>
-
+            {/* VİEW'LERE GÖRE İÇERİK */}
+            
             {view === 'dashboard' && (
-                <div className="space-y-6">
+                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-gradient-to-br from-electric-purple/20 to-cyber-blue/20 p-6 rounded-lg border border-electric-purple/30">
                             <div className="flex items-center justify-between"><div><p className="text-cyber-gray text-sm">Aktif Kullanıcılar</p><p className="text-3xl font-bold text-electric-purple">{systemStats.activeUsers}</p></div><Users className="text-electric-purple" size={32} /></div>
@@ -1652,62 +692,30 @@ const AdminPage: React.FC = () => {
                             <div className="flex items-center justify-between"><div><p className="text-cyber-gray text-sm">Oyun Oynanma</p><p className="text-3xl font-bold text-red-400">{systemStats.totalGamesPlayed.toLocaleString()}</p></div><Gamepad2 className="text-red-400" size={32} /></div>
                         </motion.div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                            <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Zap className="text-electric-purple" />Sistem Durumu</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Veritabanı: Aktif</span></div>
-                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Sohbet: Aktif</span></div>
-                                <div className="flex items-center gap-3"><div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div><span className="text-ghost-white">Oyunlar: Aktif</span></div>
-                            </div>
+                     {systemStats.topChatter && (
+                        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-6 rounded-lg border border-blue-500/30">
+                            <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Crown className="text-yellow-400" />En Çok Mesaj Atan</h3>
+                            <p className="text-xl font-bold text-blue-400">{systemStats.topChatter.displayName} ({systemStats.topChatter.messageCount.toLocaleString()} mesaj)</p>
                         </motion.div>
-
-                        {systemStats.topChatter && (
-                            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-6 rounded-lg border border-blue-500/30">
-                                <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
-                                    <Crown className="text-yellow-400" />
-                                    En Çok Mesaj Atan
-                                </h3>
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <p className="text-xl font-bold text-blue-400">{systemStats.topChatter.displayName}</p>
-                                        <p className="text-cyber-gray mt-1">
-                                            {systemStats.topChatter.messageCount.toLocaleString()} mesaj
-                                        </p>
-                                    </div>
-                                    <MessageSquare className="text-blue-400" size={32} />
-                                </div>
-                            </motion.div>
-                        )}
-                    </div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Clock className="text-electric-purple" />Hızlı İşlemler</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <button onClick={() => setView('users')} className="p-4 bg-electric-purple/20 hover:bg-electric-purple/30 rounded-lg border border-electric-purple/30 transition-colors text-left"><Users className="text-electric-purple mb-2" size={24} /><p className="font-bold">Kullanıcıları Yönet</p><p className="text-sm text-cyber-gray">Sustur, sil, mesaj at</p></button>
-                            <button onClick={() => setView('feedback')} className="p-4 bg-yellow-500/20 hover:bg-yellow-500/30 rounded-lg border border-yellow-500/30 transition-colors text-left"><MessageSquare className="text-yellow-400 mb-2" size={24} /><p className="font-bold">Geri Bildirimler</p><p className="text-sm text-cyber-gray">{unreadFeedbackCount} okunmamış</p></button>
-                            <button onClick={() => setView('games')} className="p-4 bg-red-500/20 hover:bg-red-500/30 rounded-lg border border-red-500/30 transition-colors text-left"><Gamepad2 className="text-red-400 mb-2" size={24} /><p className="font-bold">Oyun İstatistikleri</p><p className="text-sm text-cyber-gray">En popüler oyunlar</p></button>
-                            <button onClick={() => navigate('/chat')} className="p-4 bg-green-500/20 hover:bg-green-500/30 rounded-lg border border-green-500/30 transition-colors text-left"><MessageSquare className="text-green-400 mb-2" size={24} /><p className="font-bold">Sohbete Git</p><p className="text-sm text-cyber-gray">Admin komutları kullan</p></button>
-                        </div>
-                    </motion.div>
-                </div>
+                    )}
+                 </div>
             )}
-
             {view === 'users' && (
-                <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
+                 <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
                     <table className="w-full text-left">
-                        <thead className="border-b border-cyber-gray/50"><tr><th className="p-4">Kullanıcı Adı</th><th className="p-4">E-posta</th><th className="p-4">Rol</th><th className="p-4">Eylemler</th></tr></thead>
+                        <thead className="border-b border-cyber-gray/50"><tr><th className="p-4">Kullanıcı</th><th className="p-4 hidden md:table-cell">E-posta</th><th className="p-4">Rol</th><th className="p-4">Eylemler</th></tr></thead>
                         <tbody>
                             {users.map(u => {
                                 const isMuted = u.mutedUntil && u.mutedUntil.toDate() > new Date();
                                 return (
                                     <tr key={u.uid} className={`border-b border-cyber-gray/50 last:border-0 hover:bg-space-black ${isMuted ? 'bg-red-900/30' : ''}`}>
-                                        <td className="p-4 flex items-center gap-2">{u.displayName}{isMuted && <MicOff size={14} className="text-red-400"/>}</td>
-                                        <td className="p-4 text-cyber-gray">{u.email}</td>
+                                        <td className="p-4 flex items-center gap-2 font-bold">{u.displayName}{isMuted && <MicOff size={14} className="text-red-400"/>}</td>
+                                        <td className="p-4 text-cyber-gray hidden md:table-cell">{u.email}</td>
                                         <td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td>
                                         <td className="p-4 flex gap-4">
                                             <button onClick={() => startDmWithUser(u)} disabled={u.uid === user?.uid} className="text-sky-400 hover:text-sky-300 disabled:text-gray-600" title="Özel Mesaj"><MessageSquare size={18} /></button>
                                             <button onClick={() => openMuteModal(u)} disabled={u.uid === user?.uid} className="text-yellow-500 hover:text-yellow-400 disabled:text-gray-600" title="Sustur"><MicOff size={18} /></button>
-                                            <button onClick={() => handleDeleteUser(u)} disabled={u.role === 'admin' || u.uid === user?.uid} className="text-red-500 hover:text-red-400 disabled:text-gray-600" title="Kullanıcıyı Sil"><Trash2 size={18} /></button>
+                                            <button onClick={() => handleDeleteUser(u)} disabled={u.role === 'admin' || u.uid === user?.uid} className="text-red-500 hover:text-red-400 disabled:text-gray-600" title="Sil"><Trash2 size={18} /></button>
                                         </td>
                                     </tr>
                                 );
@@ -1716,727 +724,104 @@ const AdminPage: React.FC = () => {
                     </table>
                 </div>
             )}
-
             {view === 'games' && (
-                <div className="space-y-4">
-                    <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead className="border-b border-cyber-gray/50">
-                                <tr>
-                                    <th className="p-4">Oyun Adı</th>
-                                    <th className="p-4">Kategori</th>
-                                    <th className="p-4">Oynanma Sayısı</th>
+                <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="border-b border-cyber-gray/50"><tr><th className="p-4">Oyun Adı</th><th className="p-4">Kategori</th><th className="p-4">Oynanma Sayısı</th></tr></thead>
+                        <tbody>
+                            {games.map(game => (
+                                <tr key={game.id} className="border-b border-cyber-gray/50 last:border-0 hover:bg-space-black">
+                                    <td className="p-4">{game.title}</td>
+                                    <td className="p-4 text-cyber-gray">{game.category || 'Kategorisiz'}</td>
+                                    <td className="p-4 font-bold">{game.playCount?.toLocaleString() || '0'}</td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {games.map(game => (
-                                    <tr key={game.id} className="border-b border-cyber-gray/50 last:border-0 hover:bg-space-black">
-                                        <td className="p-4">{game.title}</td>
-                                        <td className="p-4 text-cyber-gray">{game.category || 'Kategorisiz'}</td>
-                                        <td className="p-4">{game.playCount?.toLocaleString() || '0'}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             )}
-            
             {view === 'feedback' && (
-                <div className="space-y-4">
+                 <div className="space-y-4">
                 {feedback.map(fb => (
                     <div key={fb.id} className={`p-4 rounded-lg border ${fb.isRead ? 'bg-dark-gray/30 border-cyber-gray/20' : 'bg-electric-purple/10 border-electric-purple/30'}`}>
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start flex-wrap gap-4">
                             <div>
                                 <p className="font-bold">{fb.displayName}</p>
                                 <p className="text-cyber-gray mt-2">{fb.message}</p>
                             </div>
-                            <div className="flex items-center gap-4 flex-shrink-0 ml-4">
+                            <div className="flex items-center gap-4 flex-shrink-0 ml-auto">
                                 <span className="text-xs text-cyber-gray">{new Date(fb.createdAt?.toDate()).toLocaleString('tr-TR')}</span>
-                                <button onClick={() => toggleFeedbackRead(fb)} title={fb.isRead ? 'Okunmadı olarak işaretle' : 'Okundu olarak işaretle'}>{fb.isRead ? <EyeOff size={18} className="text-gray-500"/> : <Eye size={18} className="text-green-500"/>}</button>
-                                <button onClick={() => handleDeleteFeedback(fb.id)} title="Geri bildirimi sil"><Trash2 size={18} className="text-red-500"/></button>
+                                <button onClick={() => toggleFeedbackRead(fb)} title={fb.isRead ? 'Okunmadı yap' : 'Okundu yap'}>{fb.isRead ? <EyeOff size={18} className="text-gray-500"/> : <Eye size={18} className="text-green-500"/>}</button>
+                                <button onClick={() => handleDeleteFeedback(fb.id)} title="Sil"><Trash2 size={18} className="text-red-500"/></button>
                             </div>
                         </div>
                     </div>
                 ))}
                 </div>
             )}
-
             {view === 'reports' && (
                 <div className="space-y-4">
-                    <div className="bg-dark-gray/50 rounded-lg p-4 mb-6">
-                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2">
-                            <Flag className="text-orange-400" />
-                            Kullanıcı Raporları
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-orange-500/20 border border-orange-500/50 p-4 rounded-lg">
-                                <p className="text-orange-300 font-bold text-lg">{reports.filter(r => r.status === 'pending').length}</p>
-                                <p className="text-orange-200 text-sm">Bekleyen Rapor</p>
-                            </div>
-                            <div className="bg-blue-500/20 border border-blue-500/50 p-4 rounded-lg">
-                                <p className="text-blue-300 font-bold text-lg">{reports.filter(r => r.status === 'reviewed').length}</p>
-                                <p className="text-blue-200 text-sm">İncelenen Rapor</p>
-                            </div>
-                            <div className="bg-green-500/20 border border-green-500/50 p-4 rounded-lg">
-                                <p className="text-green-300 font-bold text-lg">{reports.filter(r => r.status === 'resolved').length}</p>
-                                <p className="text-green-200 text-sm">Çözülen Rapor</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    {reports.map(report => (
-                        <div key={report.id} className={`p-4 rounded-lg border ${
-                            report.status === 'pending' 
-                                ? 'bg-orange-900/20 border-orange-500/50' 
-                                : report.status === 'reviewed'
-                                ? 'bg-blue-900/20 border-blue-500/50'
-                                : 'bg-green-900/20 border-green-500/50'
-                        }`}>
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                    <div className="flex items-center gap-4 mb-2">
-                                        <div>
-                                            <p className="font-bold text-ghost-white">
-                                                {report.reportedUserName} rapor edildi
-                                            </p>
-                                            <p className="text-cyber-gray text-sm">
-                                                Rapor eden: {report.reporterName}
-                                            </p>
-                                        </div>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                            report.status === 'pending' 
-                                                ? 'bg-orange-500/20 text-orange-300' 
-                                                : report.status === 'reviewed'
-                                                ? 'bg-blue-500/20 text-blue-300'
-                                                : 'bg-green-500/20 text-green-300'
-                                        }`}>
-                                            {report.status === 'pending' && 'Bekliyor'}
-                                            {report.status === 'reviewed' && 'İncelendi'}
-                                            {report.status === 'resolved' && 'Çözüldü'}
-                                        </span>
-                                    </div>
-                                    <p className="text-cyber-gray mt-2 mb-3">{report.reason}</p>
-                                    <div className="flex items-center gap-4 text-xs text-cyber-gray">
-                                        <span>Tarih: {new Date(report.createdAt?.toDate()).toLocaleString('tr-TR')}</span>
-                                        {report.messageId && <span>Mesaj ID: {report.messageId}</span>}
-                                    </div>
+                     {reports.map(report => (
+                        <div key={report.id} className={`p-4 rounded-lg border ${ report.status === 'pending' ? 'bg-orange-900/20 border-orange-500/50' : report.status === 'reviewed' ? 'bg-blue-900/20 border-blue-500/50' : 'bg-green-900/20 border-green-500/50'}`}>
+                           <div className="flex justify-between items-start">
+                                <div>
+                                    <p className="font-bold">{report.reportedUserName} rapor edildi</p>
+                                    <p className="text-cyber-gray text-sm">Rapor eden: {report.reporterName}</p>
+                                    <p className="text-cyber-gray mt-2">{report.reason}</p>
+                                    <p className="text-xs text-cyber-gray mt-2">{new Date(report.createdAt?.toDate()).toLocaleString('tr-TR')}</p>
                                 </div>
-                                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-                                    {report.status === 'pending' && (
-                                        <>
-                                            <button 
-                                                onClick={() => handleUpdateReportStatus(report.id, 'reviewed')}
-                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors"
-                                                title="İnceleme olarak işaretle"
-                                            >
-                                                İncele
-                                            </button>
-                                            <button 
-                                                onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
-                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
-                                                title="Çözüldü olarak işaretle"
-                                            >
-                                                Çöz
-                                            </button>
-                                        </>
-                                    )}
-                                    {report.status === 'reviewed' && (
-                                        <button 
-                                            onClick={() => handleUpdateReportStatus(report.id, 'resolved')}
-                                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition-colors"
-                                            title="Çözüldü olarak işaretle"
-                                        >
-                                            Çöz
-                                        </button>
-                                    )}
-                                    <button 
-                                        onClick={() => handleDeleteReport(report.id)} 
-                                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition-colors"
-                                        title="Raporu sil"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            </div>
+                               <div className="flex flex-col md:flex-row items-end gap-2">
+                                     <span className={`px-3 py-1 rounded-full text-xs font-bold mb-2 md:mb-0 ${report.status === 'pending' ? 'bg-orange-500/20 text-orange-300' : 'bg-green-500/20 text-green-300'}`}>
+                                       {report.status}
+                                     </span>
+                                    <button onClick={() => handleUpdateReportStatus(report.id, report.status === 'pending' ? 'resolved' : 'pending')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">Durum Değiştir</button>
+                                    <button onClick={() => handleDeleteReport(report.id)} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"><Trash2 size={14} /></button>
+                               </div>
+                           </div>
                         </div>
                     ))}
-                    
-                    {reports.length === 0 && (
-                        <div className="text-center py-12 text-cyber-gray">
-                            <AlertTriangle size={48} className="mx-auto mb-4 opacity-50" />
-                            <p className="text-lg">Henüz rapor bulunmuyor.</p>
-                        </div>
-                    )}
+                    {reports.length === 0 && <div className="text-center py-12 text-cyber-gray"><AlertTriangle size={48} className="mx-auto mb-4" /><p>Henüz rapor bulunmuyor.</p></div>}
                 </div>
             )}
-
-            {view === 'chatroom' && (
-                <div className="space-y-6">
-                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><MessageSquare className="text-electric-purple" />Sohbet Odası Yönetimi</h2>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Yavaş Mod Kontrolü */}
-                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                                <Clock className="text-yellow-400" />
-                                Yavaş Mod
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex gap-3 items-center">
-                                    <input
-                                        type="number"
-                                        value={slowModeDelay}
-                                        onChange={(e) => setSlowModeDelay(e.target.value)}
-                                        placeholder="Saniye"
-                                        min="1"
-                                        className="w-32 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                    />
-                                    <span className="text-cyber-gray">saniye</span>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => toggleSlowMode(true)}
-                                        className="px-4 py-2 flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Yavaş Modu Aç
-                                    </button>
-                                    <button
-                                        onClick={() => toggleSlowMode(false)}
-                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Kapat
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Sohbet Kontrolü */}
-                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                                <Zap className="text-red-400" />
-                                Sohbeti Durdur
-                            </h3>
-                            <div className="space-y-4">
-                                <input
-                                    type="text"
-                                    value={chatPauseReason}
-                                    onChange={(e) => setChatPauseReason(e.target.value)}
-                                    placeholder="Durdurma nedeni..."
-                                    className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                />
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => toggleChatPause(true)}
-                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Sohbeti Durdur
-                                    </button>
-                                    <button
-                                        onClick={() => toggleChatPause(false)}
-                                        className="px-4 py-2 flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Devam Et
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Oyun Yorumları Kontrolü */}
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                            <MessageSquare className="text-blue-400" />
-                            Oyun Yorumları
-                        </h3>
-                        <div className="space-y-4">
-                            <p className="text-cyber-gray text-sm">
-                                Oyun oynandıktan sonra otomatik yorumların gönderilmesini kontrol eder.
-                            </p>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => toggleGameComments(true)}
-                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
-                                        gameCommentsEnabled
-                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    Açık
-                                </button>
-                                <button
-                                    onClick={() => toggleGameComments(false)}
-                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
-                                        !gameCommentsEnabled
-                                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    Kapalı
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MessageSquare className="text-green-400" />Sohbet Yönetimi</h3>
-                        <div className="flex flex-col gap-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Yavaş Mod Kontrolü */}
-                                <div className="p-4 bg-space-black rounded-lg">
-                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-                                        <Clock className="text-yellow-400" />
-                                        Yavaş Mod
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <div className="flex gap-2 items-center">
-                                            <input
-                                                type="number"
-                                                value={slowModeDelay}
-                                                onChange={(e) => setSlowModeDelay(e.target.value)}
-                                                placeholder="Saniye"
-                                                min="1"
-                                                className="w-24 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                            />
-                                            <span className="text-cyber-gray">saniye</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => toggleSlowMode(true)}
-                                                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Yavaş Modu Aç
-                                            </button>
-                                            <button
-                                                onClick={() => toggleSlowMode(false)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Yavaş Modu Kapat
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Sohbet Durdurma Kontrolü */}
-                                <div className="p-4 bg-space-black rounded-lg">
-                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-                                        <Zap className="text-red-400" />
-                                        Sohbet Kontrolü
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <input
-                                            type="text"
-                                            value={chatPauseReason}
-                                            onChange={(e) => setChatPauseReason(e.target.value)}
-                                            placeholder="Durdurma nedeni..."
-                                            className="w-full p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                        />
-                                        <div className="flex gap-2">
-                                            <button
-                                                onClick={() => toggleChatPause(true)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Sohbeti Durdur
-                                            </button>
-                                            <button
-                                                onClick={() => toggleChatPause(false)}
-                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Sohbeti Aç
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-4">
-                                <button
-                                    onClick={() => exportChatHistory()}
-                                    className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Download size={20} />
-                                    <span>Sohbeti JSON Olarak İndir</span>
-                                </button>
-                            </div>
-                            <p className="text-cyber-gray text-sm">Not: Bu özellikler özel sohbet odası içindeyken de kullanılabilir.</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {view === 'privateChat' && (
                 <div className="space-y-6">
                     <div className="flex justify-between items-center">
-                        <h2 className="text-3xl font-heading mb-6 flex items-center gap-2">
-                            <MessageSquare className="text-electric-purple" />
-                            Özel Sohbet Odaları
-                        </h2>
-                        <button 
-                            onClick={openUserSelectionModal}
-                            className="px-4 py-2 bg-electric-purple hover:bg-electric-purple/80 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
-                        >
-                            <Plus size={18} />
-                            Yeni Özel Oda Oluştur
-                        </button>
+                        <h2 className="text-3xl font-heading">Özel Sohbet Odaları</h2>
+                        <button onClick={openUserSelectionModal} className="px-4 py-2 bg-electric-purple hover:bg-opacity-80 rounded-lg flex items-center gap-2"><Plus size={18}/> Yeni Oda</button>
                     </div>
-
-                    {privateChatRooms.length === 0 ? (
-                        <div className="text-center py-12 text-cyber-gray">
-                            <MessageSquare size={48} className="mx-auto mb-4 opacity-50" />
-                            <p className="text-lg">Henüz özel sohbet odası oluşturulmamış.</p>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {privateChatRooms.map((room: any) => (
-                                <div key={room.id} className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-ghost-white">{room.name}</h3>
-                                            <p className="text-cyber-gray text-sm mt-1">
-                                                Oluşturan: {room.createdBy === user?.uid ? 'Siz' : users.find(u => u.uid === room.createdBy)?.displayName || 'Bilinmeyen'}
-                                            </p>
-                                        </div>
-                                        {room.isActive && (
-                                            <span className="px-2 py-1 bg-green-500/20 text-green-400 text-xs font-bold rounded-full">
-                                                Aktif
-                                            </span>
-                                        )}
-                                        {!room.isActive && (
-                                            <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-full">
-                                                Kapalı
-                                            </span>
-                                        )}
-                                    </div>
-                                    
-                                    <div className="mb-4">
-                                        <p className="text-cyber-gray text-sm mb-2">Katılımcılar:</p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {room.participants?.map((participantId: string) => {
-                                                const participant = users.find(u => u.uid === participantId);
-                                                return (
-                                                    <span 
-                                                        key={participantId} 
-                                                        className={`px-2 py-1 rounded-full text-xs ${
-                                                            participantId === user?.uid 
-                                                                ? 'bg-electric-purple/20 text-electric-purple' 
-                                                                : 'bg-cyber-gray/20 text-ghost-white'
-                                                        }`}
-                                                    >
-                                                        {participantId === user?.uid 
-                                                            ? 'Siz' 
-                                                            : participant?.displayName || 'Bilinmeyen'}
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex justify-end gap-2">
-                                        {room.isActive && (
-                                            <>
-                                                <button
-                                                    onClick={() => navigate(`/admin-chat/${room.id}`)}
-                                                    className="px-3 py-1 bg-electric-purple hover:bg-electric-purple/80 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
-                                                >
-                                                    <MessageSquare size={14} />
-                                                    Sohbete Gir
-                                                </button>
-                                                <button
-                                                    onClick={() => handleClosePrivateChatRoom(room.id, room.name)}
-                                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors flex items-center gap-1"
-                                                >
-                                                    <X size={14} />
-                                                    Kapat
-                                                </button>
-                                            </>
-                                        )}
+                    {privateChatRooms.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {privateChatRooms.map((room) => (
+                                <div key={room.id} className="bg-dark-gray/50 p-4 rounded-lg border border-cyber-gray/50 flex flex-col">
+                                    <h3 className="text-xl font-bold">{room.name}</h3>
+                                    <span className={`text-xs font-bold self-start px-2 py-1 rounded-full mt-1 ${room.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{room.isActive ? 'Aktif' : 'Kapalı'}</span>
+                                    <div className="mt-auto pt-4 flex gap-2">
+                                        <button disabled={!room.isActive} onClick={() => navigate(`/admin-chat/${room.id}`)} className="px-3 py-1 bg-electric-purple hover:bg-opacity-80 rounded text-sm disabled:bg-gray-600">Sohbete Gir</button>
+                                        {room.isActive && <button onClick={() => handleClosePrivateChatRoom(room.id, room.name)} className="px-3 py-1 bg-red-600 hover:bg-opacity-80 rounded text-sm">Kapat</button>}
                                     </div>
                                 </div>
                             ))}
                         </div>
+                    ) : (
+                         <div className="text-center py-12 text-cyber-gray"><MessageSquare size={48} className="mx-auto mb-4" /><p>Henüz özel sohbet odası yok.</p></div>
                     )}
                 </div>
             )}
-
             {view === 'commands' && (
-                <div className="space-y-6">
-                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2"><Megaphone className="text-electric-purple" />Sistem Komutları</h2>
-                    
+                 <div className="space-y-6">
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Megaphone className="text-yellow-400" />Duyuru Yönetimi</h3><div className="space-y-4"><textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} placeholder="Duyuru metni..." className="w-full p-3 bg-space-black rounded-lg resize-none" rows={3}/>
+                        <div className="flex gap-3"><button onClick={sendAnnouncement} className="px-6 py-2 bg-yellow-500 text-black font-bold rounded-lg">Gönder</button><button onClick={removeAnnouncement} className="px-6 py-2 bg-red-500 text-white font-bold rounded-lg">Kaldır</button></div></div></div>
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Pin className="text-blue-400" />Mesaj Sabitle</h3><div className="space-y-4"><textarea value={pinText} onChange={(e) => setPinText(e.target.value)} placeholder="Sabitlenecek mesaj..." className="w-full p-3 bg-space-black rounded-lg resize-none" rows={3}/>
+                        <button onClick={pinMessage} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg">Sabitle</button></div></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Yavaş Mod Kontrolü */}
-                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                                <Clock className="text-yellow-400" />
-                                Yavaş Mod
-                            </h3>
-                            <div className="space-y-4">
-                                <div className="flex gap-3 items-center">
-                                    <input
-                                        type="number"
-                                        value={slowModeDelay}
-                                        onChange={(e) => setSlowModeDelay(e.target.value)}
-                                        placeholder="Saniye"
-                                        min="1"
-                                        className="w-32 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                    />
-                                    <span className="text-cyber-gray">saniye</span>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => toggleSlowMode(true)}
-                                        className="px-4 py-2 flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Yavaş Modu Aç
-                                    </button>
-                                    <button
-                                        onClick={() => toggleSlowMode(false)}
-                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Kapat
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Sohbet Kontrolü */}
-                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                            <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                                <Zap className="text-red-400" />
-                                Sohbeti Durdur
-                            </h3>
-                            <div className="space-y-4">
-                                <input
-                                    type="text"
-                                    value={chatPauseReason}
-                                    onChange={(e) => setChatPauseReason(e.target.value)}
-                                    placeholder="Durdurma nedeni..."
-                                    className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                />
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => toggleChatPause(true)}
-                                        className="px-4 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Sohbeti Durdur
-                                    </button>
-                                    <button
-                                        onClick={() => toggleChatPause(false)}
-                                        className="px-4 py-2 flex-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors"
-                                    >
-                                        Devam Et
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><Clock className="inline mr-2 text-yellow-400" />Yavaş Mod</h3><input type="number" value={slowModeDelay} onChange={e=>setSlowModeDelay(e.target.value)} className="w-full p-2 bg-space-black rounded-lg mb-2"/><div className="flex gap-2"><button onClick={() => toggleSlowMode(true)} className="flex-1 p-2 bg-yellow-600 rounded">Aç</button><button onClick={() => toggleSlowMode(false)} className="flex-1 p-2 bg-gray-600 rounded">Kapat</button></div></div>
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><Zap className="inline mr-2 text-red-400"/>Sohbeti Durdur</h3><input type="text" value={chatPauseReason} onChange={e=>setChatPauseReason(e.target.value)} placeholder="Neden..." className="w-full p-2 bg-space-black rounded-lg mb-2"/><div className="flex gap-2"><button onClick={() => toggleChatPause(true)} className="flex-1 p-2 bg-red-600 rounded">Durdur</button><button onClick={() => toggleChatPause(false)} className="flex-1 p-2 bg-green-600 rounded">Devam Et</button></div></div>
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><MessageSquare className="inline mr-2 text-blue-400"/>Oyun Yorumları</h3><div className="flex gap-2"><button onClick={() => toggleGameComments(true)} className={`flex-1 p-2 rounded ${gameCommentsEnabled ? 'bg-blue-600' : 'bg-gray-600'}`}>Aç</button><button onClick={() => toggleGameComments(false)} className={`flex-1 p-2 rounded ${!gameCommentsEnabled ? 'bg-red-600' : 'bg-gray-600'}`}>Kapat</button></div></div>
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><Download className="inline mr-2 text-green-400"/>Sohbet Geçmişi</h3><button onClick={exportChatHistory} className="w-full p-2 bg-green-600 rounded">JSON Olarak İndir</button></div>
                     </div>
-
-                    {/* Oyun Yorumları Kontrolü */}
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
-                            <MessageSquare className="text-blue-400" />
-                            Oyun Yorumları
-                        </h3>
-                        <div className="space-y-4">
-                            <p className="text-cyber-gray text-sm">
-                                Oyun oynandıktan sonra otomatik yorumların gönderilmesini kontrol eder.
-                            </p>
-                            <div className="flex gap-3">
-                                <button
-                                    onClick={() => toggleGameComments(true)}
-                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
-                                        gameCommentsEnabled
-                                            ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    Açık
-                                </button>
-                                <button
-                                    onClick={() => toggleGameComments(false)}
-                                    className={`px-4 py-2 flex-1 font-bold rounded-lg transition-colors ${
-                                        !gameCommentsEnabled
-                                            ? 'bg-red-600 hover:bg-red-700 text-white'
-                                            : 'bg-gray-600 hover:bg-gray-700 text-white'
-                                    }`}
-                                >
-                                    Kapalı
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50 mb-6">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Trophy className="text-yellow-400" />Skor Yönetimi</h3>
-                        <div className="space-y-4">
-                            <div className="flex gap-3">
-                                <input
-                                    type="text"
-                                    value={searchUser}
-                                    onChange={(e) => setSearchUser(e.target.value)}
-                                    placeholder="Kullanıcı adı..."
-                                    className="flex-1 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
-                                />
-                                <button
-                                    onClick={handleSearchUser}
-                                    className="px-6 py-2 bg-electric-purple hover:bg-opacity-80 text-white font-bold rounded-lg transition-colors"
-                                >
-                                    <Search className="inline-block mr-2" />Ara
-                                </button>
-                            </div>
-                            
-                            {selectedUser && (
-                                <div className="bg-space-black p-4 rounded-lg">
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <User className="text-electric-purple" />
-                                        <div>
-                                            <p className="font-bold text-ghost-white">{selectedUser.displayName}</p>
-                                            <p className="text-cyber-gray text-sm">Mevcut Skor: {selectedUser.score || 0}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="flex gap-3 items-center">
-                                        <input
-                                            type="number"
-                                            value={scoreAmount}
-                                            onChange={(e) => setScoreAmount(Math.max(0, parseInt(e.target.value) || 0))}
-                                            min="0"
-                                            placeholder="Skor miktarı..."
-                                            className="w-32 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
-                                        />
-                                        <button
-                                            onClick={() => handleUpdateScore(true)}
-                                            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
-                                        >
-                                            <Plus size={18} />Ekle
-                                        </button>
-                                        <button
-                                            onClick={() => handleUpdateScore(false)}
-                                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors flex items-center gap-2"
-                                        >
-                                            <Minus size={18} />Çıkar
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Megaphone className="text-yellow-400" />Duyuru Yönetimi</h3>
-                        <div className="space-y-4"><textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} placeholder="Duyuru metnini buraya yazın..." className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray resize-none" rows={3}/>
-                            <div className="flex gap-3"><button onClick={sendAnnouncement} className="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-black font-bold rounded-lg transition-colors">Duyuru Gönder</button><button onClick={removeAnnouncement} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors">Duyuruyu Kaldır</button></div>
-                        </div>
-                    </div>
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Pin className="text-blue-400" />Mesaj Sabitle</h3>
-                        <div className="space-y-4"><textarea value={pinText} onChange={(e) => setPinText(e.target.value)} placeholder="Sabitlenecek mesajı buraya yazın..." className="w-full p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray resize-none" rows={3}/>
-                            <button onClick={pinMessage} className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors">Mesajı Sabitle</button>
-                        </div>
-                    </div>
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MicOff className="text-red-400" />Kullanıcı Sustur</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <input type="text" value={muteUsername} onChange={(e) => setMuteUsername(e.target.value)} placeholder="Kullanıcı adı" className="p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"/>
-                            <select value={muteDuration} onChange={(e) => setMuteDuration(e.target.value)} className="p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white">
-                                <option value="5m">5 Dakika</option><option value="1h">1 Saat</option><option value="6h">6 Saat</option><option value="1d">1 Gün</option><option value="7d">7 Gün</option>
-                            </select>
-                            <button onClick={muteUser} className="px-6 py-2 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors">Sustur</button>
-                        </div>
-                    </div>
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><UserX className="text-orange-400" />Kullanıcı At</h3>
-                        <div className="flex gap-4"><input type="text" value={kickUsername} onChange={(e) => setKickUsername(e.target.value)} placeholder="Kullanıcı adı" className="flex-1 p-3 bg-space-black border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"/>
-                            <button onClick={kickUser} className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition-colors">At</button>
-                        </div>
-                    </div>
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><Trash className="text-purple-400" />Sohbet Temizle</h3>
-                        <p className="text-cyber-gray mb-4">Sohbete temizleme bildirimi gönderir (mesajlar silinmez).</p>
-                        <button onClick={clearChat} className="px-6 py-2 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-lg transition-colors">Temizleme Bildirimi Gönder</button>
-                    </div>
-
-                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
-                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2"><MessageSquare className="text-green-400" />Sohbet Yönetimi</h3>
-                        <div className="flex flex-col gap-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Yavaş Mod Kontrolü */}
-                                <div className="p-4 bg-space-black rounded-lg">
-                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-                                        <Clock className="text-yellow-400" />
-                                        Yavaş Mod
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <div className="flex gap-2 items-center">
-                                            <input
-                                                type="number"
-                                                value={slowModeDelay}
-                                                onChange={(e) => setSlowModeDelay(e.target.value)}
-                                                placeholder="Saniye"
-                                                min="1"
-                                                className="w-24 p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                            />
-                                            <span className="text-cyber-gray">saniye</span>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => toggleSlowMode(true)}
-                                                className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Yavaş Modu Aç
-                                            </button>
-                                            <button 
-                                                onClick={() => toggleSlowMode(false)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Yavaş Modu Kapat
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Sohbet Durdurma Kontrolü */}
-                                <div className="p-4 bg-space-black rounded-lg">
-                                    <h4 className="font-bold text-lg mb-3 flex items-center gap-2">
-                                        <Zap className="text-red-400" />
-                                        Sohbet Kontrolü
-                                    </h4>
-                                    <div className="space-y-3">
-                                        <input
-                                            type="text"
-                                            value={chatPauseReason}
-                                            onChange={(e) => setChatPauseReason(e.target.value)}
-                                            placeholder="Durdurma nedeni..."
-                                            className="w-full p-2 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
-                                        />
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => toggleChatPause(true)}
-                                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Sohbeti Durdur
-                                            </button>
-                                            <button 
-                                                onClick={() => toggleChatPause(false)}
-                                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
-                                            >
-                                                Sohbeti Aç
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-4">
-                                <button
-                                    onClick={() => exportChatHistory()}
-                                    className="px-6 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                                >
-                                    <Download size={20} />
-                                    <span>Sohbeti JSON Olarak İndir</span>
-                                </button>
-                            </div>
-                            <p className="text-cyber-gray text-sm">Not: Bu özellikler özel sohbet odası içindeyken de kullanılabilir.</p>
-                        </div>
+                     <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><Trophy className="inline mr-2 text-yellow-400" />Skor Yönetimi</h3>
+                        <div className="flex gap-2 mb-4"><input type="text" value={searchUser} onChange={e => setSearchUser(e.target.value)} placeholder="Kullanıcı adı..." className="flex-1 p-2 bg-space-black rounded-lg" /><button onClick={handleSearchUser} className="px-4 bg-electric-purple rounded">Ara</button></div>
+                        {selectedUser && <div className="bg-space-black p-4 rounded-lg"><p className="font-bold">{selectedUser.displayName} | Mevcut Skor: {selectedUser.score || 0}</p><div className="flex gap-2 mt-2"><input type="number" value={scoreAmount} onChange={e=>setScoreAmount(parseInt(e.target.value) || 0)} className="w-24 p-2 bg-dark-gray rounded-lg" /><button onClick={() => handleUpdateScore(true)} className="p-2 bg-green-600 rounded flex-1">Ekle</button><button onClick={() => handleUpdateScore(false)} className="p-2 bg-red-600 rounded flex-1">Çıkar</button></div></div>}
                     </div>
                 </div>
             )}
