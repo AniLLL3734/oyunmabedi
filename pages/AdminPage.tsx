@@ -15,13 +15,18 @@ import {
   addDoc, 
   setDoc, 
   getDoc, 
-  where
+  where,
+  writeBatch,
+  increment,
+  arrayUnion,
+  serverTimestamp,
+  deleteField
 } from 'firebase/firestore';
 import { 
   LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, 
   Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, 
   UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, 
-  AlertTriangle, X 
+  AlertTriangle, X, RefreshCw, ThumbsUp, ThumbsDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -33,6 +38,8 @@ interface UserData {
     role: 'admin' | 'user';
     mutedUntil?: Timestamp;
     score?: number;
+    clanId?: string;
+    clanRole?: string;
 }
 interface GameData {
     id: string;
@@ -47,7 +54,12 @@ interface FeedbackData {
     message: string;
     isRead: boolean;
     createdAt: any;
+    rating?: 'positive' | 'negative' | null;
+    source?: string;
+    gameId?: string;
+    gameTitle?: string;
 }
+
 interface ReportData {
     id: string;
     reportedUserId: string;
@@ -174,7 +186,7 @@ const UserSelectionModal: React.FC<{
 const AdminPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatroom' | 'privateChat' | 'commands'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatroom' | 'privateChat' | 'commands' | 'clan'>('dashboard');
     
     // STATE TANIMLAMALARI
     const [users, setUsers] = useState<UserData[]>([]);
@@ -201,6 +213,12 @@ const AdminPage: React.FC = () => {
     const [selectedUser, setSelectedUser] = useState<UserData | null>(null);
     const [scoreAmount, setScoreAmount] = useState<number>(0);
     
+    // KLAN YÖNETİMİ İÇİN STATE'LER
+    const [clanMemberUsername, setClanMemberUsername] = useState('');
+    const [adminClanId, setAdminClanId] = useState<string | null>(null);
+    const [adminClanData, setAdminClanData] = useState<any | null>(null);
+    const [clanToRemove, setClanToRemove] = useState('');
+    
     // ÖZEL SOHBET ODALARI İÇİN STATE'LER
     const [isUserSelectionModalOpen, setIsUserSelectionModalOpen] = useState(false);
     const [availableUsers, setAvailableUsers] = useState<UserData[]>([]);
@@ -216,6 +234,22 @@ const AdminPage: React.FC = () => {
             navigate('/');
             return;
         }
+
+        // Admin'in klan verisini çek
+        const fetchAdminClanData = async () => {
+            if (userProfile?.clanId) {
+                try {
+                    const clanDoc = await getDoc(doc(db, 'clans', userProfile.clanId));
+                    if (clanDoc.exists()) {
+                        setAdminClanData({ id: clanDoc.id, ...clanDoc.data() });
+                    }
+                } catch (error) {
+                    console.error("Admin klan verisi çekilirken hata:", error);
+                }
+            }
+        };
+
+        fetchAdminClanData();
 
         const fetchAllUsersForModal = async () => {
             try {
@@ -304,6 +338,17 @@ const AdminPage: React.FC = () => {
         };
         fetchSettings();
 
+        // Admin klanı için gerçek zamanlı dinleyici
+        let unsubscribeClan: (() => void) | null = null;
+        if (userProfile?.clanId) {
+            const clanRef = doc(db, 'clans', userProfile.clanId);
+            unsubscribeClan = onSnapshot(clanRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    setAdminClanData({ id: docSnap.id, ...docSnap.data() });
+                }
+            });
+        }
+
         // İSTATİSTİKLER İÇİN SNAPSHOT LISTENER'LAR
         const unsubUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
             setSystemStats(prev => ({ ...prev, activeUsers: snapshot.size }));
@@ -327,7 +372,7 @@ const AdminPage: React.FC = () => {
                 if (count > maxMessages) { maxMessages = count; topChatterId = uid; }
             });
 
-            let topChatterData;
+            let topChatterData: { uid: string; displayName: string; messageCount: number } | undefined;
             if (topChatterId) {
                 const userDoc = await getDoc(doc(db, 'users', topChatterId));
                 if (userDoc.exists()) {
@@ -351,8 +396,11 @@ const AdminPage: React.FC = () => {
             unsubUsers();
             unsubMessages();
             unsubGames();
+            if (unsubscribeClan) {
+                unsubscribeClan();
+            }
         };
-    }, [isAdmin]);
+    }, [isAdmin, userProfile?.clanId]);
     
     // FONKSİYONLAR
 
@@ -645,6 +693,159 @@ const AdminPage: React.FC = () => {
         } catch (error) { console.error('Skor güncelleme hatası:', error); }
     };
     
+    // Kullanıcıyı admin'in klanına ekle
+    const handleAddUserToClan = async () => {
+        if (!clanMemberUsername.trim() || !userProfile) return;
+        
+        try {
+            // Önce admin'in klanını bul
+            if (!userProfile.clanId) {
+                alert('Önce bir klana katılmak veya klan oluşturmak gerekir.');
+                return;
+            }
+            
+            // Kullanıcıyı kullanıcı adına göre bul
+            const userQuery = query(collection(db, 'users'), where('displayName', '==', clanMemberUsername.trim()));
+            const userSnapshot = await getDocs(userQuery);
+            
+            if (userSnapshot.empty) {
+                alert('Kullanıcı bulunamadı.');
+                return;
+            }
+            
+            const targetUser = userSnapshot.docs[0];
+            const targetUserData = targetUser.data() as UserData;
+            
+            // Kullanıcı zaten bir klanda mı?
+            if (targetUserData.clanId) {
+                alert('Bu kullanıcı zaten bir klanda.');
+                return;
+            }
+            
+            // Kullanıcıyı klanına ekle
+            const batch = writeBatch(db);
+            
+            // Klan belgesini güncelle
+            const clanRef = doc(db, 'clans', userProfile.clanId);
+            batch.update(clanRef, {
+                members: arrayUnion(targetUser.id),
+                memberCount: increment(1),
+                totalScore: increment(targetUserData.score || 0)
+            });
+            
+            // Kullanıcı belgesini güncelle
+            const userRef = doc(db, 'users', targetUser.id);
+            batch.update(userRef, { 
+                clanId: userProfile.clanId, 
+                clanRole: 'member' 
+            });
+            
+            await batch.commit();
+            
+            alert(`${clanMemberUsername} kullanıcısı klanınıza eklendi!`);
+            setClanMemberUsername('');
+            
+            // Klan verisini yenile
+            if (userProfile.clanId) {
+                const clanDoc = await getDoc(doc(db, 'clans', userProfile.clanId));
+                if (clanDoc.exists()) {
+                    setAdminClanData({ id: clanDoc.id, ...clanDoc.data() });
+                }
+            }
+        } catch (error) {
+            console.error('Klan üyesi ekleme hatası:', error);
+            alert('Klan üyesi eklenirken bir hata oluştu.');
+        }
+    };
+    
+    // Klanı ismine göre kaldır
+    const handleRemoveClan = async () => {
+    if (!clanToRemove.trim()) {
+        alert('Lütfen kaldırılacak klanın adını girin.');
+        return;
+    }
+
+    try {
+        // Klanı ismine göre bul
+        const clanQuery = query(collection(db, 'clans'), where('name_lowercase', '==', clanToRemove.trim().toLowerCase()));
+        const clanSnapshot = await getDocs(clanQuery);
+
+        if (clanSnapshot.empty) {
+            alert('Belirtilen isimde bir klan bulunamadı.');
+            return;
+        }
+
+        const clanDoc = clanSnapshot.docs[0];
+        const clanData = clanDoc.data();
+        const clanId = clanDoc.id;
+
+        if (!window.confirm(`"${clanData.name}" adlı klanı ve tüm üyelerini kaldırmak istediğinizden emin misiniz? Bu işlem geri alınamaz.`)) {
+            return;
+        }
+
+        // ========================
+        //    DÜZELTİLMİŞ KISIM
+        // ========================
+
+        // 1. BİR TANE batch oluşturuyoruz ve tüm işlemleri buna ekleyeceğiz.
+        const batch = writeBatch(db);
+
+        // 2. Klanı 'archived_clans' koleksiyonuna arşivle.
+        const archivedClanData = {
+            ...clanData,
+            id: clanId,
+            archivedAt: serverTimestamp(),
+            archivedBy: user?.uid,
+            archivedByName: userProfile?.displayName,
+            isArchived: true
+        };
+        const archiveRef = doc(db, 'archived_clans', clanId);
+        batch.set(archiveRef, archivedClanData);
+
+        // 3. Klanın aktivite loglarını arşivle
+        const logQuery = query(collection(db, 'clans', clanId, 'activityLog'));
+        const logSnapshot = await getDocs(logQuery);
+        for (const logDoc of logSnapshot.docs) {
+            const archivedLogRef = doc(db, 'archived_clans', clanId, 'activityLog', logDoc.id);
+            batch.set(archivedLogRef, logDoc.data());
+        }
+
+        // 4. Tüm klan üyelerinin klan bilgilerini temizle
+        if (clanData.members && Array.isArray(clanData.members)) {
+            for (const memberId of clanData.members) {
+                const userRef = doc(db, 'users', memberId);
+                batch.update(userRef, {
+                    clanId: deleteField(),
+                    clanRole: deleteField()
+                });
+            }
+        }
+        
+        // 5. Orijinal klan belgesini sil
+        const clanRef = doc(db, 'clans', clanId);
+        batch.delete(clanRef);
+        
+        // 6. TÜM İŞLEMLERİ TEK SEFERDE GÖNDER!
+        await batch.commit();
+        
+        // ========================
+        //    DÜZELTME BİTTİ
+        // ========================
+        
+        alert(`"${clanData.name}" klanı başarıyla kaldırıldı ve arşivlendi!`);
+        setClanToRemove('');
+        
+        if (adminClanData && adminClanData.id === clanId) {
+            setAdminClanData(null);
+        }
+
+    } catch (error) {
+        // Hatayı daha detaylı göstermek için console.error'ı kullanmak önemlidir.
+        console.error('Klan kaldırma hatası:', error);
+        alert('Klan kaldırılırken bir hata oluştu. Detaylar için konsolu kontrol edin.');
+    }
+};
+    
 
     // RENDER
     if (authLoading || isLoading) { return <div className="flex justify-center items-center h-screen"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>; }
@@ -661,9 +862,9 @@ const AdminPage: React.FC = () => {
             <h1 className="text-4xl md:text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             
             <div className="flex flex-wrap gap-2 md:gap-4 mb-8 border-b border-cyber-gray/50">
-                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'privateChat', 'commands'] as const).map(tab => {
-                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, privateChat: MessageSquare, commands: Shield };
-                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', privateChat: 'Özel Odalar', commands: 'Komutlar' };
+                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'privateChat', 'commands', 'clan'] as const).map(tab => {
+                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, privateChat: MessageSquare, commands: Shield, clan: Users };
+                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', privateChat: 'Özel Odalar', commands: 'Komutlar', clan: 'Klan' };
                     const Icon = icons[tab];
                     return (
                         <button key={tab} onClick={() => setView(tab)} className={`py-3 px-3 md:px-5 text-sm md:text-lg font-bold relative transition-colors ${view === tab ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray hover:text-white'}`}>
@@ -692,6 +893,51 @@ const AdminPage: React.FC = () => {
                             <div className="flex items-center justify-between"><div><p className="text-cyber-gray text-sm">Oyun Oynanma</p><p className="text-3xl font-bold text-red-400">{systemStats.totalGamesPlayed.toLocaleString()}</p></div><Gamepad2 className="text-red-400" size={32} /></div>
                         </motion.div>
                     </div>
+                    
+                    {/* Admin Klan Bilgisi */}
+                    {adminClanData && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }} 
+                            animate={{ opacity: 1, y: 0 }} 
+                            transition={{ delay: 0.4 }} 
+                            className="bg-gradient-to-br from-purple-500/20 to-indigo-500/20 p-6 rounded-lg border border-purple-500/30"
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-2xl font-heading flex items-center gap-2">
+                                    <Shield className="text-purple-400" />Klanınız: {adminClanData.name}
+                                </h3>
+                                <button 
+                                    onClick={async () => {
+                                        if (userProfile?.clanId) {
+                                            const clanDoc = await getDoc(doc(db, 'clans', userProfile.clanId));
+                                            if (clanDoc.exists()) {
+                                                setAdminClanData({ id: clanDoc.id, ...clanDoc.data() });
+                                            }
+                                        }
+                                    }}
+                                    className="p-2 bg-dark-gray/50 hover:bg-dark-gray/70 rounded-lg transition-colors"
+                                    title="Yenile"
+                                >
+                                    <RefreshCw size={18} className="text-cyber-gray" />
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-dark-gray/30 p-4 rounded-lg">
+                                    <p className="text-cyber-gray text-sm">Üye Sayısı</p>
+                                    <p className="text-xl font-bold text-purple-400">{adminClanData.memberCount}</p>
+                                </div>
+                                <div className="bg-dark-gray/30 p-4 rounded-lg">
+                                    <p className="text-cyber-gray text-sm">Toplam Skor</p>
+                                    <p className="text-xl font-bold text-purple-400">{adminClanData.totalScore?.toLocaleString() || '0'}</p>
+                                </div>
+                                <div className="bg-dark-gray/30 p-4 rounded-lg">
+                                    <p className="text-cyber-gray text-sm">Seviye</p>
+                                    <p className="text-xl font-bold text-purple-400">{adminClanData.level || '1'}</p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                    
                      {systemStats.topChatter && (
                         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="bg-gradient-to-br from-blue-500/20 to-indigo-500/20 p-6 rounded-lg border border-blue-500/30">
                             <h3 className="text-2xl font-heading mb-4 flex items-center gap-2"><Crown className="text-yellow-400" />En Çok Mesaj Atan</h3>
@@ -746,13 +992,39 @@ const AdminPage: React.FC = () => {
                     <div key={fb.id} className={`p-4 rounded-lg border ${fb.isRead ? 'bg-dark-gray/30 border-cyber-gray/20' : 'bg-electric-purple/10 border-electric-purple/30'}`}>
                         <div className="flex justify-between items-start flex-wrap gap-4">
                             <div>
-                                <p className="font-bold">{fb.displayName}</p>
+                                <div className="flex items-center gap-2 mb-2">
+                                    <p className="font-bold">{fb.displayName}</p>
+                                    {fb.source === 'game_exit' && (
+                                        <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">Oyun Çıkışı</span>
+                                    )}
+                                </div>
+                                {fb.gameTitle && (
+                                    <p className="text-sm text-cyber-gray mb-2">
+                                        Oyun: <span className="font-semibold">{fb.gameTitle}</span>
+                                    </p>
+                                )}
+                                {fb.rating && (
+                                    <div className="flex items-center gap-2 mb-2">
+                                        {fb.rating === 'positive' ? (
+                                            <ThumbsUp size={16} className="text-green-500" />
+                                        ) : (
+                                            <ThumbsDown size={16} className="text-red-500" />
+                                        )}
+                                        <span className="text-sm text-cyber-gray">
+                                            {fb.rating === 'positive' ? 'Olumlu' : 'Olumsuz'} değerlendirme
+                                        </span>
+                                    </div>
+                                )}
                                 <p className="text-cyber-gray mt-2">{fb.message}</p>
                             </div>
                             <div className="flex items-center gap-4 flex-shrink-0 ml-auto">
                                 <span className="text-xs text-cyber-gray">{new Date(fb.createdAt?.toDate()).toLocaleString('tr-TR')}</span>
-                                <button onClick={() => toggleFeedbackRead(fb)} title={fb.isRead ? 'Okunmadı yap' : 'Okundu yap'}>{fb.isRead ? <EyeOff size={18} className="text-gray-500"/> : <Eye size={18} className="text-green-500"/>}</button>
-                                <button onClick={() => handleDeleteFeedback(fb.id)} title="Sil"><Trash2 size={18} className="text-red-500"/></button>
+                                <button onClick={() => toggleFeedbackRead(fb)} title={fb.isRead ? 'Okunmadı yap' : 'Okundu yap'}>
+                                    {fb.isRead ? <EyeOff size={18} className="text-gray-500"/> : <Eye size={18} className="text-green-500"/>}
+                                </button>
+                                <button onClick={() => handleDeleteFeedback(fb.id)} title="Sil">
+                                    <Trash2 size={18} className="text-red-500"/>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -794,7 +1066,9 @@ const AdminPage: React.FC = () => {
                             {privateChatRooms.map((room) => (
                                 <div key={room.id} className="bg-dark-gray/50 p-4 rounded-lg border border-cyber-gray/50 flex flex-col">
                                     <h3 className="text-xl font-bold">{room.name}</h3>
-                                    <span className={`text-xs font-bold self-start px-2 py-1 rounded-full mt-1 ${room.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{room.isActive ? 'Aktif' : 'Kapalı'}</span>
+                                    <span className={`text-xs font-bold self-start px-2 py-1 rounded-full mt-1 ${room.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                        {room.isActive ? 'Aktif' : 'Kapalı'}
+                                    </span>
                                     <div className="mt-auto pt-4 flex gap-2">
                                         <button disabled={!room.isActive} onClick={() => navigate(`/admin-chat/${room.id}`)} className="px-3 py-1 bg-electric-purple hover:bg-opacity-80 rounded text-sm disabled:bg-gray-600">Sohbete Gir</button>
                                         {room.isActive && <button onClick={() => handleClosePrivateChatRoom(room.id, room.name)} className="px-3 py-1 bg-red-600 hover:bg-opacity-80 rounded text-sm">Kapat</button>}
@@ -822,6 +1096,129 @@ const AdminPage: React.FC = () => {
                      <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50"><h3 className="text-xl font-heading mb-4"><Trophy className="inline mr-2 text-yellow-400" />Skor Yönetimi</h3>
                         <div className="flex gap-2 mb-4"><input type="text" value={searchUser} onChange={e => setSearchUser(e.target.value)} placeholder="Kullanıcı adı..." className="flex-1 p-2 bg-space-black rounded-lg" /><button onClick={handleSearchUser} className="px-4 bg-electric-purple rounded">Ara</button></div>
                         {selectedUser && <div className="bg-space-black p-4 rounded-lg"><p className="font-bold">{selectedUser.displayName} | Mevcut Skor: {selectedUser.score || 0}</p><div className="flex gap-2 mt-2"><input type="number" value={scoreAmount} onChange={e=>setScoreAmount(parseInt(e.target.value) || 0)} className="w-24 p-2 bg-dark-gray rounded-lg" /><button onClick={() => handleUpdateScore(true)} className="p-2 bg-green-600 rounded flex-1">Ekle</button><button onClick={() => handleUpdateScore(false)} className="p-2 bg-red-600 rounded flex-1">Çıkar</button></div></div>}
+                    </div>
+                    
+                    {/* KLAN YÖNETİMİ */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                        <h3 className="text-xl font-heading mb-4 flex items-center gap-2">
+                            <Users className="text-purple-400" />Klan Üyesi Ekle
+                        </h3>
+                        <div className="space-y-4">
+                            <p className="text-cyber-gray text-sm">
+                                Klanınıza üye eklemek için kullanıcı adını girin. 
+                                Kullanıcı zaten bir klanda değilse klanınıza eklenecektir.
+                            </p>
+                            <div className="flex gap-2">
+                                <input 
+                                    type="text" 
+                                    value={clanMemberUsername} 
+                                    onChange={(e) => setClanMemberUsername(e.target.value)} 
+                                    placeholder="Kullanıcı adı..." 
+                                    className="flex-1 p-3 bg-space-black rounded-lg"
+                                />
+                                <button 
+                                    onClick={handleAddUserToClan} 
+                                    className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
+                                >
+                                    Klanına Ekle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {view === 'clan' && (
+                <div className="space-y-6">
+                    <h2 className="text-3xl font-heading mb-6 flex items-center gap-2">
+                        <Shield className="text-purple-400" />Klan Yönetimi
+                    </h2>
+                    
+                    {adminClanData ? (
+                        <>
+                            <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                                <h3 className="text-2xl font-heading mb-4">{adminClanData.name}</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                    <div className="bg-space-black p-4 rounded-lg">
+                                        <p className="text-cyber-gray">Üye Sayısı</p>
+                                        <p className="text-2xl font-bold text-purple-400">{adminClanData.memberCount}</p>
+                                    </div>
+                                    <div className="bg-space-black p-4 rounded-lg">
+                                        <p className="text-cyber-gray">Toplam Skor</p>
+                                        <p className="text-2xl font-bold text-purple-400">{adminClanData.totalScore?.toLocaleString() || '0'}</p>
+                                    </div>
+                                    <div className="bg-space-black p-4 rounded-lg">
+                                        <p className="text-cyber-gray">Seviye</p>
+                                        <p className="text-2xl font-bold text-purple-400">{adminClanData.level || '1'}</p>
+                                    </div>
+                                </div>
+                                
+                                <div className="border-t border-cyber-gray/50 pt-6">
+                                    <h4 className="text-xl font-heading mb-4">Klan Üyesi Ekle</h4>
+                                    <p className="text-cyber-gray mb-4">
+                                        Klanınıza üye eklemek için kullanıcı adını girin. 
+                                        Kullanıcı zaten bir klanda değilse klanınıza eklenecektir.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <input 
+                                            type="text" 
+                                            value={clanMemberUsername} 
+                                            onChange={(e) => setClanMemberUsername(e.target.value)} 
+                                            placeholder="Kullanıcı adı..." 
+                                            className="flex-1 p-3 bg-space-black rounded-lg"
+                                        />
+                                        <button 
+                                            onClick={handleAddUserToClan} 
+                                            className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors"
+                                        >
+                                            Klanına Ekle
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50">
+                                <h4 className="text-xl font-heading mb-4">Klan Üyeleri</h4>
+                                <p className="text-cyber-gray">Klan üyelerinizi yönetmek için <a href={`/clan/${adminClanData.id}`} className="text-purple-400 hover:underline">klan sayfasına</a> gidin.</p>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="bg-dark-gray/50 p-6 rounded-lg border border-cyber-gray/50 text-center">
+                            <Shield size={48} className="text-cyber-gray mx-auto mb-4" />
+                            <h3 className="text-xl font-heading mb-2">Klan Bulunamadı</h3>
+                            <p className="text-cyber-gray mb-4">
+                                Henüz bir klan oluşturmadınız veya bir klana katılmadınız.
+                            </p>
+                            <a href="/clans" className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg inline-block transition-colors">
+                                Klan Oluştur veya Katıl
+                            </a>
+                        </div>
+                    )}
+                    
+                    {/* Klan Kaldırma Bölümü */}
+                    <div className="bg-dark-gray/50 p-6 rounded-lg border border-red-500/50">
+                        <h3 className="text-2xl font-heading mb-4 flex items-center gap-2 text-red-400">
+                            <AlertTriangle className="text-red-400" />Klan Kaldır
+                        </h3>
+                        <p className="text-cyber-gray mb-4">
+                            İsmi girilen klanı sistemden tamamen kaldırır. 
+                            Bu işlem tüm üyeleri klandan çıkarır ve klan verisini siler. 
+                            İşlem geri alınamaz!
+                        </p>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={clanToRemove} 
+                                onChange={(e) => setClanToRemove(e.target.value)} 
+                                placeholder="Kaldırılacak klan adı..." 
+                                className="flex-1 p-3 bg-space-black rounded-lg"
+                            />
+                            <button 
+                                onClick={handleRemoveClan} 
+                                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition-colors"
+                            >
+                                Klanı Kaldır
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

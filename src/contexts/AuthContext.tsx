@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
+import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
 
 // ==============================================================================
 // GEREKLİ IMPORTLAR
@@ -20,7 +20,7 @@ export interface UserProfileData {
     avatarUrl?: string;
     achievements?: string[];
     clanId?: string;
-    clanRole?: 'leader' | 'co-leader' | 'member';
+    clanRole?: 'leader' | 'elder' | 'officer' | 'member';
     [key:string]: any;
 }
 
@@ -29,6 +29,7 @@ interface AuthContextType {
   userProfile: UserProfileData | null;
   isAdmin: boolean;
   loading: boolean;
+  refreshUserProfile?: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({ user: null, userProfile: null, isAdmin: false, loading: true });
@@ -149,7 +150,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []); // Bu useEffect sadece bir kez çalışır.
 
   const isAdmin = userProfile?.role === 'admin';
-  const value = { user, userProfile, isAdmin, loading };
+  
+  // Add refreshUserProfile function
+  const refreshUserProfile = async () => {
+    if (user) {
+      const userDocRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        setUserProfile(docSnap.data() as UserProfileData);
+      }
+    }
+  };
+  
+  const value = { user, userProfile, isAdmin, loading, refreshUserProfile };
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,6 +1,6 @@
 // DOSYA: data/achievements.ts
 
-import { RadioTower, MessagesSquare, Milestone, Award, Badge, Medal, Ghost, Coffee, Bot, Bomb, Crown } from "lucide-react";
+import { RadioTower, MessagesSquare, Milestone, Award, Badge, Medal, Ghost, Coffee, Bot, Bomb, Crown, Shield, Users, Trophy } from "lucide-react";
 import React from 'react';
 
 export interface Achievement {
@@ -88,6 +88,39 @@ export const achievementsList: Achievement[] = [
         description: 'Tüm başarımların kilidini açtın. Bu evrenin her köşesini keşfettin. Sana saygımız sonsuz, Efsane.',
         icon: Medal,
         color: 'from-yellow-400 via-red-500 to-purple-500', // Gradyan için özel
+        tier: 'Zor'
+    },
+    // === Klan Başarımları ===
+    {
+        id: 'clan_founder',
+        name: 'Klan Kurucusu',
+        description: 'İlk kez bir klan kurdun. Gücünü topluluğunda buldun.',
+        icon: Crown,
+        color: 'text-yellow-400',
+        tier: 'Orta'
+    },
+    {
+        id: 'clan_leader',
+        name: 'Klan Lideri',
+        description: 'Bir klanın lideri oldun. Topluluğu yönetme yeteneğini kanıtladın.',
+        icon: Shield,
+        color: 'text-blue-400',
+        tier: 'Orta'
+    },
+    {
+        id: 'clan_loyalty',
+        name: 'Klan Sadakati',
+        description: 'Aynı klanın üyesi olarak 30 gün geçirdin. Sadakatini kanıtladın.',
+        icon: Users,
+        color: 'text-green-400',
+        tier: 'Zor'
+    },
+    {
+        id: 'clan_champion',
+        name: 'Klan Şampiyonu',
+        description: 'Klanın en yüksek skoruna sahip üyesi oldun. Klanın gururu sensin!',
+        icon: Trophy,
+        color: 'text-purple-400',
         tier: 'Zor'
     }
 ];

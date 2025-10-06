@@ -511,6 +511,33 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: ['HTML5', 'Zeka', 'Bulmaca', 'Fizik', 'Sevimli', 'Strateji', 'Klasik'],
   controls: 'Mouse: İpleri kesmek için sürükle.',
 },
+{
+  id: 'backrooms',
+  title: 'BACKROOMS',
+  description: 'Sonsuz sarı odalarda kayboldun. Vızıldayan ışıkların altında yalnız değilsin. Çıkışı bulmaya çalış ama dikkatli ol, duvarların gözleri olabilir.',
+  type: GameType.HTML5,
+  url: 'https://beamish-chaja-5ce738.netlify.app/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(4).jpg',
+  
+  category: 'Korku',
+  tags: ['HTML5', 'Korku', 'Hayatta Kalma', 'Labirent', 'Gerilim', 'Keşif'],
+  controls: 'WASD: Hareket, Mouse: Etrafa bak, Shift: Koş, E: Etkileşim',
+},
+{
+  id: 'awesometanks2',
+  title: 'AWESOME TANKS 2',
+  description: 'Savaş alanına gir, tankını yükselt ve düşmanlarını yok et. Her seviyede daha da güçlen. Patlamaya hazır mısın? -FaTaLRhymeR37',
+  type: GameType.HTML5,
+  url: 'https://peppy-begonia-b67b48.netlify.app/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/awstanks2.png',
+  
+  category: 'Aksiyon',
+  tags: ['HTML5', 'Aksiyon', 'Savaş', 'Tank', 'Vurma', 'Yükseltme', 'Arena'],
+  controls: 'WASD/Ok Tuşları: Hareket, Mouse: Nişan al ve ateş et.',
+},
+
 
 
 

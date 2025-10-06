@@ -13,7 +13,8 @@ type AchievementEvent =
   | { type: 'MESSAGE_SENT', payload: { updatedProfile: UserProfileData } }
   | { type: 'GAME_PLAYED', payload: { updatedProfile: UserProfileData } }
   | { type: 'SCORE_UPDATED', payload: { updatedProfile: UserProfileData } }
-  | { type: 'SPECIAL_ACTION', payload: { actionId: 'visited_creator_page' } };
+  | { type: 'SPECIAL_ACTION', payload: { actionId: 'visited_creator_page' } }
+  | { type: 'CLAN_ACTION', payload: { action: 'created' | 'joined' | 'promoted' | 'transferred' } };
 
 
 /**
@@ -60,6 +61,10 @@ export const checkAndGrantAchievements = (userProfile: UserProfileData, event: A
       if (event.payload.actionId === 'visited_creator_page' && !hasAchievement('scholar_of_the_code')) {
         grantAchievement(uid, 'scholar_of_the_code');
       }
+      break;
+      
+    case 'CLAN_ACTION':
+      checkClanAchievements(userProfile, event.payload.action);
       break;
   }
   
@@ -123,4 +128,28 @@ const checkAllRetroactive = (userProfile: UserProfileData) => {
     checkMessageAchievements(userProfile);
     checkGameAchievements(userProfile);
     // Özel başarımlar geriye dönük kontrol edilmez (örn: scholar_of_the_code)
+};
+
+/**
+ * KLAN BAŞARIMLARI: Klan ile ilgili başarımları kontrol eder.
+ * @param userProfile Kontrol edilecek kullanıcı profili
+ * @param action Gerçekleşen klan eylemi
+ */
+const checkClanAchievements = (userProfile: UserProfileData, action: 'created' | 'joined' | 'promoted' | 'transferred') => {
+    const { uid, achievements = [], clanRole } = userProfile;
+    const has = (id: string) => achievements.includes(id);
+
+    // Klan kurucusu başarımı
+    if (action === 'created' && !has('clan_founder')) {
+        grantAchievement(uid, 'clan_founder');
+    }
+    
+    // Klan lideri başarımı
+    if ((action === 'promoted' || action === 'transferred') && clanRole === 'leader' && !has('clan_leader')) {
+        grantAchievement(uid, 'clan_leader');
+    }
+    
+    // Klan sadakati başarımı - bu daha karmaşık bir kontrol gerektirir
+    // Şimdilik sadece klan üyesi olma durumu için basit bir kontrol yapıyoruz
+    // Gerçek uygulamada, kullanıcının klanda geçirdiği süreyi takip etmek gerekir
 };

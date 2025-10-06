@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, lazy, Suspense } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { games } from '../data/games';
 import { GameType } from '../types';
 import { ArrowLeft, Gamepad2, Fullscreen, Info, Play, LoaderCircle } from 'lucide-react';
@@ -9,6 +9,7 @@ import GameSplashScreen from '../components/GameSplashScreen';
 
 const RufflePlayer = lazy(() => import('../components/RufflePlayer'));
 const CommentSection = lazy(() => import('../components/CommentSection'));
+const GameFeedbackPopup = lazy(() => import('../components/GameFeedbackPopup'));
 
 const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
     <div className="flex flex-col items-center justify-center text-center p-8 text-cyber-gray h-full">
@@ -19,6 +20,7 @@ const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
 
 const GamePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
+    const navigate = useNavigate();
     const game = useMemo(() => games.find((g) => g.id === id), [id]);
 
     const gameContainerRef = useRef<HTMLDivElement>(null);
@@ -27,6 +29,8 @@ const GamePage: React.FC = () => {
     const [gameStarted, setGameStarted] = useState(false);
     const [loadingProgress, setLoadingProgress] = useState(0);
     const [showSplashScreen, setShowSplashScreen] = useState(false);
+    const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
+    const [canNavigate, setCanNavigate] = useState(true);
     
     // ========================================================================
     // YENİ EKLENEN KOD: HTML5 OYUNLARI İÇİN SAHTE YÜKLEME SİMÜLASYONU
@@ -77,6 +81,81 @@ const GamePage: React.FC = () => {
         }
     }, []);
 
+    // Check if user has opted out of feedback for this game
+    const shouldShowFeedback = useCallback(() => {
+        if (!gameStarted || !id) return false;
+        
+        // Check global preference
+        const globalPreference = localStorage.getItem('gameFeedbackPreference');
+        if (globalPreference === 'dontShow') return false;
+        
+        // Check game-specific preference
+        const dontShowGames = JSON.parse(localStorage.getItem('dontShowFeedbackForGames') || '[]');
+        if (dontShowGames.includes(id)) return false;
+        
+        return true;
+    }, [gameStarted, id]);
+
+    // Handle navigation away from the game page
+    const handleNavigationAway = useCallback((e: React.MouseEvent) => {
+        // Only show feedback popup if user has played a game
+        if (gameStarted && canNavigate) {
+            if (shouldShowFeedback()) {
+                e.preventDefault();
+                setShowFeedbackPopup(true);
+                setCanNavigate(false);
+                return false;
+            }
+        }
+        return true;
+    }, [gameStarted, canNavigate, shouldShowFeedback]);
+
+    // Add event listener for beforeunload
+    useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            // Show feedback popup when user tries to leave the page after playing a game
+            if (gameStarted && canNavigate) {
+                if (shouldShowFeedback()) {
+                    e.preventDefault();
+                    e.returnValue = ''; // Required for Chrome
+                    setShowFeedbackPopup(true);
+                    setCanNavigate(false);
+                    return ''; // Required for other browsers
+                }
+            }
+        };
+
+        // Add event listener for when user tries to leave the page
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [gameStarted, canNavigate, shouldShowFeedback]);
+
+    // Handle browser back/forward navigation
+    useEffect(() => {
+        const handlePopState = () => {
+            if (gameStarted && canNavigate) {
+                if (shouldShowFeedback()) {
+                    // Prevent default navigation
+                    window.history.pushState(null, '', window.location.href);
+                    setShowFeedbackPopup(true);
+                    setCanNavigate(false);
+                }
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        
+        // Push initial state to enable back button detection
+        window.history.pushState(null, '', window.location.href);
+        
+        return () => {
+            window.removeEventListener('popstate', handlePopState);
+        };
+    }, [gameStarted, canNavigate, shouldShowFeedback]);
+
     if (!game) {
         return (
             <div className="text-center py-20">
@@ -101,7 +180,11 @@ const GamePage: React.FC = () => {
             />
 
             <div className="max-w-7xl mx-auto px-4">
-                <Link to="/" className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple my-6 transition-colors">
+                <Link 
+                    to="/" 
+                    className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple my-6 transition-colors"
+                    onClick={handleNavigationAway}
+                >
                     <ArrowLeft size={20} />
                     <span>Diğer Simülasyonlara Dön</span>
                 </Link>
@@ -168,6 +251,25 @@ const GamePage: React.FC = () => {
                 </Suspense>
             </div>
             </div>
+            
+            <Suspense fallback={null}>
+                <GameFeedbackPopup 
+                    isOpen={showFeedbackPopup}
+                    onClose={() => {
+                        setShowFeedbackPopup(false);
+                        setCanNavigate(true);
+                    }}
+                    onFeedbackSent={() => {
+                        // Allow navigation after feedback is sent
+                        setTimeout(() => {
+                            setCanNavigate(true);
+                            setShowFeedbackPopup(false);
+                        }, 2000);
+                    }}
+                    gameId={game.id}
+                    gameTitle={game.title}
+                />
+            </Suspense>
         </>
     );
 };

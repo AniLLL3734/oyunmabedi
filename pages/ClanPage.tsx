@@ -6,9 +6,10 @@ import { db } from '../src/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
-import { Users, ShieldPlus, Search, Trophy, Star, X } from 'lucide-react';
+import { Users, ShieldPlus, Search, Trophy, Star, X, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { clanEmblems, getClanIconComponent } from '../components/ClanIcons';
+import { checkAndGrantAchievements } from '../src/utils/achievementService';
 
 // =============================================================================
 // TYPESCRIPT VERİ TİPLERİ
@@ -21,6 +22,7 @@ interface Clan {
   totalScore: number;
   memberCount: number;
   level: number;
+  experience: number;
   leaderId: string;
   createdAt: any;
 }
@@ -60,6 +62,7 @@ const ClanCard: React.FC<{ clan: Clan; userClanId?: string | null; onJoin: (clan
           <p className="flex items-center gap-2"><Users size={16} /> Üyeler: {clan.memberCount}</p>
           <p className="flex items-center gap-2"><Trophy size={16} /> Toplam Skor: {clan.totalScore.toLocaleString()}</p>
           <p className="flex items-center gap-2"><Star size={16} /> Seviye: {clan.level}</p>
+          <p className="flex items-center gap-2"><Zap size={16} /> Tecrübe: {clan.experience?.toLocaleString() || '0'}</p>
         </div>
       </div>
       {isMember ? (
@@ -222,6 +225,7 @@ const ClansPage: React.FC = () => {
         totalScore: userProfile.score || 0,
         memberCount: 1,
         level: 1,
+        experience: 0,
         leaderId: user.uid,
         createdAt: serverTimestamp(),
         members: [user.uid]
@@ -235,6 +239,11 @@ const ClansPage: React.FC = () => {
       batch.update(userRef, { clanId: clanRef.id, clanRole: 'leader' });
       
       await batch.commit();
+      
+      // Trigger clan founder achievement
+      if (userProfile) {
+        checkAndGrantAchievements(userProfile, { type: 'CLAN_ACTION', payload: { action: 'created' } });
+      }
       
       setClans(prev => [{ id: clanRef.id, ...newClanData } as Clan, ...prev]);
 
@@ -270,7 +279,7 @@ const ClansPage: React.FC = () => {
       });
 
       const userRef = doc(db, 'users', user.uid);
-      const clanRole = userProfile.role === 'admin' ? 'co-leader' : 'member';
+      const clanRole = 'member';
       batch.update(userRef, { clanId, clanRole });
 
       await batch.commit();
