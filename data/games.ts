@@ -555,7 +555,7 @@ SPACE: Hızlanmak için basılı tut.`,
   title: 'CHROME DINO',
   description: 'İnternet yok mu? Sorun değil! T-Rex ile kaktüslerin üzerinden atla, engellerden kaç ve en yüksek skoru hedefle. Bu klasik sonsuz koşu oyununda ne kadar ileri gidebilirsin? -FaTaLRhymeR37',
   type: GameType.HTML5,
-  url: 'https://spontaneous-kitsune-5c1bc2.netlify.app/',
+  url: 'https://stunning-cassata-487c6f.netlify.app/',
   
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(3).png',
   
