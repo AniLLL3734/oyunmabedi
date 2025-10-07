@@ -8,8 +8,17 @@ import { collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp, do
 import { db } from '../src/firebase';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
-// YENİ: Search ikonu eklendi
-import { SendHorizonal, MessageSquare, CheckCircle, TrendingUp, Compass, Sparkles, X, Mail, AlertTriangle, UserPlus, LogIn, ShoppingBag, Crown, Star, Search } from 'lucide-react';
+// YENİ: Megaphone (anons) ikonu eklendi, MessageSquare anlık olarak bu bileşenden kaldırıldı
+import { SendHorizonal, CheckCircle, TrendingUp, Compass, Sparkles, X, Mail, AlertTriangle, UserPlus, LogIn, ShoppingBag, Crown, Star, Search, Megaphone, MessageSquare } from 'lucide-react';
+
+// AdminNote interface tanımı (değişiklik yok)
+interface AdminNote {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: any;
+  updatedAt: any;
+}
 
 const shuffleArray = (array: Game[]): Game[] => {
   const shuffled = [...array];
@@ -26,6 +35,9 @@ const HomePage: React.FC = () => {
   const [mostPlayed, setMostPlayed] = useState<(Game & { playCount: number })[]>([]);
   const [newlyAdded, setNewlyAdded] = useState<Game[]>([]);
   const [shuffledGames, setShuffledGames] = useState<Game[]>([]);
+  
+  // YENİ: Sadece tek ve en güncel admin notunu tutmak için state
+  const [adminNote, setAdminNote] = useState<AdminNote | null>(null);
   
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -58,6 +70,24 @@ const HomePage: React.FC = () => {
     setShuffledGames(shuffleArray(games));
     fetchGameLists();
     
+    // YENİ: Sadece en son admin notunu verimli bir şekilde çekme
+    const fetchAdminNote = async () => {
+      try {
+        const q = query(collection(db, 'admin_notes'), orderBy('createdAt', 'desc'), limit(1));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+          const latestNoteDoc = querySnapshot.docs[0];
+          setAdminNote({ id: latestNoteDoc.id, ...latestNoteDoc.data() } as AdminNote);
+        } else {
+          setAdminNote(null); // Not bulunamazsa state'i temizle
+        }
+      } catch (error) {
+        console.error("Admin notu çekilirken hata:", error);
+      }
+    };
+    
+    fetchAdminNote();
+    
     // Giriş yapmayan kullanıcılar için uyarı göster
     if (!user) {
       const timer = setTimeout(() => {
@@ -68,7 +98,7 @@ const HomePage: React.FC = () => {
     }
   }, [fetchGameLists, user]);
 
-  // Bildirim Kontrolü useEffect'i - YÖNTEM 2 AKTİF
+  // Bildirim Kontrolü useEffect'i
   useEffect(() => {
     if (user) {
       const checkNotifications = async () => {
@@ -171,8 +201,45 @@ const HomePage: React.FC = () => {
             <SearchBar onSearch={setSearchQuery} />
         </div>
 
-        {/* YENİ: ARAMA SONUÇLARI BÖLÜMÜ */}
-        {/* Sadece kullanıcı arama yapıyorsa bu bölümü göster */}
+        {/* ======================================================================= */}
+        {/* YENİ: HAVALI VE ANİMASYONLU ADMİN NOTU ÇERÇEVESİ                      */}
+        {/* ======================================================================= */}
+        <AnimatePresence>
+          {adminNote && (
+            <motion.section
+              layout
+              initial={{ opacity: 0, y: -50, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+              className="mb-16 p-6 md:p-8 rounded-2xl border-2 border-electric-purple/50 bg-gradient-to-br from-dark-gray via-space-black to-dark-gray shadow-lg shadow-electric-purple/20 overflow-hidden relative"
+            >
+              {/* Arkaplan Işık Efekti */}
+              <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-64 h-64 bg-electric-purple/30 rounded-full blur-3xl opacity-50"></div>
+              
+              <div className="relative z-10">
+                <div className="flex flex-col sm:flex-row items-start gap-4 mb-4">
+                  <div className="p-3 bg-electric-purple/20 rounded-full border border-electric-purple/30">
+                    <Megaphone className="text-electric-purple animate-pulse" size={28} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-heading text-ghost-white tracking-wide">Sessizliği Bozan Bir Not</h2>
+                     <span className="text-xs text-cyber-gray">
+                      {adminNote.createdAt?.toDate().toLocaleDateString('tr-TR', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="mt-4 border-t border-cyber-gray/20 pt-4">
+                  <h3 className="text-xl font-bold text-electric-purple mb-2">{adminNote.title}</h3>
+                  <p className="text-cyber-gray whitespace-pre-wrap text-base leading-relaxed">{adminNote.content}</p>
+                </div>
+              </div>
+            </motion.section>
+          )}
+        </AnimatePresence>
+
+        {/* ARAMA SONUÇLARI BÖLÜMÜ */}
         {isSearching && (
             <section className="mb-16">
                 <h2 className="text-3xl font-heading mb-6 border-l-4 border-electric-purple pl-4 flex items-center gap-2"><Search /> Arama Sonuçları</h2>
@@ -192,7 +259,7 @@ const HomePage: React.FC = () => {
             </section>
         )}
 
-        {/* GÜNCELLEME: Aşağıdaki bölümleri sadece arama yapılmadığında göster */}
+        {/* Sadece arama yapılmadığında gösterilecek bölümler */}
         {!isSearching && (
             <>
                 {mostPlayed.length > 0 && (
@@ -267,7 +334,6 @@ const HomePage: React.FC = () => {
             )}
         </section>
 
-        {/* GÜNCELLEME: Tüm Simülasyonlar bölümünü de sadece arama yapılmadığında göster */}
         {!isSearching && (
             <section>
                 <div className="flex flex-wrap items-center justify-between mb-6">
