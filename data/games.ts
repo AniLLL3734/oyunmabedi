@@ -537,6 +537,32 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: ['HTML5', 'Aksiyon', 'Savaş', 'Tank', 'Vurma', 'Yükseltme', 'Arena'],
   controls: 'WASD/Ok Tuşları: Hareket, Mouse: Nişan al ve ateş et.',
 },
+{
+  id: 'ovo',
+  title: 'OvO',
+  description: 'Hız, hassasiyet ve parkur yeteneklerini birleştir. Her bölüm daha da zorlaşan bu platform oyununda bayrağa ulaşabilir misin? -FaTaLRhymeR37',
+  type: GameType.HTML5,
+  url: 'https://legendary-capybara-30b443.netlify.app/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/ovo.jpg',
+  
+  category: 'Platform',
+  tags: ['HTML5', 'Platform', 'Parkur', 'Beceri', 'Hızlı', 'Zor', 'Çöp Adam'],
+  controls: 'Ok Tuşları/WASD: Hareket et, Yukarı Ok: Zıpla, Aşağı Ok: Kay/Yere Vur.',
+},
+{
+  id: 'chromedino',
+  title: 'CHROME DINO',
+  description: 'İnternet yok mu? Sorun değil! T-Rex ile kaktüslerin üzerinden atla, engellerden kaç ve en yüksek skoru hedefle. Bu klasik sonsuz koşu oyununda ne kadar ileri gidebilirsin? -FaTaLRhymeR37',
+  type: GameType.HTML5,
+  url: 'https://spontaneous-kitsune-5c1bc2.netlify.app/',
+  
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(3).png',
+  
+  category: 'Arcade',
+  tags: ['HTML5', 'Arcade', 'Sonsuz Koşu', 'Dinozor', 'Klasik', 'Skor', 'Basit'],
+  controls: 'Space/Yukarı Ok: Zıpla, Aşağı Ok: Eğil.',
+},
 
 
 
