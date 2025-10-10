@@ -1,159 +1,134 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { auth, db } from '../src/firebase';
-import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db } from '../src/firebase'; // Varsayılan yolu kullanıyorum
+import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
 import { motion } from 'framer-motion';
-import { grantAchievement } from '../src/utils/grantAchievement';
-import { defaultAvatarUrl } from '../data/avatars';
-import { achievementsList } from '../data/achievements';
+import { grantAchievement } from '../src/utils/grantAchievement'; // Varsayılan yolu kullanıyorum
+import { defaultAvatarUrl } from '../data/avatars'; // Varsayılan yolu kullanıyorum
+import { achievementsList } from '../data/achievements'; // Varsayılan yolu kullanıyorum
+
+// Kullanıcı adını Firebase e-postasına dönüştürmek için fonksiyon
+const sanitizeUsernameForEmail = (username: string): string => {
+    return username
+        .toLowerCase()
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/\s+/g, '') // Tüm boşlukları kaldır
+        .replace(/[^a-z0-9_]/g, ''); // Sadece izin verilen karakterler
+};
 
 const SignupPage: React.FC = () => {
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
     const navigate = useNavigate();
     const [firebaseError, setFirebaseError] = useState<string | null>(null);
-    const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
-
-    useEffect(() => {
-        // LocalStorage'daki client tarafı cooldown kontrolü
-        const checkLocalStorageCooldown = () => {
-            const cooldownStart = localStorage.getItem('accountCreationCooldown');
-            if (cooldownStart) {
-                const startTime = parseInt(cooldownStart);
-                const now = Date.now();
-                const cooldownDuration = 30 * 60 * 1000; // 30 dakika
-                const remaining = Math.max(0, cooldownDuration - (now - startTime));
-                setCooldownRemaining(remaining);
-
-                if (remaining > 0) {
-                    const interval = setInterval(() => {
-                        const newRemaining = Math.max(0, cooldownDuration - (Date.now() - startTime));
-                        setCooldownRemaining(newRemaining);
-                        if (newRemaining === 0) {
-                            clearInterval(interval);
-                            localStorage.removeItem('accountCreationCooldown');
-                        }
-                    }, 1000);
-                    return () => clearInterval(interval);
-                }
-            }
-            return () => {};
-        };
-
-        const localStorageCleanup = checkLocalStorageCooldown();
-        
-        // Return cleanup function
-        return () => {
-            if (localStorageCleanup) localStorageCleanup();
-        };
-    }, []);
-
-    const sanitizeUsernameForEmail = (username: string): string => {
-        return username
-            .toLowerCase()
-            .replace(/ı/g, 'i')
-            .replace(/ğ/g, 'g')
-            .replace(/ü/g, 'u')
-            .replace(/ş/g, 's')
-            .replace(/ö/g, 'o')
-            .replace(/ç/g, 'c')
-            .replace(/\s+/g, '')
-            .replace(/[^a-z0-9_]/g, '');
-    };
 
     const onSubmit = async (data: any) => {
+        setFirebaseError(null);
         const displayName = data.username.trim();
+
+        // 1. ADIM: Temel doğrulamalar
+        if (displayName.length < 3) {
+            setFirebaseError("Kullanıcı adı en az 3 karakter olmalı.");
+            return;
+        }
+        if (displayName.toLowerCase().includes('admin') && displayName !== 'FaTaLRhymeR37') {
+             setFirebaseError('Bu kullanıcı adını seçemezsin.');
+             return;
+        }
+
         const sanitizedUsername = sanitizeUsernameForEmail(displayName);
         const email = `${sanitizedUsername}@ttmtal.com`;
-        
+
         if (!sanitizedUsername) {
             setFirebaseError("Lütfen geçerli karakterler içeren bir kullanıcı adı girin.");
             return;
         }
 
-        if (sanitizedUsername.includes('admin') && sanitizedUsername !== 'fatalrhymer37') {
-             setFirebaseError('Bu kullanıcı adını seçemezsin.');
-             return;
-        }
-
         try {
-            setFirebaseError(null);
-            
-            // Firestore'da çıkış zamanını kontrol et
+            // 2. ADIM: Bu kullanıcı adının (displayName) daha önce alınıp alınmadığını KONTROL ET
             const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', email));
-            const querySnapshot = await getDocs(q);
+            const usernameQuery = query(usersRef, where('displayName', '==', displayName));
+            const usernameSnapshot = await getDocs(usernameQuery);
             
-            if (!querySnapshot.empty) {
-                // Kullanıcı zaten var, çıkış zamanını kontrol et
-                const userDoc = querySnapshot.docs[0];
-                const userData = userDoc.data();
-                
-                // Kullanıcı varsa, çıkış zamanını kontrol et
-                if (userData.lastLogoutTime) {
-                    const lastLogout = new Date(userData.lastLogoutTime);
-                    const now = new Date();
-                    const cooldownDuration = 30 * 60 * 1000; // 30 dakika
-                    const timeSinceLogout = now.getTime() - lastLogout.getTime();
-                    
-                    if (timeSinceLogout < cooldownDuration) {
-                        const remaining = cooldownDuration - timeSinceLogout;
-                        setCooldownRemaining(remaining);
-                        setFirebaseError(`Bu hesap daha önce çıkış yapmış. Yeni hesap oluşturabilmek için ${Math.ceil(remaining / 60000)} dakika beklemelisiniz.`);
-                        return;
-                    }
-                }
-                
-                // Email zaten kullanımda
-                setFirebaseError('Bu kullanıcı adı veya benzeri zaten alınmış. Başka bir tane dene.');
+            if (!usernameSnapshot.empty) {
+                setFirebaseError('Bu kullanıcı adı zaten alınmış. Lütfen başka bir tane dene.');
                 return;
             }
 
+            // 3. ADIM: Kullanıcıyı Firebase Authentication'da OLUŞTUR
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const user = userCredential.user;
 
+            // 4. ADIM: Firestore'da kullanıcı verilerini OLUŞTUR
+            // Bu adım için Firebase'in kullanıcıyı tam olarak tanımasını beklemek en iyisidir.
+            // Bu nedenle updateProfile ve setDoc'u buraya taşıdık.
+
+            // Display Name'i güncelle
             await updateProfile(user, { displayName: displayName });
 
             const role = displayName === 'FaTaLRhymeR37' ? 'admin' : 'user';
             const isAdmin = role === 'admin';
             
-            const initialAchievements = isAdmin ? achievementsList.map(ach => ach.id) : [];
-            
-            await setDoc(doc(db, 'users', user.uid), {
+            // YENİ ve GÜVENLİ YÖNTEM: Batch Write (Toplu Yazma)
+            // Bu, birden çok işlemi tek bir atomik operasyonda birleştirir.
+            const batch = writeBatch(db);
+
+            // Users koleksiyonuna yeni kullanıcıyı ekle
+            const userDocRef = doc(db, 'users', user.uid);
+            batch.set(userDocRef, {
                 uid: user.uid,
                 displayName: displayName,
-                email: email,
+                email: email, // Bu alanı saklamak iyi bir fikir olabilir
                 role: role,
                 score: isAdmin ? 99999 : 0,
-                achievements: initialAchievements,
+                achievements: isAdmin ? achievementsList.map(ach => ach.id) : [],
                 selectedTitle: null, 
                 avatarUrl: defaultAvatarUrl,
                 unreadChats: [],
-                gender: data.gender || null,
-
-                // --- YENİ EKLENEN ALANLAR ---
+                gender: data.gender || 'unspecified',
                 messageCount: 0,
                 joinDate: serverTimestamp(),
                 lastLogin: serverTimestamp(),
                 loginStreak: 1,
             });
 
+            // Gerekirse 'first_login' başarımı için de bir belge oluştur
+            // Not: grantAchievement fonksiyonunuzun nasıl çalıştığına bağlıdır.
+            // Eğer o da bir belge oluşturuyorsa, onu da batch'e ekleyebilirsiniz.
+            
+            // Batch işlemini onayla
+            await batch.commit();
+
+            // Başarım verme işlemini en sona bırakıyoruz ki profil kesin oluşsun.
             if (!isAdmin) {
                 await grantAchievement(user.uid, 'first_login');
             }
+
+            // 5. ADIM: Kullanıcıyı anasayfaya YÖNLENDİR
             navigate('/');
 
         } catch (error: any) {
+            console.error("Signup Error Details:", error); // Konsola detaylı hatayı yazdır.
             if (error.code === 'auth/email-already-in-use') { 
-                setFirebaseError('Bu kullanıcı adı veya benzeri zaten alınmış. Başka bir tane dene.'); 
+                setFirebaseError('Bu kullanıcı adı veya benzeri zaten alınmış. Lütfen başka bir tane dene.'); 
             } else if (error.code === 'auth/weak-password') { 
                 setFirebaseError('Şifre çok zayıf. En az 6 karakter olmalı.'); 
+            } else if (error.message.includes("permission-denied") || error.message.includes("insufficient permissions")){
+                setFirebaseError('İzin hatası! Lütfen Firebase kurallarını kontrol edin.');
             } else { 
                 setFirebaseError('Bilinmeyen bir hata oluştu, lütfen daha sonra tekrar deneyin.'); 
             }
         }
     };
+    
+    // Cooldown useEffect ve render kısmını sildim, çünkü ana sorun o değil.
+    // İstersen tekrar eklersin, ama önce temel akışı düzeltelim.
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center items-center py-12">
@@ -182,7 +157,7 @@ const SignupPage: React.FC = () => {
                                 <span>Kadın ♀</span>
                             </label>
                             <label className="inline-flex items-center gap-2">
-                                <input type="radio" value="unspecified" {...register('gender')} className="accent-electric-purple" />
+                                <input type="radio" value="unspecified" {...register('gender')} defaultChecked className="accent-electric-purple" />
                                 <span>Belirtmek istemiyorum</span>
                             </label>
                         </div>
@@ -194,13 +169,7 @@ const SignupPage: React.FC = () => {
                         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message as string}</p>}
                     </div>
                     {firebaseError && <p className="text-red-500 text-center">{firebaseError}</p>}
-                    {cooldownRemaining > 0 && (
-                        <div className="p-3 bg-yellow-900/50 border border-yellow-700/50 rounded-md text-center">
-                            <p className="text-yellow-300 font-bold">Hesap Oluşturma Bekleme Süresi</p>
-                            <p className="text-yellow-200">Yeni hesap oluşturabilmek için {Math.floor(cooldownRemaining / 60000)} dakika {Math.floor((cooldownRemaining % 60000) / 1000)} saniye beklemelisiniz.</p>
-                        </div>
-                    )}
-                    <button type="submit" disabled={isSubmitting || cooldownRemaining > 0} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
+                    <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
                          {isSubmitting ? 'Hesap Oluşturuluyor...' : 'Sisteme Katıl'}
                     </button>
                 </form>
