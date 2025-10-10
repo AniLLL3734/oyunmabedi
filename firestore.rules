@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿rules_version = '2';
+﻿﻿rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -14,31 +14,29 @@ service cloud.firestore {
     }
 
     // --- TEMEL ERİŞİM ---
-    // Oturum açan herkes her şeyi okuyabilir. Bu, okuma hatalarını tamamen ortadan kaldırır.
+    // Oturum açan herkes her şeyi okuyabilir. Admin bu kapsama zaten giriyor.
     match /{document=**} {
       allow read: if isAuthenticated();
     }
 
     // === USERS KOLEKSİYONU ===
     match /users/{userId} {
-      // Her kullanıcı kendi profilini oluşturabilir ve güncelleyebilir (rolü hariç).
-      // Admin her şeyi güncelleyebilir.
-      allow write: if (request.auth.uid == userId && !(request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))) || isAdmin();
+      allow create: if request.auth.uid == userId;
+      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+                      || isAdmin();
+      allow delete: if isAdmin();
     }
     
     // === GAMES & YORUMLAR ===
     match /games/{gameId} {
-      allow write: if isAdmin(); // Sadece admin oyun ekleyip silebilir
+      allow write: if isAdmin();
       match /comments/{commentId} {
-        // Oturum açan herkes yorum yapabilir.
-        // Yorum sahibi veya admin silebilir.
         allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
         allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
       }
     }
 
     // --- GERİ BİLDİRİM & RAPORLAR ---
-    // Sadece admin okuyabilir veya silebilir.
     match /feedback/{docId} {
       allow create: if isAuthenticated();
       allow write: if isAdmin();
@@ -51,73 +49,83 @@ service cloud.firestore {
     // --- GENEL SOHBET & AYARLAR ---
     match /messages/{messageId} {
       allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid || isAdmin();
+      allow update: if isAuthenticated();
       allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
     }
     match /chat_meta/{docId} {
-      allow write: if isAdmin(); // Sohbet ayarlarını sadece admin değiştirebilir
+      allow write: if isAdmin();
     }
-
-    // =============================================================
-    //       SORUNU ÇÖZECEK BASİTLEŞTİRİLMİŞ DM VE GRUP KURALLARI
-    // =============================================================
 
     // --- KULLANICI-ADMİN DM SİSTEMİ (chats) ---
     match /chats/{chatId} {
-      // Odayı, admin VEYA katılımcılardan biri oluşturabilir/güncelleyebilir.
       allow write: if isAdmin() || (isAuthenticated() && request.auth.uid in chatId.split('_'));
-
       match /messages/{messageId} {
-        // Mesajı, admin VEYA katılımcılardan biri oluşturabilir.
         allow create: if isAdmin() || (isAuthenticated() && request.auth.uid in chatId.split('_'));
       }
     }
     
     // --- ÖZEL GRUP SOHBETLERİ (private_chat_rooms) ---
     match /private_chat_rooms/{roomId} {
-      // Odayı sadece admin oluşturabilir/güncelleyebilir/silebilir.
       allow write: if isAdmin();
-
       match /messages/{messageId} {
-        // Mesajı, admin VEYA katılımcılardan biri oluşturabilir.
+        allow read: if isAdmin() || (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/private_chat_rooms/$(roomId)).data.participants);
         allow create: if isAdmin() || (isAuthenticated() && request.auth.uid in get(/databases/$(database)/documents/private_chat_rooms/$(roomId)).data.participants);
       }
     }
     
     // --- KLAN SİSTEMİ ---
     match /clans/{clanId} {
-      // Klanlara erişim
-      allow read, write: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
       
-      // Klan mesajları - sadece klan üyeleri yazabilir
       match /messages/{messageId} {
-        allow read: if isClanMember(clanId);
+        allow read: if isClanMember(clanId) || isAdmin();
         allow create: if isClanMember(clanId) && request.resource.data.uid == request.auth.uid;
-        allow delete: if isClanMember(clanId) && (request.auth.uid == resource.data.uid || isAdmin());
+        allow delete: if isAdmin() || (isClanMember(clanId) && request.auth.uid == resource.data.uid);
       }
       
-      // Klan aktivite logları - sadece klan üyeleri okuyabilir, sistem yazabilir
       match /activityLog/{logId} {
-        allow read: if isClanMember(clanId);
-        allow create: if isAuthenticated(); // Sistem tarafından oluşturulur
-        allow delete, update: if false; // Loglar silinemez/güncellenemez
+        allow read: if isClanMember(clanId) || isAdmin();
+        allow create: if isAuthenticated();
+        allow write: if isAdmin(); 
+        allow delete: if false; 
       }
       
-      // Klan katılma istekleri - sadece klan liderleri yönetebilir
       match /joinRequests/{requestId} {
-        allow read: if isClanMember(clanId) && 
-                    (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clanRole == 'leader' ||
-                     get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clanRole == 'officer');
-        allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
-        allow delete: if isClanMember(clanId) && 
+        allow read, delete: if isAdmin() || (isClanMember(clanId) && 
                       (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clanRole == 'leader' ||
-                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clanRole == 'officer');
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clanRole == 'officer'));
+        allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
       }
+    }
+    
+    match /archived_clans/{clanId} {
+      allow read, write: if isAdmin();
+      match /activityLog/{logId} {
+        allow read, write: if isAdmin();
+      }
+    }
+
+    // =============================================================
+    //       YENİ EKLENEN KURAL - HATA BUNUN EKSİKLİĞİNDEN KAYNAKLANIYORDU
+    // =============================================================
+    match /admin_notes/{noteId} {
+      // Notlar ana sayfada gösterileceği için tüm doğrulanmış kullanıcılar okuyabilir.
+      allow read: if isAuthenticated();
+      // Notları sadece adminler oluşturabilir, güncelleyebilir ve silebilir.
+      allow write: if isAdmin();
+    }
+    // =============================================================
+
+    // --- CHAT JOIN REQUESTS ---
+    match /chat_join_requests/{requestId} {
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
+      allow read, write: if isAdmin();
     }
 
     // --- DİĞER KOLEKSİYONLAR ---
     match /news/{docId} { allow write: if isAdmin(); }
     match /system/{docId} { allow write: if isAdmin(); }
-
     match /notifications/{notificationId} {
       allow create: if isAdmin();
       allow update, delete: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();

@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore'; // DİKKAT: setDoc import edildi
+import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
 // ==============================================================================
 // GEREKLİ IMPORTLAR
 // ==============================================================================
-import { checkAndGrantAchievements } from '../utils/achievementService'; // Başarım Servisini import et
-import { defaultAvatarUrl } from '../../data/avatars'; // Varsayılan avatarı import et
+import { checkAndGrantAchievements } from '../utils/achievementService';
+import { defaultAvatarUrl } from '../../data/avatars';
 
 export interface UserProfileData {
     uid: string;
@@ -15,12 +15,13 @@ export interface UserProfileData {
     email: string;
     role: 'admin' | 'user';
     score?: number;
-    highestScore?: number;  // En yüksek skoru tutacak yeni alan
+    highestScore?: number;
     bio?: string;
     avatarUrl?: string;
     achievements?: string[];
     clanId?: string;
     clanRole?: 'leader' | 'elder' | 'officer' | 'member';
+    lastLogoutTime?: Date; // Yeni eklenen alan
     [key:string]: any;
 }
 
@@ -30,6 +31,7 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   refreshUserProfile?: () => Promise<void>;
+  signOutAndSetCooldown?: () => Promise<void>; // Yeni eklenen fonksiyon
 }
 
 const AuthContext = createContext<AuthContextType>({ user: null, userProfile: null, isAdmin: false, loading: true });
@@ -47,37 +49,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [userProfile, setUserProfile] = useState<UserProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Not: Presence sistemi artık sadece sohbet sayfasında useChatPresence hook'u ile yönetiliyor
-
   useEffect(() => {
-    // Auth durumu değiştiğinde dinleyici çalışır
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser); // Auth kullanıcısını ayarla
+      setUser(currentUser);
       
       if (currentUser) {
-        // Kullanıcı giriş yaptıysa, gidip Firestore'daki profilini dinlemeye başla
         const userDocRef = doc(db, 'users', currentUser.uid);
         
         const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
             if (docSnap.exists()) {
-                // =====================================================================
-                // 1. MEVCUT KULLANICI GİRİŞ YAPTIĞINDA
-                // =====================================================================
                 const profileData = docSnap.data() as UserProfileData;
-                setUserProfile(profileData); 
-                
-                // KULLANICI GİRİŞ YAPTIĞI ANDA EKSİK BAŞARIMLARINI KONTROL ET!
+                setUserProfile(profileData);
                 checkAndGrantAchievements(profileData, { type: 'USER_LOGIN' });
-
             } else {
-                // =====================================================================
-                // 2. YENİ KULLANICI İLK DEFA GİRİŞ YAPIYORSA
-                // =====================================================================
-                
-                // Admin kontrolü: Eğer email admin email ise, admin rolü ver
                 const isAdminUser = currentUser.email === 'fatalrhymer37@ttmtal.com';
-
-                // Yeni kullanıcı için varsayılan bir profil nesnesi oluştur
                 const newUserProfile: UserProfileData = {
                     uid: currentUser.uid,
                     displayName: isAdminUser ? 'FaTaLRhymeR37' : (currentUser.displayName || `Gezgin#${Math.floor(Math.random() * 9000) + 1000}`),
@@ -115,18 +100,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     language: 'tr'
                 };
 
-                // Asenkron işlemleri yönetmek için IIFE (Immediately Invoked Function Expression) kullan
                 (async () => {
                     try {
-                        // Yeni profili Firestore'a kaydet
                         await setDoc(userDocRef, newUserProfile);
-                        
-                        // YENİ KULLANICI OLAYINI BAŞARIM SERVİSİNE BİLDİR!
                         checkAndGrantAchievements(newUserProfile, { type: 'USER_CREATED' });
-
-                        // Uygulamanın anında tepki vermesi için state'i hemen güncelle
                         setUserProfile(newUserProfile); 
-                        
                     } catch (error) {
                         console.error("Yeni kullanıcı profili oluşturulurken hata oluştu:", error);
                     }
@@ -135,23 +113,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setLoading(false);
         });
 
-        // Component unmount olduğunda Firestore dinleyicisini iptal et
         return () => unsubscribeProfile();
-        
       } else {
-        // Kullanıcı çıkış yaptıysa, tüm verileri sıfırla
         setUserProfile(null);
         setLoading(false);
       }
     });
     
-    // Component unmount olduğunda Auth dinleyicisini iptal et
     return () => unsubscribeAuth();
-  }, []); // Bu useEffect sadece bir kez çalışır.
+  }, []);
+
+  // Yeni eklenen fonksiyon: Çıkış yaparken cooldown süresini başlatır
+  const signOutAndSetCooldown = async () => {
+    if (user) {
+      try {
+        // Kullanıcının Firestore belgesini güncelle
+        const userDocRef = doc(db, 'users', user.uid);
+        await updateDoc(userDocRef, {
+          lastLogoutTime: new Date() // Çıkış zamanını kaydet
+        });
+      } catch (error) {
+        console.error("Çıkış zamanı kaydedilirken hata oluştu:", error);
+      }
+    }
+    
+    // Firebase auth oturumunu kapat
+    await signOut(auth);
+    
+    // LocalStorage'a da çıkış zamanını kaydet (client tarafı için)
+    localStorage.setItem('accountCreationCooldown', Date.now().toString());
+  };
 
   const isAdmin = userProfile?.role === 'admin';
   
-  // Add refreshUserProfile function
   const refreshUserProfile = async () => {
     if (user) {
       const userDocRef = doc(db, 'users', user.uid);
@@ -162,11 +156,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
   
-  const value = { user, userProfile, isAdmin, loading, refreshUserProfile };
+  const value = { user, userProfile, isAdmin, loading, refreshUserProfile, signOutAndSetCooldown };
 
   return (
     <AuthContext.Provider value={value}>
-      {/* Yükleme bitene kadar alt component'leri render etme */}
       {!loading && children}
     </AuthContext.Provider>
   );

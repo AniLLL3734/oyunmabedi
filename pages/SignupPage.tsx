@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore'; // Değişiklik: serverTimestamp import edildi
+import { doc, setDoc, serverTimestamp, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { grantAchievement } from '../src/utils/grantAchievement';
 import { defaultAvatarUrl } from '../data/avatars';
@@ -13,6 +13,41 @@ const SignupPage: React.FC = () => {
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
     const navigate = useNavigate();
     const [firebaseError, setFirebaseError] = useState<string | null>(null);
+    const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
+
+    useEffect(() => {
+        // LocalStorage'daki client tarafı cooldown kontrolü
+        const checkLocalStorageCooldown = () => {
+            const cooldownStart = localStorage.getItem('accountCreationCooldown');
+            if (cooldownStart) {
+                const startTime = parseInt(cooldownStart);
+                const now = Date.now();
+                const cooldownDuration = 30 * 60 * 1000; // 30 dakika
+                const remaining = Math.max(0, cooldownDuration - (now - startTime));
+                setCooldownRemaining(remaining);
+
+                if (remaining > 0) {
+                    const interval = setInterval(() => {
+                        const newRemaining = Math.max(0, cooldownDuration - (Date.now() - startTime));
+                        setCooldownRemaining(newRemaining);
+                        if (newRemaining === 0) {
+                            clearInterval(interval);
+                            localStorage.removeItem('accountCreationCooldown');
+                        }
+                    }, 1000);
+                    return () => clearInterval(interval);
+                }
+            }
+            return () => {};
+        };
+
+        const localStorageCleanup = checkLocalStorageCooldown();
+        
+        // Return cleanup function
+        return () => {
+            if (localStorageCleanup) localStorageCleanup();
+        };
+    }, []);
 
     const sanitizeUsernameForEmail = (username: string): string => {
         return username
@@ -44,6 +79,37 @@ const SignupPage: React.FC = () => {
 
         try {
             setFirebaseError(null);
+            
+            // Firestore'da çıkış zamanını kontrol et
+            const usersRef = collection(db, 'users');
+            const q = query(usersRef, where('email', '==', email));
+            const querySnapshot = await getDocs(q);
+            
+            if (!querySnapshot.empty) {
+                // Kullanıcı zaten var, çıkış zamanını kontrol et
+                const userDoc = querySnapshot.docs[0];
+                const userData = userDoc.data();
+                
+                // Kullanıcı varsa, çıkış zamanını kontrol et
+                if (userData.lastLogoutTime) {
+                    const lastLogout = new Date(userData.lastLogoutTime);
+                    const now = new Date();
+                    const cooldownDuration = 30 * 60 * 1000; // 30 dakika
+                    const timeSinceLogout = now.getTime() - lastLogout.getTime();
+                    
+                    if (timeSinceLogout < cooldownDuration) {
+                        const remaining = cooldownDuration - timeSinceLogout;
+                        setCooldownRemaining(remaining);
+                        setFirebaseError(`Bu hesap daha önce çıkış yapmış. Yeni hesap oluşturabilmek için ${Math.ceil(remaining / 60000)} dakika beklemelisiniz.`);
+                        return;
+                    }
+                }
+                
+                // Email zaten kullanımda
+                setFirebaseError('Bu kullanıcı adı veya benzeri zaten alınmış. Başka bir tane dene.');
+                return;
+            }
+
             const userCredential = await createUserWithEmailAndPassword(auth, email, data.password);
             const user = userCredential.user;
 
@@ -128,7 +194,13 @@ const SignupPage: React.FC = () => {
                         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message as string}</p>}
                     </div>
                     {firebaseError && <p className="text-red-500 text-center">{firebaseError}</p>}
-                    <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
+                    {cooldownRemaining > 0 && (
+                        <div className="p-3 bg-yellow-900/50 border border-yellow-700/50 rounded-md text-center">
+                            <p className="text-yellow-300 font-bold">Hesap Oluşturma Bekleme Süresi</p>
+                            <p className="text-yellow-200">Yeni hesap oluşturabilmek için {Math.floor(cooldownRemaining / 60000)} dakika {Math.floor((cooldownRemaining % 60000) / 1000)} saniye beklemelisiniz.</p>
+                        </div>
+                    )}
+                    <button type="submit" disabled={isSubmitting || cooldownRemaining > 0} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
                          {isSubmitting ? 'Hesap Oluşturuluyor...' : 'Sisteme Katıl'}
                     </button>
                 </form>

@@ -81,6 +81,17 @@ const GameFeedbackPopup: React.FC<GameFeedbackPopupProps> = ({ isOpen, onClose, 
     }
   }, [feedbackSent, onClose]);
 
+  // Reset feedback state when popup is closed
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset all states when popup is closed
+      setFeedbackMessage('');
+      setRating(null);
+      setFeedbackSent(false);
+      setFeedbackError('');
+    }
+  }, [isOpen]);
+
   return (
     <AnimatePresence>
       {isOpen && (

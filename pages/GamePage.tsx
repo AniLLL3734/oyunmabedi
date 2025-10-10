@@ -83,16 +83,26 @@ const GamePage: React.FC = () => {
 
     // Check if user has opted out of feedback for this game
     const shouldShowFeedback = useCallback(() => {
-        if (!gameStarted || !id) return false;
+        if (!gameStarted || !id) {
+            console.log('Feedback check - game not started or no ID:', { gameStarted, id });
+            return false;
+        }
         
         // Check global preference
         const globalPreference = localStorage.getItem('gameFeedbackPreference');
-        if (globalPreference === 'dontShow') return false;
+        if (globalPreference === 'dontShow') {
+            console.log('Feedback check - global preference disabled');
+            return false;
+        }
         
         // Check game-specific preference
         const dontShowGames = JSON.parse(localStorage.getItem('dontShowFeedbackForGames') || '[]');
-        if (dontShowGames.includes(id)) return false;
+        if (dontShowGames.includes(id)) {
+            console.log('Feedback check - game specific preference disabled:', id);
+            return false;
+        }
         
+        console.log('Feedback check - should show feedback for game:', id);
         return true;
     }, [gameStarted, id]);
 
@@ -100,8 +110,11 @@ const GamePage: React.FC = () => {
     const handleNavigationAway = useCallback((e: React.MouseEvent) => {
         // Only show feedback popup if user has played a game
         if (gameStarted && canNavigate) {
-            if (shouldShowFeedback()) {
+            const shouldShow = shouldShowFeedback();
+            console.log('Checking if feedback should show:', { gameStarted, canNavigate, shouldShow });
+            if (shouldShow) {
                 e.preventDefault();
+                console.log('Showing feedback popup');
                 setShowFeedbackPopup(true);
                 setCanNavigate(false);
                 return false;
@@ -115,7 +128,9 @@ const GamePage: React.FC = () => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             // Show feedback popup when user tries to leave the page after playing a game
             if (gameStarted && canNavigate) {
-                if (shouldShowFeedback()) {
+                const shouldShow = shouldShowFeedback();
+                console.log('Before unload check:', { gameStarted, canNavigate, shouldShow });
+                if (shouldShow) {
                     e.preventDefault();
                     e.returnValue = ''; // Required for Chrome
                     setShowFeedbackPopup(true);
@@ -137,7 +152,9 @@ const GamePage: React.FC = () => {
     useEffect(() => {
         const handlePopState = () => {
             if (gameStarted && canNavigate) {
-                if (shouldShowFeedback()) {
+                const shouldShow = shouldShowFeedback();
+                console.log('Pop state check:', { gameStarted, canNavigate, shouldShow });
+                if (shouldShow) {
                     // Prevent default navigation
                     window.history.pushState(null, '', window.location.href);
                     setShowFeedbackPopup(true);
@@ -155,6 +172,13 @@ const GamePage: React.FC = () => {
             window.removeEventListener('popstate', handlePopState);
         };
     }, [gameStarted, canNavigate, shouldShowFeedback]);
+
+    // Reset canNavigate when game starts
+    useEffect(() => {
+        if (gameStarted) {
+            setCanNavigate(true);
+        }
+    }, [gameStarted]);
 
     if (!game) {
         return (

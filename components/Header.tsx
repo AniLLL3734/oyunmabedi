@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth, UserProfileData } from '../src/contexts/AuthContext';
-import { signOut } from 'firebase/auth';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit, orderBy, getDocs, writeBatch } from 'firebase/firestore';
 import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X } from 'lucide-react'; 
 import toast from 'react-hot-toast';
 
 const Header: React.FC = () => {
-  const { user, isAdmin, userProfile } = useAuth();
+  const { user, isAdmin, userProfile, signOutAndSetCooldown } = useAuth();
   const navigate = useNavigate();
   
   const [hasUnreadAdminMessage, setHasUnreadAdminMessage] = useState(false);
@@ -19,8 +18,14 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-        await signOut(auth);
-        navigate('/'); 
+        // Yeni fonksiyonu kullanarak çıkış yap ve cooldown süresini başlat
+        if (signOutAndSetCooldown) {
+            await signOutAndSetCooldown();
+        } else {
+            // Geriye dönük uyumluluk için eski yöntem
+            localStorage.setItem('accountCreationCooldown', Date.now().toString());
+        }
+        navigate('/');
     } catch(error) { console.error("Çıkış hatası:", error); }
   };
 
@@ -207,7 +212,7 @@ const Header: React.FC = () => {
         notificationsUnsubscribe();
       }
     };
-  }, [user, isAdmin]); // Bağımlılıklar doğru.
+  }, [user, isAdmin]);
 
   const markNotificationAsRead = async (roomId: string) => {
     if (!user) return;
@@ -288,6 +293,9 @@ const Header: React.FC = () => {
           )}
           
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/all-users" style={({ isActive }) => (isActive ? activeStyle : {})}>Gezginler</NavLink></motion.div></li>
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
+            <MessageSquare size={18} /> Ana Sohbet
+          </NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>Skor Tablosu</NavLink></motion.div></li>
           {user && (
             <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">

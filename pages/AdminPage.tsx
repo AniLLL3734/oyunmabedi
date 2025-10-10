@@ -22,13 +22,14 @@ import {
   serverTimestamp,
   deleteField
 } from 'firebase/firestore';
-import { 
-  LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare, 
-  Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash, 
-  UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag, 
-  AlertTriangle, X, RefreshCw, ThumbsUp, ThumbsDown, ClipboardEdit, Save
+import {
+  LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare,
+  Eye, EyeOff, Activity, TrendingUp, Clock, Zap, Megaphone, Pin, Trash,
+  UserX, Crown, Download, Trophy, Search, User, Plus, Minus, Flag,
+  AlertTriangle, X, RefreshCw, ThumbsUp, ThumbsDown, ClipboardEdit, Save, UserCheck, CheckCircle, Ban
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import EnhancedAdminChatControls from '../components/EnhancedAdminChatControls';
 
 // INTERFACE TANIMLAMALARI
 interface UserData {
@@ -40,6 +41,10 @@ interface UserData {
     score?: number;
     clanId?: string;
     clanRole?: string;
+    messageCount?: number;
+    bannedFromChat?: boolean;
+    joinDate?: any;
+    lastLogin?: any;
 }
 interface GameData {
     id: string;
@@ -70,6 +75,16 @@ interface ReportData {
     status: 'pending' | 'reviewed' | 'resolved';
     reporterName?: string;
     reportedUserName?: string;
+}
+interface ChatJoinRequestData {
+    id: string;
+    uid: string;
+    displayName: string;
+    class: string;
+    schoolNumber: string;
+    reason: string;
+    status: 'pending' | 'approved' | 'rejected';
+    submittedAt: any;
 }
 interface SystemStats {
     activeUsers: number;
@@ -193,9 +208,9 @@ const UserSelectionModal: React.FC<{
 
 // ANA ADMIN PAGE COMPONENT'İ
 const AdminPage: React.FC = () => {
-    const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
+    const { user, userProfile, isAdmin, loading: authLoading, refreshUserProfile } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'privateChat' | 'commands' | 'clan' | 'adminNotes'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatRequests' | 'privateChat' | 'commands' | 'clan' | 'adminNotes'>('dashboard');
     
     // STATE TANIMLAMALARI
     const [users, setUsers] = useState<UserData[]>([]);
@@ -241,6 +256,31 @@ const AdminPage: React.FC = () => {
     const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
     const [editingNoteTitle, setEditingNoteTitle] = useState('');
     const [editingNoteContent, setEditingNoteContent] = useState('');
+
+    // Chat join requests için state
+    const [chatJoinRequests, setChatJoinRequests] = useState<ChatJoinRequestData[]>([]);
+    
+    // YENİ: Gelişmiş admin chat kontrolleri için state'ler
+    const [isEnhancedControlsOpen, setIsEnhancedControlsOpen] = useState(false);
+    const [selectedUserForControls, setSelectedUserForControls] = useState<UserData | null>(null);
+    
+    // Function to open enhanced controls for a user
+    const openEnhancedControls = (user: UserData) => {
+        setSelectedUserForControls(user);
+        setIsEnhancedControlsOpen(true);
+    };
+    
+    // Function to close enhanced controls
+    const closeEnhancedControls = () => {
+        setIsEnhancedControlsOpen(false);
+        setSelectedUserForControls(null);
+    };
+    
+    // Function to handle user updates
+    const handleUserUpdated = () => {
+        // This will trigger a refresh of the user data
+        // We can add more logic here if needed
+    };
     
     // YETKİ KONTROLÜ VE VERİ ÇEKME İŞLEMLERİ
     useEffect(() => {
@@ -317,6 +357,10 @@ const AdminPage: React.FC = () => {
                         const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                         setPrivateChatRooms(rooms);
                      });
+                } else if (view === 'chatRequests') {
+                    const q = query(collection(db, 'chat_join_requests'), orderBy('submittedAt', 'desc'));
+                    const querySnapshot = await getDocs(q);
+                    setChatJoinRequests(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ChatJoinRequestData)));
                 }
             } catch (error) { 
                 console.error("Admin paneli verisi çekilirken hata:", error);
@@ -779,6 +823,44 @@ const AdminPage: React.FC = () => {
             alert('Klan kaldırılırken bir hata oluştu. Detaylar için konsolu kontrol edin.');
         }
     };
+
+    // Chat join request functions
+    const handleApproveRequest = async (requestId: string) => {
+        try {
+            // Get the request data to get the uid
+            const requestDoc = await getDoc(doc(db, 'chat_join_requests', requestId));
+            if (!requestDoc.exists()) return;
+            const requestData = requestDoc.data() as ChatJoinRequestData;
+            const userUid = requestData.uid;
+
+            // Update request status
+            await updateDoc(doc(db, 'chat_join_requests', requestId), { status: 'approved' });
+
+            // Update user's chatAccessGranted
+            const userRef = doc(db, 'users', userUid);
+            await updateDoc(userRef, { chatAccessGranted: true });
+
+            // Refresh user profile if it's the current user
+            if (user?.uid === userUid && refreshUserProfile) {
+                await refreshUserProfile();
+            }
+
+            setChatJoinRequests(chatJoinRequests.map(r => r.id === requestId ? { ...r, status: 'approved' } : r));
+            alert('İstek onaylandı!');
+        } catch (error) {
+            console.error("İstek onaylanırken hata:", error);
+        }
+    };
+
+    const handleRejectRequest = async (requestId: string) => {
+        try {
+            await updateDoc(doc(db, 'chat_join_requests', requestId), { status: 'rejected' });
+            setChatJoinRequests(chatJoinRequests.map(r => r.id === requestId ? { ...r, status: 'rejected' } : r));
+            alert('İstek reddedildi!');
+        } catch (error) {
+            console.error("İstek reddedilirken hata:", error);
+        }
+    };
     
     // RENDER
     if (authLoading) { return <div className="flex justify-center items-center h-screen"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>; }
@@ -786,24 +868,37 @@ const AdminPage: React.FC = () => {
     
     const unreadFeedbackCount = feedback.filter(fb => !fb.isRead).length;
     const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
+    const pendingChatRequestsCount = chatJoinRequests.filter(r => r.status === 'pending').length;
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 md:p-8">
             {isMuteModalOpen && selectedUserForMute && (<MuteModal user={selectedUserForMute} onClose={closeMuteModal} onMute={handleMuteUser} />)}
+            {isEnhancedControlsOpen && selectedUserForControls && (
+                <EnhancedAdminChatControls 
+                    user={user}
+                    userProfile={userProfile}
+                    selectedUser={selectedUserForControls}
+                    users={users}
+                    setUsers={setUsers}
+                    onClose={closeEnhancedControls}
+                    onUserUpdated={handleUserUpdated}
+                />
+            )}
             <UserSelectionModal isOpen={isUserSelectionModalOpen} onClose={closeUserSelectionModal} availableUsers={availableUsers} selectedUsers={selectedUsersForRoom} onUserToggle={handleUserToggle} onCreateRoom={handleCreatePrivateChatRoom} roomName={privateChatRoomName} setRoomName={setPrivateChatRoomName}/>
             
             <h1 className="text-4xl md:text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             
             <div className="flex flex-wrap gap-2 md:gap-4 mb-8 border-b border-cyber-gray/50">
-                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'privateChat', 'commands', 'clan', 'adminNotes'] as const).map(tab => {
-                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, privateChat: MessageSquare, commands: Shield, clan: Users, adminNotes: ClipboardEdit };
-                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', privateChat: 'Özel Odalar', commands: 'Komutlar', clan: 'Klan', adminNotes: 'Admin Notları' };
+                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'chatRequests', 'privateChat', 'commands', 'clan', 'adminNotes'] as const).map(tab => {
+                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, chatRequests: UserCheck, privateChat: MessageSquare, commands: Shield, clan: Users, adminNotes: ClipboardEdit };
+                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', chatRequests: 'Chat İstekleri', privateChat: 'Özel Odalar', commands: 'Komutlar', clan: 'Klan', adminNotes: 'Admin Notları' };
                     const Icon = icons[tab];
                     return (
                         <button key={tab} onClick={() => setView(tab)} className={`py-3 px-3 md:px-5 text-sm md:text-lg font-bold relative transition-colors ${view === tab ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray hover:text-white'}`}>
                             <Icon className="inline-block mr-2" /> {labels[tab]}
                             {tab === 'feedback' && unreadFeedbackCount > 0 && <span className="absolute top-2 right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center text-xs text-white">{unreadFeedbackCount}</span></span>}
                             {tab === 'reports' && pendingReportsCount > 0 && <span className="absolute top-2 right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-orange-500 justify-center items-center text-xs text-white">{pendingReportsCount}</span></span>}
+                            {tab === 'chatRequests' && pendingChatRequestsCount > 0 && <span className="absolute top-2 right-1 flex h-4 w-4"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span><span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500 justify-center items-center text-xs text-white">{pendingChatRequestsCount}</span></span>}
                         </button>
                     );
                 })}
@@ -823,7 +918,70 @@ const AdminPage: React.FC = () => {
                  </div>
             )}
             {!isLoading && view === 'users' && (
-                 <div className="bg-dark-gray/50 rounded-lg overflow-x-auto"><table className="w-full text-left"><thead className="border-b border-cyber-gray/50"><tr><th className="p-4">Kullanıcı</th><th className="p-4 hidden md:table-cell">E-posta</th><th className="p-4">Rol</th><th className="p-4">Eylemler</th></tr></thead><tbody>{users.map(u => { const isMuted = u.mutedUntil && u.mutedUntil.toDate() > new Date(); return (<tr key={u.uid} className={`border-b border-cyber-gray/50 last:border-0 hover:bg-space-black ${isMuted ? 'bg-red-900/30' : ''}`}><td className="p-4 flex items-center gap-2 font-bold">{u.displayName}{isMuted && <MicOff size={14} className="text-red-400"/>}</td><td className="p-4 text-cyber-gray hidden md:table-cell">{u.email}</td><td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td><td className="p-4 flex gap-4"><button onClick={() => startDmWithUser(u)} disabled={u.uid === user?.uid} className="text-sky-400 hover:text-sky-300 disabled:text-gray-600" title="Özel Mesaj"><MessageSquare size={18} /></button><button onClick={() => openMuteModal(u)} disabled={u.uid === user?.uid} className="text-yellow-500 hover:text-yellow-400 disabled:text-gray-600" title="Sustur"><MicOff size={18} /></button><button onClick={() => handleDeleteUser(u)} disabled={u.role === 'admin' || u.uid === user?.uid} className="text-red-500 hover:text-red-400 disabled:text-gray-600" title="Sil"><Trash2 size={18} /></button></td></tr>);})}</tbody></table></div>
+                <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead className="border-b border-cyber-gray/50">
+                            <tr>
+                                <th className="p-4">Kullanıcı</th>
+                                <th className="p-4 hidden md:table-cell">E-posta</th>
+                                <th className="p-4">Rol</th>
+                                <th className="p-4">Mesaj Sayısı</th>
+                                <th className="p-4">Eylemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {users.map(u => { 
+                                const isMuted = u.mutedUntil && u.mutedUntil.toDate() > new Date();
+                                const isBanned = u.bannedFromChat;
+                                return (
+                                    <tr key={u.uid} className={`border-b border-cyber-gray/50 last:border-0 hover:bg-space-black ${isMuted ? 'bg-red-900/30' : ''} ${isBanned ? 'bg-red-900/50' : ''}`}>
+                                        <td className="p-4 flex items-center gap-2 font-bold">
+                                            {u.displayName}
+                                            {isMuted && <MicOff size={14} className="text-red-400"/>}
+                                            {isBanned && <Ban size={14} className="text-red-400"/>}
+                                        </td>
+                                        <td className="p-4 text-cyber-gray hidden md:table-cell">{u.email}</td>
+                                        <td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td>
+                                        <td className="p-4">{u.messageCount || 0}</td>
+                                        <td className="p-4 flex gap-4">
+                                            <button 
+                                                onClick={() => openEnhancedControls(u)}
+                                                className="text-blue-400 hover:text-blue-300"
+                                                title="Yönetim Araçları"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => startDmWithUser(u)} 
+                                                disabled={u.uid === user?.uid} 
+                                                className="text-sky-400 hover:text-sky-300 disabled:text-gray-600" 
+                                                title="Özel Mesaj"
+                                            >
+                                                <MessageSquare size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => openMuteModal(u)} 
+                                                disabled={u.uid === user?.uid} 
+                                                className="text-yellow-500 hover:text-yellow-400 disabled:text-gray-600" 
+                                                title="Sustur"
+                                            >
+                                                <MicOff size={18} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDeleteUser(u)} 
+                                                disabled={u.role === 'admin' || u.uid === user?.uid} 
+                                                className="text-red-500 hover:text-red-400 disabled:text-gray-600" 
+                                                title="Sil"
+                                            >
+                                                <Trash2 size={18} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             )}
             {!isLoading && view === 'games' && (
                 <div className="bg-dark-gray/50 rounded-lg overflow-x-auto"><table className="w-full text-left"><thead className="border-b border-cyber-gray/50"><tr><th className="p-4">Oyun Adı</th><th className="p-4">Kategori</th><th className="p-4">Oynanma Sayısı</th></tr></thead><tbody>{games.map(game => (<tr key={game.id} className="border-b border-cyber-gray/50 last:border-0 hover:bg-space-black"><td className="p-4">{game.title}</td><td className="p-4 text-cyber-gray">{game.category || 'Kategorisiz'}</td><td className="p-4 font-bold">{game.playCount?.toLocaleString() || '0'}</td></tr>))}</tbody></table></div>
@@ -833,6 +991,63 @@ const AdminPage: React.FC = () => {
             )}
             {!isLoading && view === 'reports' && (
                 <div className="space-y-4">{reports.map(report => (<div key={report.id} className={`p-4 rounded-lg border ${ report.status === 'pending' ? 'bg-orange-900/20 border-orange-500/50' : report.status === 'reviewed' ? 'bg-blue-900/20 border-blue-500/50' : 'bg-green-900/20 border-green-500/50'}`}><div className="flex justify-between items-start"><div><p className="font-bold">{report.reportedUserName} rapor edildi</p><p className="text-cyber-gray text-sm">Rapor eden: {report.reporterName}</p><p className="text-cyber-gray mt-2">{report.reason}</p><p className="text-xs text-cyber-gray mt-2">{new Date(report.createdAt?.toDate()).toLocaleString('tr-TR')}</p></div><div className="flex flex-col md:flex-row items-end gap-2"><span className={`px-3 py-1 rounded-full text-xs font-bold mb-2 md:mb-0 ${report.status === 'pending' ? 'bg-orange-500/20 text-orange-300' : 'bg-green-500/20 text-green-300'}`}>{report.status}</span><button onClick={() => handleUpdateReportStatus(report.id, report.status === 'pending' ? 'resolved' : 'pending')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">Durum Değiştir</button><button onClick={() => handleDeleteReport(report.id)} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"><Trash2 size={14} /></button></div></div></div>))}{reports.length === 0 && <div className="text-center py-12 text-cyber-gray"><AlertTriangle size={48} className="mx-auto mb-4" /><p>Henüz rapor bulunmuyor.</p></div>}</div>
+            )}
+            {!isLoading && view === 'chatRequests' && (
+                <div className="space-y-4">
+                    {chatJoinRequests.map(request => (
+                        <div key={request.id} className={`p-4 rounded-lg border ${request.status === 'pending' ? 'bg-blue-900/20 border-blue-500/50' : request.status === 'approved' ? 'bg-green-900/20 border-green-500/50' : 'bg-red-900/20 border-red-500/50'}`}>
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <p className="font-bold">{request.displayName}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                                        <div>
+                                            <p className="text-xs text-cyber-gray">Sınıf:</p>
+                                            <p className="text-sm">{request.class}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-cyber-gray">Okul Numarası:</p>
+                                            <p className="text-sm">{request.schoolNumber}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-2">
+                                        <p className="text-xs text-cyber-gray">Katılma Nedeni:</p>
+                                        <p className="text-sm">{request.reason}</p>
+                                    </div>
+                                    <p className="text-xs text-cyber-gray mt-2">
+                                        {new Date(request.submittedAt?.toDate()).toLocaleString('tr-TR')}
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-2 ml-4">
+                                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${request.status === 'pending' ? 'bg-blue-500/20 text-blue-300' : request.status === 'approved' ? 'bg-green-500/20 text-green-300' : 'bg-red-500/20 text-red-300'}`}>
+                                        {request.status === 'pending' ? 'Beklemede' : request.status === 'approved' ? 'Onaylandı' : 'Reddedildi'}
+                                    </span>
+                                    {request.status === 'pending' && (
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleApproveRequest(request.id)} 
+                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm flex items-center gap-1"
+                                            >
+                                                <CheckCircle size={14} /> Onayla
+                                            </button>
+                                            <button 
+                                                onClick={() => handleRejectRequest(request.id)} 
+                                                className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm flex items-center gap-1"
+                                            >
+                                                <X size={14} /> Reddet
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {chatJoinRequests.length === 0 && (
+                        <div className="text-center py-12 text-cyber-gray">
+                            <UserCheck size={48} className="mx-auto mb-4" />
+                            <p>Henüz chat katılım isteği bulunmuyor.</p>
+                        </div>
+                    )}
+                </div>
             )}
             {!isLoading && view === 'privateChat' && (
                 <div className="space-y-6"><div className="flex justify-between items-center"><h2 className="text-3xl font-heading">Özel Sohbet Odaları</h2><button onClick={openUserSelectionModal} className="px-4 py-2 bg-electric-purple hover:bg-opacity-80 rounded-lg flex items-center gap-2"><Plus size={18}/> Yeni Oda</button></div>{privateChatRooms.length > 0 ? (<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{privateChatRooms.map((room) => (<div key={room.id} className="bg-dark-gray/50 p-4 rounded-lg border border-cyber-gray/50 flex flex-col"><h3 className="text-xl font-bold">{room.name}</h3><span className={`text-xs font-bold self-start px-2 py-1 rounded-full mt-1 ${room.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>{room.isActive ? 'Aktif' : 'Kapalı'}</span><div className="mt-auto pt-4 flex gap-2"><button disabled={!room.isActive} onClick={() => navigate(`/admin-chat/${room.id}`)} className="px-3 py-1 bg-electric-purple hover:bg-opacity-80 rounded text-sm disabled:bg-gray-600">Sohbete Gir</button>{room.isActive && <button onClick={() => handleClosePrivateChatRoom(room.id, room.name)} className="px-3 py-1 bg-red-600 hover:bg-opacity-80 rounded text-sm">Kapat</button>}</div></div>))}</div>) : (<div className="text-center py-12 text-cyber-gray"><MessageSquare size={48} className="mx-auto mb-4" /><p>Henüz özel sohbet odası yok.</p></div>)}</div>
