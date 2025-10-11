@@ -1,0 +1,81 @@
+/* --- Matrix Yağmuru Stilleri --- */
+.matrix-rain-container {
+  position: relative;
+  /* İçeriğin canvas üzerinde görünmesi için */
+  isolation: isolate;
+}
+
+.matrix-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; /* İçeriğin arkasında kalır */
+}
+
+/* --- Hologram & Glitch Efekti Stilleri --- */
+.hologram-glitch-container {
+  position: relative;
+  /* text-shadow ve filtrelerin uygulanması için */
+  text-shadow: 0 0 5px rgba(0, 255, 255, 0.5), 0 0 10px rgba(0, 255, 255, 0.5);
+  animation: hologram-flicker 3s infinite linear;
+}
+
+.glitch-content {
+  position: relative;
+}
+
+/* Pseudo-elementler ile glitch katmanları oluşturuyoruz */
+.glitch-content::before,
+.glitch-content::after {
+  content: attr(data-text); /* data-text attribute'undan içeriği alır */
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: black; /* Yazı rengiyle aynı yapın veya transparan yapın */
+  overflow: hidden;
+  clip-path: inset(0); /* Başlangıçta tam görünür */
+}
+
+.glitch-content::before {
+  color: #ff00c1; /* Magenta/Pembe */
+  text-shadow: -2px 0 #ff00c1;
+  animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}
+
+.glitch-content::after {
+  color: #00ffff; /* Cyan */
+  text-shadow: 2px 0 #00ffff;
+  animation: glitch-anim-2 3s infinite linear alternate-reverse;
+}
+
+/* Animasyon Keyframe'leri */
+@keyframes glitch-anim-1 {
+  0% { clip-path: inset(30% 0 60% 0); transform: translate(-3px, 0); }
+  25% { clip-path: inset(10% 0 85% 0); transform: translate(3px, 2px); }
+  50% { clip-path: inset(80% 0 5% 0); transform: translate(-2px, -3px); }
+  75% { clip-path: inset(50% 0 40% 0); transform: translate(2px, -1px); }
+  100% { clip-path: inset(25% 0 70% 0); transform: translate(-3px, 1px); }
+}
+
+@keyframes glitch-anim-2 {
+  0% { clip-path: inset(80% 0 10% 0); transform: translate(3px, -1px); }
+  20% { clip-path: inset(15% 0 75% 0); transform: translate(-2px, 2px); }
+  40% { clip-path: inset(90% 0 2% 0); transform: translate(1px, -2px); }
+  60% { clip-path: inset(40% 0 55% 0); transform: translate(3px, 1px); }
+  80% { clip-path: inset(65% 0 20% 0); transform: translate(-3px, 0); }
+  100% { clip-path: inset(10% 0 80% 0); transform: translate(-1px, 3px); }
+}
+
+@keyframes hologram-flicker {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+  52% { opacity: 1; }
+  55% { opacity: 0.9; }
+  56% { opacity: 1; }
+  80% { opacity: 0.95; }
+  82% { opacity: 1; }
+}

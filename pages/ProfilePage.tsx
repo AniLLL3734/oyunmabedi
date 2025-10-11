@@ -3,11 +3,13 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { db } from '../src/firebase';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield, ShoppingBag, Crown, Palette, Star, Clock, MessageSquare as MessageSquareIcon } from 'lucide-react'; // Shield ikonu import edildi
+import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield, ShoppingBag, Crown, Palette, Star, Clock, MessageSquare as MessageSquareIcon, Gamepad2 } from 'lucide-react'; // Shield ikonu import edildi
 import { achievementsList, adminTitle } from '../data/achievements';
 import { shopItems } from '../data/shopItems';
+import { games } from '../data/games';
 import { useAuth } from '../src/contexts/AuthContext';
 import AdminTag from '../components/AdminTag';
+import ProfileAnimation from '../components/ProfileAnimations';
 
 // Arayüz tanımlamaları
 interface UserProfile {
@@ -25,14 +27,15 @@ interface UserProfile {
     loginStreak?: number;
     lastLogin?: Timestamp;
     gender?: 'male' | 'female' | 'unspecified' | string;
+    gameStats?: { [gameId: string]: { playCount: number; totalPlayTime: number } };
     inventory?: {
         avatarFrames: string[];
-        colorThemes: string[];
+        profileAnimations: string[];
         specialTitles: string[];
         temporaryAchievements: { id: string; expiresAt: Date }[];
         specialEmojis: string[];
         activeAvatarFrame?: string;
-        activeColorTheme?: string;
+        activeProfileAnimation?: string;
         activeSpecialTitle?: string;
     };
 }
@@ -114,7 +117,7 @@ const ProfilePage: React.FC = () => {
     };
 
     // Dükkan ürünlerini aktif etme/etmeme fonksiyonları
-    const handleEquipShopItem = async (itemType: 'avatarFrame' | 'colorTheme' | 'specialTitle', itemId: string) => {
+    const handleEquipShopItem = async (itemType: 'avatarFrame' | 'profileAnimation' | 'specialTitle', itemId: string) => {
         if (!currentUser || currentUser.uid !== userId || !profile?.inventory) return;
         
         try {
@@ -126,8 +129,8 @@ const ProfilePage: React.FC = () => {
                 case 'avatarFrame':
                     updateData['inventory.activeAvatarFrame'] = itemId;
                     break;
-                case 'colorTheme':
-                    updateData['inventory.activeColorTheme'] = itemId;
+                case 'profileAnimation':
+                    updateData['inventory.activeProfileAnimation'] = itemId;
                     break;
                 case 'specialTitle':
                     updateData['inventory.activeSpecialTitle'] = itemId;
@@ -152,7 +155,7 @@ const ProfilePage: React.FC = () => {
         }
     };
 
-    const handleUnequipShopItem = async (itemType: 'avatarFrame' | 'colorTheme' | 'specialTitle') => {
+    const handleUnequipShopItem = async (itemType: 'avatarFrame' | 'profileAnimation' | 'specialTitle') => {
         if (!currentUser || currentUser.uid !== userId || !profile?.inventory) return;
         
         try {
@@ -164,8 +167,8 @@ const ProfilePage: React.FC = () => {
                 case 'avatarFrame':
                     updateData['inventory.activeAvatarFrame'] = null;
                     break;
-                case 'colorTheme':
-                    updateData['inventory.activeColorTheme'] = null;
+                case 'profileAnimation':
+                    updateData['inventory.activeProfileAnimation'] = null;
                     break;
                 case 'specialTitle':
                     updateData['inventory.activeSpecialTitle'] = null;
@@ -231,39 +234,41 @@ const ProfilePage: React.FC = () => {
                 )}
 
                  <div className="relative">
-                     <img 
-                         src={profile.avatarUrl || `https://ui-avatars.com/api/?name=${profile.displayName}&background=1a1a2e&color=ffffff`} 
-                         alt={profile.displayName || 'Anonim'} 
-                         className={`w-24 h-24 rounded-full border-4 object-cover ${
-                             profile.inventory?.activeAvatarFrame === 'neon_frame' 
-                                 ? 'border-electric-purple shadow-neon-purple ring-4 ring-cyan-400/50' 
-                                 : profile.inventory?.activeAvatarFrame === 'hologram_frame'
-                                 ? 'border-purple-400 shadow-purple-400 ring-4 ring-purple-400/50'
-                                 : profile.inventory?.activeAvatarFrame === 'golden_frame'
-                                 ? 'border-yellow-400 shadow-yellow-400 ring-4 ring-yellow-400/50'
-                                 : profile.inventory?.activeAvatarFrame === 'matrix_frame'
-                                 ? 'border-green-400 shadow-green-400 ring-4 ring-green-400/50'
-                                 : profile.inventory?.activeAvatarFrame === 'fire_frame'
-                                 ? 'border-red-400 shadow-red-400 ring-4 ring-red-400/50'
-                                 : 'border-electric-purple shadow-neon-purple'
-                         }`}
-                     />
-                     {/* Aktif çerçeve efekti */}
-                     {profile.inventory?.activeAvatarFrame && (
-                         <div className={`absolute inset-0 rounded-full animate-pulse ${
-                             profile.inventory.activeAvatarFrame === 'neon_frame' 
-                                 ? 'ring-2 ring-cyan-400/30' 
-                                 : profile.inventory.activeAvatarFrame === 'hologram_frame'
-                                 ? 'ring-2 ring-purple-400/30'
-                                 : profile.inventory.activeAvatarFrame === 'golden_frame'
-                                 ? 'ring-2 ring-yellow-400/30'
-                                 : profile.inventory.activeAvatarFrame === 'matrix_frame'
-                                 ? 'ring-2 ring-green-400/30'
-                                 : profile.inventory.activeAvatarFrame === 'fire_frame'
-                                 ? 'ring-2 ring-red-400/30'
-                                 : ''
-                         }`} />
-                     )}
+                     <ProfileAnimation animationId={profile.inventory?.activeProfileAnimation || ''}>
+                         <img
+                             src={profile.avatarUrl || `https://ui-avatars.com/api/?name=${profile.displayName}&background=1a1a2e&color=ffffff`}
+                             alt={profile.displayName || 'Anonim'}
+                             className={`w-24 h-24 rounded-full border-4 object-cover ${
+                                 profile.inventory?.activeAvatarFrame === 'neon_frame'
+                                     ? 'border-electric-purple shadow-neon-purple ring-4 ring-cyan-400/50'
+                                     : profile.inventory?.activeAvatarFrame === 'hologram_frame'
+                                     ? 'border-purple-400 shadow-purple-400 ring-4 ring-purple-400/50'
+                                     : profile.inventory?.activeAvatarFrame === 'golden_frame'
+                                     ? 'border-yellow-400 shadow-yellow-400 ring-4 ring-yellow-400/50'
+                                     : profile.inventory?.activeAvatarFrame === 'matrix_frame'
+                                     ? 'border-green-400 shadow-green-400 ring-4 ring-green-400/50'
+                                     : profile.inventory?.activeAvatarFrame === 'fire_frame'
+                                     ? 'border-red-400 shadow-red-400 ring-4 ring-red-400/50'
+                                     : 'border-electric-purple shadow-neon-purple'
+                             }`}
+                         />
+                         {/* Aktif çerçeve efekti */}
+                         {profile.inventory?.activeAvatarFrame && (
+                             <div className={`absolute inset-0 rounded-full animate-pulse ${
+                                 profile.inventory.activeAvatarFrame === 'neon_frame'
+                                     ? 'ring-2 ring-cyan-400/30'
+                                     : profile.inventory.activeAvatarFrame === 'hologram_frame'
+                                     ? 'ring-2 ring-purple-400/30'
+                                     : profile.inventory.activeAvatarFrame === 'golden_frame'
+                                     ? 'ring-2 ring-yellow-400/30'
+                                     : profile.inventory.activeAvatarFrame === 'matrix_frame'
+                                     ? 'ring-2 ring-green-400/30'
+                                     : profile.inventory.activeAvatarFrame === 'fire_frame'
+                                     ? 'ring-2 ring-red-400/30'
+                                     : ''
+                             }`} />
+                         )}
+                     </ProfileAnimation>
                  </div>
                  
                  {profile.role === 'admin' ? (
@@ -327,6 +332,60 @@ const ProfilePage: React.FC = () => {
                 </div>
 
                  {profile.bio && <p className="text-cyber-gray mt-6 max-w-lg italic">"{profile.bio}"</p>}
+                 
+                 {/* En Çok Oynanan Oyunlar Bölümü */}
+                 <div className="mt-8">
+                     <h2 className="text-3xl font-heading mb-6 flex items-center">
+                        <Gamepad2 className="inline-block mr-3 text-yellow-400" />En Çok Oynanan Oyunlar
+                    </h2>
+                     {profile.gameStats && Object.keys(profile.gameStats).length > 0 ? (
+                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                             {Object.entries(profile.gameStats)
+                                 .sort(([, a], [, b]) => b.playCount - a.playCount)
+                                 .slice(0, 5)
+                                 .map(([gameId, stats]) => {
+                                     const game = games.find(g => g.id === gameId);
+                                     if (!game) return null;
+                                     const hours = (stats.totalPlayTime / 3600).toFixed(1);
+                                     return (
+                                         <motion.div
+                                             key={gameId}
+                                             className="p-4 bg-dark-gray/50 border border-cyber-gray/50 rounded-lg hover:border-electric-purple/50 transition-all"
+                                             whileHover={{ scale: 1.02 }}
+                                         >
+                                             <div className="flex items-center gap-3 mb-2">
+                                                 <img
+                                                     src={game.thumbnail}
+                                                     alt={game.title}
+                                                     className="w-12 h-12 rounded object-cover"
+                                                 />
+                                                 <div>
+                                                     <h3 className="text-lg font-bold text-ghost-white">{game.title}</h3>
+                                                     <p className="text-sm text-cyber-gray">{game.category}</p>
+                                                 </div>
+                                             </div>
+                                             <div className="flex justify-between text-sm">
+                                                 <span className="text-electric-purple">{stats.playCount} kez oynandı</span>
+                                                 <span className="text-yellow-400">{hours} saat</span>
+                                             </div>
+                                         </motion.div>
+                                     );
+                                 })}
+                         </div>
+                     ) : (
+                         <div className="text-center py-12">
+                             <Gamepad2 className="mx-auto text-cyber-gray mb-4" size={64} />
+                             <h3 className="text-2xl font-bold text-cyber-gray mb-2">Henüz Oyun Oynanmamış</h3>
+                             <p className="text-cyber-gray mb-4">Oyun oynadıkça istatistiklerin burada görünecek.</p>
+                             <Link
+                                 to="/"
+                                 className="inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all"
+                             >
+                                 Oyunlara Git
+                             </Link>
+                         </div>
+                     )}
+                 </div>
                  
                  {/* Admin Paneli */}
                  {profile.role === 'admin' && currentUser?.uid === userId && (
@@ -459,42 +518,42 @@ const ProfilePage: React.FC = () => {
                          </div>
                      )}
 
-                     {/* Renk Temaları */}
-                     {profile.inventory.colorThemes && profile.inventory.colorThemes.length > 0 && (
+                     {/* Profil Animasyonları */}
+                     {profile.inventory.profileAnimations && profile.inventory.profileAnimations.length > 0 && (
                          <div className="mb-8">
                              <h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2">
-                                 <Palette className="text-blue-400" size={20} />
-                                 Renk Temaları
+                                 <Star className="text-purple-400" size={20} />
+                                 Profil Animasyonları
                              </h3>
                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                 {profile.inventory.colorThemes.map(themeId => {
-                                     const theme = shopItems.find(item => item.id === themeId);
-                                     if (!theme) return null;
-                                     const isActive = profile.inventory?.activeColorTheme === themeId;
+                                 {profile.inventory.profileAnimations.map(animationId => {
+                                     const animation = shopItems.find(item => item.id === animationId);
+                                     if (!animation) return null;
+                                     const isActive = profile.inventory?.activeProfileAnimation === animationId;
                                      const canInteract = currentUser?.uid === userId;
-                                     
+
                                      return (
-                                         <motion.div 
-                                             key={themeId}
+                                         <motion.div
+                                             key={animationId}
                                              className={`p-4 rounded-lg border text-center transition-all ${
-                                                 isActive 
-                                                     ? 'border-blue-400 bg-blue-400/10 ring-2 ring-blue-400/50' 
-                                                     : 'border-blue-400 bg-dark-gray/50'
+                                                 isActive
+                                                     ? 'border-purple-400 bg-purple-400/10 ring-2 ring-purple-400/50'
+                                                     : 'border-purple-400 bg-dark-gray/50'
                                              }`}
                                              whileHover={{ scale: canInteract ? 1.05 : 1 }}
                                          >
-                                             <Palette className={`mx-auto mb-2 ${isActive ? 'text-blue-400' : 'text-blue-400'}`} size={24} />
-                                             <p className="text-sm font-bold text-ghost-white mb-2">{theme.name}</p>
+                                             <Star className={`mx-auto mb-2 ${isActive ? 'text-purple-400' : 'text-purple-400'}`} size={24} />
+                                             <p className="text-sm font-bold text-ghost-white mb-2">{animation.name}</p>
                                              {canInteract && (
                                                  <button
-                                                     onClick={() => isActive 
-                                                         ? handleUnequipShopItem('colorTheme')
-                                                         : handleEquipShopItem('colorTheme', themeId)
+                                                     onClick={() => isActive
+                                                         ? handleUnequipShopItem('profileAnimation')
+                                                         : handleEquipShopItem('profileAnimation', animationId)
                                                      }
                                                      className={`px-3 py-1 rounded text-xs font-bold transition-all ${
                                                          isActive
                                                              ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                             : 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                             : 'bg-purple-500 hover:bg-purple-600 text-white'
                                                      }`}
                                                  >
                                                      {isActive ? 'Çıkar' : 'Uygula'}
@@ -621,7 +680,7 @@ const ProfilePage: React.FC = () => {
 
                      {/* Koleksiyon boşsa */}
                      {(!profile.inventory.avatarFrames || profile.inventory.avatarFrames.length === 0) &&
-                      (!profile.inventory.colorThemes || profile.inventory.colorThemes.length === 0) &&
+                      (!profile.inventory.profileAnimations || profile.inventory.profileAnimations.length === 0) &&
                       (!profile.inventory.specialTitles || profile.inventory.specialTitles.length === 0) &&
                       (!profile.inventory.temporaryAchievements || profile.inventory.temporaryAchievements.length === 0) &&
                       (!profile.inventory.specialEmojis || profile.inventory.specialEmojis.length === 0) && (

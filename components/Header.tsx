@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth, UserProfileData } from '../src/contexts/AuthContext';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit, orderBy, getDocs, writeBatch } from 'firebase/firestore';
-import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X } from 'lucide-react'; 
+import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X, Menu } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Header: React.FC = () => {
@@ -15,6 +15,7 @@ const Header: React.FC = () => {
   const [hasUnreadDmsForAdmin, setHasUnreadDmsForAdmin] = useState(false);
   const [hasPrivateChatNotification, setHasPrivateChatNotification] = useState(false);
   const [privateChatRoomId, setPrivateChatRoomId] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -253,8 +254,17 @@ const Header: React.FC = () => {
     <header className="sticky top-0 z-40 bg-dark-gray/70 backdrop-blur-sm border-b border-cyber-gray/50">
       <nav className="container mx-auto flex justify-between items-center p-4">
         <Link to="/" className="text-2xl font-heading font-bold hover:text-electric-purple transition-colors">Oyun Mabedi</Link>
-        
-        <ul className="flex items-center space-x-4 md:space-x-6 text-lg">
+
+        {/* Hamburger Menu Button - Mobile */}
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="md:hidden p-2 text-ghost-white hover:text-electric-purple transition-colors"
+        >
+          <Menu size={24} />
+        </button>
+
+        {/* Desktop Navigation */}
+        <ul className="hidden md:flex items-center space-x-6 text-lg">
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sayfa</NavLink></motion.div></li>
           
           {user && !isAdmin && (
@@ -375,6 +385,95 @@ const Header: React.FC = () => {
           )}
         </ul>
       </nav>
+
+      {/* Mobile Navigation Menu */}
+      {isMobileMenuOpen && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          className="md:hidden bg-dark-gray/95 backdrop-blur-sm border-b border-cyber-gray/50"
+        >
+          <ul className="container mx-auto px-4 py-4 space-y-4 text-lg">
+            <li><NavLink to="/" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Ana Sayfa</NavLink></li>
+
+            {user && !isAdmin && (
+              <li>
+                <button onClick={() => { handleGoToAdminChat(); setIsMobileMenuOpen(false); }} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors w-full text-left">
+                  <MessageCircle size={18} /> Adminle Sohbet
+                  {hasUnreadAdminMessage && <span className="w-2 h-2 bg-electric-purple rounded-full"></span>}
+                </button>
+              </li>
+            )}
+
+            {user && !isAdmin && hasPrivateChatNotification && (
+              <li>
+                <button
+                  onClick={() => {
+                    if (privateChatRoomId) {
+                      markNotificationAsRead(privateChatRoomId);
+                      navigate(`/admin-chat/${privateChatRoomId}`);
+                    }
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors w-full text-left"
+                >
+                  <MessageSquare size={18} /> Özel Sohbet
+                  <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                </button>
+              </li>
+            )}
+
+            <li><NavLink to="/all-users" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Gezginler</NavLink></li>
+            <li><NavLink to="/chat" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
+              <MessageSquare size={18} /> Ana Sohbet
+            </NavLink></li>
+            <li><NavLink to="/leaderboard" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Skor Tablosu</NavLink></li>
+            {user && (
+              <li><NavLink to="/shop" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
+                <ShoppingBag size={18} className="text-yellow-400" /> Siber Dükkan
+              </NavLink></li>
+            )}
+
+            <li><NavLink to="/creator" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Yapımcı</NavLink></li>
+            <li><NavLink to="/clans" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Klanlar</NavLink></li>
+
+            {isAdmin && (
+              <>
+                <li>
+                  <NavLink to="/messages" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
+                    <Mail size={18} /> DM Gelen Kutusu
+                    {hasUnreadDmsForAdmin && <span className="w-2 h-2 bg-red-500 rounded-full"></span>}
+                  </NavLink>
+                </li>
+                <li>
+                  <NavLink to="/admin" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 text-green-400 hover:text-green-300 transition-colors">
+                    <Shield size={18} /> Panel
+                  </NavLink>
+                </li>
+              </>
+            )}
+
+            {user && userProfile ? (
+              <li className="border-t border-cyber-gray/50 pt-4 mt-4">
+                <div className="flex items-center justify-between">
+                  <Link to={`/profile/${user.uid}`} onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3">
+                    <img
+                      src={userProfile.avatarUrl}
+                      alt="Avatar"
+                      className="w-8 h-8 rounded-full border border-cyber-gray object-cover"
+                    />
+                    <span className="hover:text-electric-purple transition-colors">Profil</span>
+                  </Link>
+                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">Çıkış</button>
+                </div>
+              </li>
+            ) : (
+              <li><NavLink to="/login" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 bg-electric-purple text-white text-center rounded-md hover:bg-opacity-80 transition-all">Giriş Yap</NavLink></li>
+            )}
+          </ul>
+        </motion.div>
+      )}
     </header>
   );
 };

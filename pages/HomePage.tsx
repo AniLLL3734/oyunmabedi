@@ -191,7 +191,7 @@ const HomePage: React.FC = () => {
         )}
         </AnimatePresence>
         
-        <div className="text-center my-12 md:my-16">
+        <div className="text-center my-8 md:my-16">
             <motion.h1 className="text-4xl md:text-6xl font-black font-heading bg-clip-text text-transparent bg-gradient-to-r from-ghost-white to-electric-purple" initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
             Zil Çaldığında, Gerçeklik Bükülür.
             </motion.h1>

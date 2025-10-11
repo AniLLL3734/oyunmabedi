@@ -19,7 +19,7 @@ export interface Game {
 // === DÜKKAN SİSTEMİ TYPES ===
 export enum ShopItemType {
   AVATAR_FRAME = 'avatar_frame',
-  COLOR_THEME = 'color_theme',
+  PROFILE_ANIMATION = 'profile_animation',
   SPECIAL_TITLE = 'special_title',
   TEMPORARY_ACHIEVEMENT = 'temporary_achievement',
   SPECIAL_EMOJI = 'special_emoji'
@@ -40,12 +40,12 @@ export interface ShopItem {
 
 export interface UserInventory {
   avatarFrames: string[];
-  colorThemes: string[];
+  profileAnimations: string[];
   specialTitles: string[];
   temporaryAchievements: { id: string; expiresAt: Date }[];
   specialEmojis: string[];
   activeAvatarFrame?: string;
-  activeColorTheme?: string;
+  activeProfileAnimation?: string;
   activeSpecialTitle?: string;
 }
 

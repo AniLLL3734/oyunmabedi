@@ -4,7 +4,8 @@ import { games } from '../data/games';
 import { GameType } from '../types';
 import { ArrowLeft, Gamepad2, Fullscreen, Info, Play, LoaderCircle } from 'lucide-react';
 import { db } from '../src/firebase';
-import { doc, setDoc, increment } from 'firebase/firestore';
+import { doc, setDoc, increment, updateDoc, FieldPath } from 'firebase/firestore';
+import { useAuth } from '../src/contexts/AuthContext';
 import GameSplashScreen from '../components/GameSplashScreen';
 
 const RufflePlayer = lazy(() => import('../components/RufflePlayer'));
@@ -21,6 +22,7 @@ const GenericLoader: React.FC<{ message: string }> = ({ message }) => (
 const GamePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { user } = useAuth();
     const game = useMemo(() => games.find((g) => g.id === id), [id]);
 
     const gameContainerRef = useRef<HTMLDivElement>(null);
@@ -31,7 +33,17 @@ const GamePage: React.FC = () => {
     const [showSplashScreen, setShowSplashScreen] = useState(false);
     const [showFeedbackPopup, setShowFeedbackPopup] = useState(false);
     const [canNavigate, setCanNavigate] = useState(true);
-    
+    const [startTime, setStartTime] = useState<number | null>(null);
+
+    // Update play time in Firebase
+    const updatePlayTime = useCallback(() => {
+        if (user && id && startTime) {
+            const duration = (Date.now() - startTime) / 1000;
+            const userRef = doc(db, 'users', user.uid);
+            updateDoc(userRef, `gameStats.${id}.totalPlayTime`, increment(duration)).catch(console.error);
+        }
+    }, [user, id, startTime]);
+
     // ========================================================================
     // YENİ EKLENEN KOD: HTML5 OYUNLARI İÇİN SAHTE YÜKLEME SİMÜLASYONU
     // ========================================================================
@@ -67,7 +79,13 @@ const GamePage: React.FC = () => {
                 setDoc(doc(db, 'games', id), { playCount: increment(1) }, { merge: true }).catch(console.error);
             });
         }
-    }, [id]);
+        // Track user game stats
+        if (user && id) {
+            const userRef = doc(db, 'users', user.uid);
+            updateDoc(userRef, `gameStats.${id}.playCount`, increment(1)).catch(console.error);
+            setStartTime(Date.now());
+        }
+    }, [id, user]);
 
     const handleStartGame = useCallback(() => {
         if (showSplashScreen || gameStarted) return;
@@ -108,6 +126,8 @@ const GamePage: React.FC = () => {
 
     // Handle navigation away from the game page
     const handleNavigationAway = useCallback((e: React.MouseEvent) => {
+        // Update play time
+        updatePlayTime();
         // Only show feedback popup if user has played a game
         if (gameStarted && canNavigate) {
             const shouldShow = shouldShowFeedback();
@@ -121,11 +141,13 @@ const GamePage: React.FC = () => {
             }
         }
         return true;
-    }, [gameStarted, canNavigate, shouldShowFeedback]);
+    }, [gameStarted, canNavigate, shouldShowFeedback, updatePlayTime]);
 
     // Add event listener for beforeunload
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            // Update play time
+            updatePlayTime();
             // Show feedback popup when user tries to leave the page after playing a game
             if (gameStarted && canNavigate) {
                 const shouldShow = shouldShowFeedback();
@@ -151,6 +173,8 @@ const GamePage: React.FC = () => {
     // Handle browser back/forward navigation
     useEffect(() => {
         const handlePopState = () => {
+            // Update play time
+            updatePlayTime();
             if (gameStarted && canNavigate) {
                 const shouldShow = shouldShowFeedback();
                 console.log('Pop state check:', { gameStarted, canNavigate, shouldShow });
@@ -171,7 +195,7 @@ const GamePage: React.FC = () => {
         return () => {
             window.removeEventListener('popstate', handlePopState);
         };
-    }, [gameStarted, canNavigate, shouldShowFeedback]);
+    }, [gameStarted, canNavigate, shouldShowFeedback, updatePlayTime]);
 
     // Reset canNavigate when game starts
     useEffect(() => {

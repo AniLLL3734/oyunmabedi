@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { Send, CheckCircle, Loader } from 'lucide-react'; // Loader ekleyebiliriz
 import { useNavigate } from 'react-router-dom';
@@ -12,17 +12,18 @@ const ChatJoinRequestPage: React.FC = () => {
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [requestStatus, setRequestStatus] = useState<'form' | 'pending' | null>(null);
+    const [isChatInvitationless, setIsChatInvitationless] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        // 1. EN ÖNEMLİ KONTROL: Kullanıcının zaten yetkisi var mı?
+        // 1. EN ÖNEMLİ KONTROL: Kullanıcının zaten yetkisi var mı veya davet olmadan giriş açık mı?
         // userProfile, onSnapshot sayesinde her zaman güncel olacak.
-        if (userProfile?.chatAccessGranted) {
+        if (userProfile?.chatAccessGranted || isChatInvitationless) {
             navigate('/chat');
-            return; // Yetkisi varsa başka hiçbir şey yapma, çık.
+            return; // Yetkisi varsa veya davet olmadan giriş açık ise başka hiçbir şey yapma, çık.
         }
-        
-        // 2. Yetkisi yoksa, mevcut bir başvurusu var mı diye kontrol et.
+
+        // 2. Yetkisi yoksa ve davet olmadan giriş kapalıysa, mevcut bir başvurusu var mı diye kontrol et.
         const checkExistingRequest = async () => {
             if (!user) return;
             try {
@@ -43,12 +44,22 @@ const ChatJoinRequestPage: React.FC = () => {
             }
         };
 
-        // userProfile yüklendi ve chat yetkisi yoksa kontrolü başlat
-        if (user && userProfile && !userProfile.chatAccessGranted) {
+        // userProfile yüklendi ve chat yetkisi yoksa ve davet olmadan giriş kapalıysa kontrolü başlat
+        if (user && userProfile && !userProfile.chatAccessGranted && !isChatInvitationless) {
              checkExistingRequest();
         }
 
-    }, [user, userProfile, navigate]);
+    }, [user, userProfile, isChatInvitationless, navigate]);
+
+    useEffect(() => {
+        const unsubscribe = onSnapshot(doc(db, 'chat_meta', 'settings'), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setIsChatInvitationless(data.isChatInvitationless || false);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     const onSubmit = async (data: any) => {
         if (!user || !userProfile) return;

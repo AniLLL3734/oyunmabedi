@@ -56,56 +56,128 @@ export const shopItems: ShopItem[] = [
     preview: 'fire-dance'
   },
 
-  // === RENK TEMALARI ===
+  // === PROFIL ANIMASYONLARI ===
   {
-    id: 'cyber_blue_theme',
-    name: 'Siber Mavi Tema',
-    description: 'Derin uzayın mavi tonlarında bir deneyim. Sakinlik ve güven veren renkler.',
-    type: ShopItemType.COLOR_THEME,
-    price: 1500,
-    category: 'Görsel',
-    rarity: 'common',
-    preview: 'blue-gradient'
-  },
-  {
-    id: 'neon_green_theme',
-    name: 'Neon Yeşil Tema',
-    description: 'Matriks dünyasının yeşil tonları. Dijital evrenin ana rengi.',
-    type: ShopItemType.COLOR_THEME,
-    price: 1500,
-    category: 'Görsel',
-    rarity: 'common',
-    preview: 'green-matrix'
-  },
-  {
-    id: 'electric_purple_theme',
-    name: 'Elektrik Mor Tema',
-    description: 'Mistik mor tonlarında elektrikli bir atmosfer. Gizem ve gücün buluşması.',
-    type: ShopItemType.COLOR_THEME,
-    price: 2000,
-    category: 'Görsel',
-    rarity: 'rare',
-    preview: 'purple-electric'
-  },
-  {
-    id: 'blood_red_theme',
-    name: 'Kan Kırmızısı Tema',
-    description: 'Derin kırmızı tonlarında tutkulu bir deneyim. Ateş ve tutkunun rengi.',
-    type: ShopItemType.COLOR_THEME,
-    price: 2000,
-    category: 'Görsel',
-    rarity: 'rare',
-    preview: 'red-blood'
-  },
-  {
-    id: 'cosmic_rainbow_theme',
-    name: 'Kozmik Gökkuşağı Tema',
-    description: 'Evrenin tüm renklerini içeren kozmik tema. Sonsuzluğun renkleri.',
-    type: ShopItemType.COLOR_THEME,
-    price: 4000,
-    category: 'Görsel',
+    id: 'neon_pulse_animation',
+    name: 'Neon Nabız Animasyonu',
+    description: 'Profiliniz kalp atışı gibi nabız atan neon ışıklarla canlanır. Hayat belirtisi gösteren dijital nabız.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 15000,
+    category: 'Animasyon',
     rarity: 'epic',
-    preview: 'rainbow-cosmic'
+    preview: 'neon-pulse'
+  },
+  {
+    id: 'matrix_rain_animation',
+    name: 'Matriks Yağmuru Animasyonu',
+    description: 'Yeşil kod yağmuru profilinizi yıkar. Gerçekliğin ardındaki kodu görenlerin animasyonu.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 20000,
+    category: 'Animasyon',
+    rarity: 'legendary',
+    preview: 'matrix-rain-fall'
+  },
+  {
+    id: 'electric_arc_animation',
+    name: 'Elektrik Arkı Animasyonu',
+    description: 'Şimşek gibi elektrik arkları profil etrafında dans eder. Güç ve enerji dolu bir görünüm.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 18000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'electric-arcs'
+  },
+  {
+    id: 'hologram_glitch_animation',
+    name: 'Hologram Glitch Animasyonu',
+    description: 'Gelecekten gelen holografik glitch efektleri. Gerçeklik sınırlarını aşan bozulmalar.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 25000,
+    category: 'Animasyon',
+    rarity: 'legendary',
+    preview: 'hologram-glitch'
+  },
+  {
+    id: 'cosmic_particles_animation',
+    name: 'Kozmik Parçacık Animasyonu',
+    description: 'Evrenin parçacıkları profil etrafında döner. Kozmik enerjiyle dolu bir atmosfer.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 22000,
+    category: 'Animasyon',
+    rarity: 'legendary',
+    preview: 'cosmic-particles'
+  },
+  {
+    id: 'fire_particles_animation',
+    name: 'Ateş Parçacıkları Animasyonu',
+    description: 'Sönmeyen ateş parçacıkları profilinizi sarar. İç ateşinizi dışa vuran animasyon.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 17000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'fire-particles'
+  },
+  {
+    id: 'cyber_circuit_animation',
+    name: 'Siber Devre Animasyonu',
+    description: 'Dijital devreler profilinizde akar. Teknoloji ve zekanın birleşimi.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 16000,
+    category: 'Animasyon',
+    rarity: 'rare',
+    preview: 'cyber-circuits'
+  },
+  {
+    id: 'quantum_field_animation',
+    name: 'Kuantum Alan Animasyonu',
+    description: 'Kuantum parçacıklar gerçekliği büker. Bilim kurgunun en gelişmiş animasyonu.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 30000,
+    category: 'Animasyon',
+    rarity: 'legendary',
+    preview: 'quantum-field'
+  },
+
+  // === FUTBOL TAKIMI ANIMASYONLARI ===
+  {
+    id: 'galatasaray_animation',
+    name: 'Galatasaray Animasyonu',
+    description: 'Sarı-kırmızı renklerde nabız atan, aslan gibi güçlü animasyon. Cimbom\'un ruhu profilinizde canlanır.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 12000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'galatasaray-glow'
+  },
+  {
+    id: 'fenerbahce_animation',
+    name: 'Fenerbahçe Animasyonu',
+    description: 'Sarı-lacivert dalgalarla akan, kanarya enerjisi dolu animasyon. Sarı Kanarya\'nın gücü profilinizde.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 12000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'fenerbahce-waves'
+  },
+  {
+    id: 'besiktas_animation',
+    name: 'Beşiktaş Animasyonu',
+    description: 'Siyah-beyaz kartal kanatları çırpan animasyon. Çarşı\'nın enerjisi ve kartal gücü profilinizde.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 12000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'besiktas-wings'
+  },
+  {
+    id: 'trabzonspor_animation',
+    name: 'Trabzonspor Animasyonu',
+    description: 'Bordo-mavi dalgalarla akan, Karadeniz fırtınası animasyonu. Bordo-mavi ruh profilinizde.',
+    type: ShopItemType.PROFILE_ANIMATION,
+    price: 12000,
+    category: 'Animasyon',
+    rarity: 'epic',
+    preview: 'trabzonspor-storm'
   },
 
   // === ÖZEL UNVANLAR ===
@@ -249,6 +321,7 @@ export const shopItems: ShopItem[] = [
 export const shopCategories = [
   { id: 'all', name: 'Tümü', icon: '🛒' },
   { id: 'Görsel', name: 'Görsel', icon: '🎨' },
+  { id: 'Animasyon', name: 'Animasyon', icon: '✨' },
   { id: 'Unvan', name: 'Unvan', icon: '👑' },
   { id: 'Geçici', name: 'Geçici', icon: '⏰' },
   { id: 'Sohbet', name: 'Sohbet', icon: '💬' }

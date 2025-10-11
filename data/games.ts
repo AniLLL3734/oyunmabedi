@@ -563,4 +563,5 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: ['HTML5', 'Arcade', 'Sonsuz Koşu', 'Dinozor', 'Klasik', 'Skor', 'Basit'],
   controls: 'Space/Yukarı Ok: Zıpla, Aşağı Ok: Eğil.',
 },
+
 ];

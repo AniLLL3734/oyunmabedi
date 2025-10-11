@@ -57,7 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         }}
       />
       <Header />
-      <main className="container mx-auto px-4 py-8">{children}</main>
+      <main className="container mx-auto px-4 py-4 md:py-8">{children}</main>
 
       {/* Hidden Chat Access Textbox - Only on Homepage */}
       {location.pathname === '/' && (

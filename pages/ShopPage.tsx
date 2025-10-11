@@ -31,7 +31,7 @@ const ShopPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [userInventory, setUserInventory] = useState<UserInventory>({
     avatarFrames: [],
-    colorThemes: [],
+    profileAnimations: [],
     specialTitles: [],
     temporaryAchievements: [],
     specialEmojis: []
@@ -52,12 +52,16 @@ const ShopPage: React.FC = () => {
         if (userSnap.exists()) {
           const userData = userSnap.data();
           setUserScore(userData.score || 0);
-          setUserInventory(userData.inventory || {
+          const defaultInventory = {
             avatarFrames: [],
-            colorThemes: [],
+            profileAnimations: [],
             specialTitles: [],
             temporaryAchievements: [],
             specialEmojis: []
+          };
+          setUserInventory({
+            ...defaultInventory,
+            ... (userData.inventory || {})
           });
         }
       } catch (error) {
@@ -94,12 +98,12 @@ const ShopPage: React.FC = () => {
       if (!userSnap.exists()) return;
 
       const userData = userSnap.data();
-      const currentInventory = userData.inventory || {
-        avatarFrames: [],
-        colorThemes: [],
-        specialTitles: [],
-        temporaryAchievements: [],
-        specialEmojis: []
+      const currentInventory = {
+        avatarFrames: userData.inventory?.avatarFrames || [],
+        profileAnimations: userData.inventory?.profileAnimations || [],
+        specialTitles: userData.inventory?.specialTitles || [],
+        temporaryAchievements: userData.inventory?.temporaryAchievements || [],
+        specialEmojis: userData.inventory?.specialEmojis || []
       };
 
       // Ürünü envantere ekle
@@ -111,9 +115,9 @@ const ShopPage: React.FC = () => {
             newInventory.avatarFrames.push(item.id);
           }
           break;
-        case ShopItemType.COLOR_THEME:
-          if (!newInventory.colorThemes.includes(item.id)) {
-            newInventory.colorThemes.push(item.id);
+        case ShopItemType.PROFILE_ANIMATION:
+          if (!newInventory.profileAnimations.includes(item.id)) {
+            newInventory.profileAnimations.push(item.id);
           }
           break;
         case ShopItemType.SPECIAL_TITLE:
@@ -160,8 +164,8 @@ const ShopPage: React.FC = () => {
     switch (item.type) {
       case ShopItemType.AVATAR_FRAME:
         return userInventory.avatarFrames.includes(item.id);
-      case ShopItemType.COLOR_THEME:
-        return userInventory.colorThemes.includes(item.id);
+      case ShopItemType.PROFILE_ANIMATION:
+        return userInventory.profileAnimations.includes(item.id);
       case ShopItemType.SPECIAL_TITLE:
         return userInventory.specialTitles.includes(item.id);
       case ShopItemType.SPECIAL_EMOJI:
@@ -178,8 +182,8 @@ const ShopPage: React.FC = () => {
     switch (item.type) {
       case ShopItemType.AVATAR_FRAME:
         return userInventory.activeAvatarFrame === item.id;
-      case ShopItemType.COLOR_THEME:
-        return userInventory.activeColorTheme === item.id;
+      case ShopItemType.PROFILE_ANIMATION:
+        return userInventory.activeProfileAnimation === item.id;
       case ShopItemType.SPECIAL_TITLE:
         return userInventory.activeSpecialTitle === item.id;
       default:
@@ -199,8 +203,8 @@ const ShopPage: React.FC = () => {
         case ShopItemType.AVATAR_FRAME:
           updateData['inventory.activeAvatarFrame'] = item.id;
           break;
-        case ShopItemType.COLOR_THEME:
-          updateData['inventory.activeColorTheme'] = item.id;
+        case ShopItemType.PROFILE_ANIMATION:
+          updateData['inventory.activeProfileAnimation'] = item.id;
           break;
         case ShopItemType.SPECIAL_TITLE:
           updateData['inventory.activeSpecialTitle'] = item.id;
@@ -233,8 +237,8 @@ const ShopPage: React.FC = () => {
         case ShopItemType.AVATAR_FRAME:
           updateData['inventory.activeAvatarFrame'] = null;
           break;
-        case ShopItemType.COLOR_THEME:
-          updateData['inventory.activeColorTheme'] = null;
+        case ShopItemType.PROFILE_ANIMATION:
+          updateData['inventory.activeProfileAnimation'] = null;
           break;
         case ShopItemType.SPECIAL_TITLE:
           updateData['inventory.activeSpecialTitle'] = null;
@@ -273,7 +277,7 @@ const ShopPage: React.FC = () => {
     const active = isActive(item);
     const canAfford = userScore >= item.price;
     const isPurchasing = purchasing === item.id;
-    const canEquip = owned && (item.type === ShopItemType.AVATAR_FRAME || item.type === ShopItemType.COLOR_THEME || item.type === ShopItemType.SPECIAL_TITLE);
+    const canEquip = owned && (item.type === ShopItemType.AVATAR_FRAME || item.type === ShopItemType.PROFILE_ANIMATION || item.type === ShopItemType.SPECIAL_TITLE);
 
     return (
       <motion.div
@@ -298,11 +302,11 @@ const ShopPage: React.FC = () => {
         {/* Ürün başlığı */}
         <div className="flex items-center gap-3 mb-3">
           {item.type === ShopItemType.AVATAR_FRAME && <Crown className="text-yellow-400" size={24} />}
-          {item.type === ShopItemType.COLOR_THEME && <Palette className="text-blue-400" size={24} />}
+          {item.type === ShopItemType.PROFILE_ANIMATION && <Sparkles className="text-blue-400" size={24} />}
           {item.type === ShopItemType.SPECIAL_TITLE && <Star className="text-purple-400" size={24} />}
           {item.type === ShopItemType.TEMPORARY_ACHIEVEMENT && <Clock className="text-orange-400" size={24} />}
           {item.type === ShopItemType.SPECIAL_EMOJI && <MessageSquare className="text-green-400" size={24} />}
-          
+
           <h3 className="text-xl font-bold text-ghost-white">{item.name}</h3>
         </div>
 
@@ -369,8 +373,8 @@ const ShopPage: React.FC = () => {
                   onClick={() => handleEquipItem(item)}
                   className="flex-1 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-bold transition-all text-sm"
                 >
-                  {item.type === ShopItemType.AVATAR_FRAME ? 'Tak' : 
-                   item.type === ShopItemType.COLOR_THEME ? 'Uygula' : 'Seç'}
+                  {item.type === ShopItemType.AVATAR_FRAME ? 'Tak' :
+                   item.type === ShopItemType.PROFILE_ANIMATION ? 'Uygula' : 'Seç'}
                 </button>
               )}
             </div>
