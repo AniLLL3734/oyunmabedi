@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, getDocs, doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { motion } from 'framer-motion';
 import { Send, CheckCircle, Loader } from 'lucide-react'; // Loader ekleyebiliriz
 import { useNavigate } from 'react-router-dom';
@@ -13,17 +13,23 @@ const ChatJoinRequestPage: React.FC = () => {
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [requestStatus, setRequestStatus] = useState<'form' | 'pending' | null>(null);
     const [isChatInvitationless, setIsChatInvitationless] = useState(false);
+    const [showJoinButton, setShowJoinButton] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        // 1. EN ÖNEMLİ KONTROL: Kullanıcının zaten yetkisi var mı veya davet olmadan giriş açık mı?
-        // userProfile, onSnapshot sayesinde her zaman güncel olacak.
-        if (userProfile?.chatAccessGranted || isChatInvitationless) {
+        // 1. Kullanıcının zaten yetkisi var mı?
+        if (userProfile?.chatAccessGranted) {
             navigate('/chat');
-            return; // Yetkisi varsa veya davet olmadan giriş açık ise başka hiçbir şey yapma, çık.
+            return;
         }
 
-        // 2. Yetkisi yoksa ve davet olmadan giriş kapalıysa, mevcut bir başvurusu var mı diye kontrol et.
+        // 2. Davet olmadan giriş açık mı?
+        if (isChatInvitationless && !userProfile?.chatAccessGranted) {
+            setShowJoinButton(true);
+            return;
+        }
+
+        // 3. Yetkisi yoksa ve davet olmadan giriş kapalıysa, mevcut bir başvurusu var mı diye kontrol et.
         const checkExistingRequest = async () => {
             if (!user) return;
             try {
@@ -80,6 +86,18 @@ const ChatJoinRequestPage: React.FC = () => {
             setSubmitError('İstek gönderilirken bir hata oluştu. Lütfen tekrar deneyin.');
         }
     };
+
+    const handleJoin = async () => {
+        if (!user) return;
+        try {
+            setSubmitError(null);
+            await updateDoc(doc(db, 'users', user.uid), { chatAccessGranted: true });
+            navigate('/chat');
+        } catch (error) {
+            console.error('Katılma hatası:', error);
+            setSubmitError('Katılma sırasında hata oluştu.');
+        }
+    };
     
     // Auth contexti yüklenirken veya durum belirlenirken bir yükleme ekranı göster
     if (loading || requestStatus === null) {
@@ -98,6 +116,22 @@ const ChatJoinRequestPage: React.FC = () => {
                     <h1 className="text-3xl font-bold text-ghost-white font-heading">İstek Gönderildi</h1>
                     <p className="text-cyber-gray">Chat katılım isteğiniz adminlere iletildi. Onay bekleniyor...</p>
                     <p className="text-sm text-cyber-gray/80">İletişim Ekibimiz Tarafından Verdiğiniz Bilgiler Gözden Geçirilecek En Fazla 5 Dakika</p>
+                </div>
+            </motion.div>
+        );
+    }
+
+    // Davet olmadan katılma ekranı
+    if (showJoinButton) {
+        return (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center items-center py-12">
+                <div className="w-full max-w-md p-8 space-y-6 bg-dark-gray rounded-lg border border-cyber-gray/50 text-center">
+                    <h1 className="text-3xl font-bold text-ghost-white font-heading">Chat'e Katıl</h1>
+                    <p className="text-cyber-gray">Şu anda davet olmadan chat'e katılabilirsiniz.</p>
+                    {submitError && <p className="text-red-500">{submitError}</p>}
+                    <button onClick={handleJoin} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all">
+                        Katıl
+                    </button>
                 </div>
             </motion.div>
         );

@@ -210,7 +210,7 @@ const UserSelectionModal: React.FC<{
 const AdminPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading, refreshUserProfile } = useAuth();
     const navigate = useNavigate();
-    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatRequests' | 'privateChat' | 'commands' | 'clan' | 'adminNotes'>('dashboard');
+    const [view, setView] = useState<'dashboard' | 'users' | 'games' | 'feedback' | 'reports' | 'chatRequests' | 'privateChat' | 'commands' | 'clan' | 'adminNotes' | 'recentUsers'>('dashboard');
     
     // STATE TANIMLAMALARI
     const [users, setUsers] = useState<UserData[]>([]);
@@ -326,6 +326,10 @@ const AdminPage: React.FC = () => {
             try {
                 if (view === 'users') {
                     const q = query(collection(db, 'users'), orderBy('displayName'));
+                    const querySnapshot = await getDocs(q);
+                    setUsers(querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserData)));
+                } else if (view === 'recentUsers') {
+                    const q = query(collection(db, 'users'), orderBy('joinDate', 'desc'));
                     const querySnapshot = await getDocs(q);
                     setUsers(querySnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() } as UserData)));
                 } else if (view === 'games') {
@@ -898,9 +902,9 @@ const AdminPage: React.FC = () => {
             <h1 className="text-4xl md:text-5xl font-heading mb-8 flex items-center gap-4"><Shield size={48} className="text-electric-purple" /> Yönetim Paneli</h1>
             
             <div className="flex flex-wrap gap-2 md:gap-4 mb-8 border-b border-cyber-gray/50">
-                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'chatRequests', 'privateChat', 'commands', 'clan', 'adminNotes'] as const).map(tab => {
-                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, chatRequests: UserCheck, privateChat: MessageSquare, commands: Shield, clan: Users, adminNotes: ClipboardEdit };
-                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', chatRequests: 'Chat İstekleri', privateChat: 'Özel Odalar', commands: 'Komutlar', clan: 'Klan', adminNotes: 'Admin Notları' };
+                {(['dashboard', 'users', 'games', 'feedback', 'reports', 'chatRequests', 'privateChat', 'commands', 'clan', 'adminNotes', 'recentUsers'] as const).map(tab => {
+                    const icons = { dashboard: Activity, users: Users, games: Gamepad2, feedback: MessageSquare, reports: Flag, chatRequests: UserCheck, privateChat: MessageSquare, commands: Shield, clan: Users, adminNotes: ClipboardEdit, recentUsers: Users };
+                    const labels = { dashboard: 'Dashboard', users: 'Kullanıcılar', games: 'Oyunlar', feedback: 'Geri Bildirim', reports: 'Raporlar', chatRequests: 'Chat İstekleri', privateChat: 'Özel Odalar', commands: 'Komutlar', clan: 'Klan', adminNotes: 'Admin Notları', recentUsers: 'Son Kullanıcılar' };
                     const Icon = icons[tab];
                     return (
                         <button key={tab} onClick={() => setView(tab)} className={`py-3 px-3 md:px-5 text-sm md:text-lg font-bold relative transition-colors ${view === tab ? 'text-electric-purple border-b-2 border-electric-purple' : 'text-cyber-gray hover:text-white'}`}>
@@ -990,6 +994,76 @@ const AdminPage: React.FC = () => {
                             })}
                         </tbody>
                     </table>
+                </div>
+            )}
+            {!isLoading && view === 'recentUsers' && (
+                <div>
+                    <h2 className="text-2xl font-heading mb-4 flex items-center gap-2"><Users className="text-electric-purple" size={24} /> Son Katılan Kullanıcılar</h2>
+                    <div className="bg-dark-gray/50 rounded-lg overflow-x-auto">
+                        <table className="w-full text-left">
+                            <thead className="border-b border-cyber-gray/50">
+                                <tr>
+                                    <th className="p-4">Kullanıcı</th>
+                                    <th className="p-4 hidden md:table-cell">E-posta</th>
+                                    <th className="p-4">Katılım Tarihi</th>
+                                    <th className="p-4">Rol</th>
+                                    <th className="p-4">Eylemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map(u => { 
+                                    const isMuted = u.mutedUntil && u.mutedUntil.toDate() > new Date();
+                                    const isBanned = u.bannedFromChat;
+                                    const joinDate = u.joinDate ? new Date(u.joinDate.toDate()).toLocaleDateString('tr-TR') : 'Bilinmiyor';
+                                    return (
+                                        <tr key={u.uid} className={`border-b border-cyber-gray/50 last:border-0 hover:bg-space-black ${isMuted ? 'bg-red-900/30' : ''} ${isBanned ? 'bg-red-900/50' : ''}`}>
+                                            <td className="p-4 flex items-center gap-2 font-bold">
+                                                {u.displayName}
+                                                {isMuted && <MicOff size={14} className="text-red-400"/>}
+                                                {isBanned && <Ban size={14} className="text-red-400"/>}
+                                            </td>
+                                            <td className="p-4 text-cyber-gray hidden md:table-cell">{u.email}</td>
+                                            <td className="p-4 text-sm">{joinDate}</td>
+                                            <td className="p-4">{u.role === 'admin' ? <span className="text-electric-purple font-bold">Admin</span> : 'Kullanıcı'}</td>
+                                            <td className="p-4 flex gap-4">
+                                                <button 
+                                                    onClick={() => openEnhancedControls(u)}
+                                                    className="text-blue-400 hover:text-blue-300"
+                                                    title="Yönetim Araçları"
+                                                >
+                                                    <Eye size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => startDmWithUser(u)} 
+                                                    disabled={u.uid === user?.uid} 
+                                                    className="text-sky-400 hover:text-sky-300 disabled:text-gray-600" 
+                                                    title="Özel Mesaj"
+                                                >
+                                                    <MessageSquare size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => openMuteModal(u)} 
+                                                    disabled={u.uid === user?.uid} 
+                                                    className="text-yellow-500 hover:text-yellow-400 disabled:text-gray-600" 
+                                                    title="Sustur"
+                                                >
+                                                    <MicOff size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteUser(u)} 
+                                                    disabled={u.role === 'admin' || u.uid === user?.uid} 
+                                                    className="text-red-500 hover:text-red-400 disabled:text-gray-600" 
+                                                    title="Sil"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
             {!isLoading && view === 'games' && (
