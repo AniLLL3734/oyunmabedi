@@ -5,4 +5,4 @@
 - [x] Adjust Layout.tsx: Reduce padding on mobile for more space
 - [x] Improve ChatPage.tsx: Make input and buttons touch-friendly
 - [x] Minor tweaks to HomePage.tsx: Adjust margins/spacing if needed
-- [ ] Test mobile responsiveness using browser_action
+- [x] Test mobile responsiveness using browser_action

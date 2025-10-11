@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "home": "Ana Sayfa",
+    "users": "Gezginler",
+    "chat": "Ana Sohbet",
+    "leaderboard": "Skor Tablosu",
+    "shop": "Siber Dükkan",
+    "creator": "Yapımcı",
+    "clans": "Klanlar",
+    "login": "Giriş Yap",
+    "logout": "Çıkış Yap"
+  },
+  "common": {
+    "loading": "Yükleniyor...",
+    "error": "Hata",
+    "success": "Başarılı",
+    "cancel": "İptal",
+    "save": "Kaydet",
+    "delete": "Sil",
+    "edit": "Düzenle"
+  }
+}

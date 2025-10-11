@@ -6,10 +6,13 @@ import ReactDOM from 'react-dom/client';
 import { HashRouter } from 'react-router-dom';
 
 // DÜZELTME: App dosyası zaten aynı dizinde olduğu için './App' kullanılır.
-import App from './App'; 
+import App from './App';
 
 // DÜZELTME: AuthProvider dosyası 'src/contexts' klasöründe olduğu için yol './src/contexts/AuthContext' olmalı.
-import { AuthProvider } from './src/contexts/AuthContext'; 
+import { AuthProvider } from './src/contexts/AuthContext';
+
+// Import i18n configuration
+import './src/i18n';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

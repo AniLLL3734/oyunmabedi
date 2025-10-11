@@ -4,12 +4,14 @@ import { motion } from 'framer-motion';
 import { useAuth, UserProfileData } from '../src/contexts/AuthContext';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit, orderBy, getDocs, writeBatch } from 'firebase/firestore';
-import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X, Menu } from 'lucide-react';
+import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X, Menu, Languages } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useTranslation } from 'react-i18next';
 
 const Header: React.FC = () => {
   const { user, isAdmin, userProfile, signOutAndSetCooldown } = useAuth();
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   
   const [hasUnreadAdminMessage, setHasUnreadAdminMessage] = useState(false);
   const [hasUnreadDmsForAdmin, setHasUnreadDmsForAdmin] = useState(false);
@@ -265,8 +267,8 @@ const Header: React.FC = () => {
 
         {/* Desktop Navigation */}
         <ul className="hidden md:flex items-center space-x-6 text-lg">
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>Ana Sayfa</NavLink></motion.div></li>
-          
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.home')}</NavLink></motion.div></li>
+
           {user && !isAdmin && (
              <li>
                 <motion.div variants={navItemVariants} whileHover="hover" className="relative">
@@ -279,11 +281,11 @@ const Header: React.FC = () => {
                 </motion.div>
              </li>
           )}
-          
+
           {user && !isAdmin && hasPrivateChatNotification && (
              <li>
                 <motion.div variants={navItemVariants} whileHover="hover" className="relative">
-                  <button 
+                  <button
                     onClick={() => {
                       if (privateChatRoomId) {
                         markNotificationAsRead(privateChatRoomId);
@@ -301,21 +303,23 @@ const Header: React.FC = () => {
                 </motion.div>
              </li>
           )}
-          
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/all-users" style={({ isActive }) => (isActive ? activeStyle : {})}>Gezginler</NavLink></motion.div></li>
+
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/all-users" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.users')}</NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/chat" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
-            <MessageSquare size={18} /> Ana Sohbet
+            <MessageSquare size={18} /> {t('nav.chat')}
           </NavLink></motion.div></li>
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>Skor Tablosu</NavLink></motion.div></li>
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.leaderboard')}</NavLink></motion.div></li>
           {user && (
             <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
-              <ShoppingBag size={18} className="text-yellow-400" /> Siber Dükkan
+              <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}
             </NavLink></motion.div></li>
           )}
 
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/creator" style={({ isActive }) => (isActive ? activeStyle : {})}>Yapımcı</NavLink></motion.div></li>
-          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/clans" style={({ isActive }) => (isActive ? activeStyle : {})}>Klanlar</NavLink></motion.div></li>
-          
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/creator" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.creator')}</NavLink></motion.div></li>
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/clans" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.clans')}</NavLink></motion.div></li>
+
+          <li><motion.div variants={navItemVariants} whileHover="hover"><button onClick={() => i18n.changeLanguage(i18n.language === 'tr' ? 'en' : 'tr')} className="flex items-center gap-1 hover:text-electric-purple transition-colors"><Languages size={18} /> {i18n.language === 'tr' ? 'EN' : 'TR'}</button></motion.div></li>
+
           {isAdmin && (
             <>
               <li>
@@ -341,7 +345,7 @@ const Header: React.FC = () => {
           
           {user && userProfile ? (
             <li className="flex items-center gap-3">
-              <button onClick={handleLogout} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">Çıkış Yap</button>
+              <button onClick={handleLogout} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">{t('nav.logout')}</button>
               <Link to={`/profile/${user.uid}`} title="Profilini Görüntüle">
                 <div className="relative">
                   <img 
@@ -381,7 +385,7 @@ const Header: React.FC = () => {
               </Link>
             </li>
           ) : (
-            <li><NavLink to="/login" className="bg-electric-purple text-white text-base py-2 px-4 rounded-md hover:bg-opacity-80 transition-all">Giriş Yap</NavLink></li>
+            <li><NavLink to="/login" className="bg-electric-purple text-white text-base py-2 px-4 rounded-md hover:bg-opacity-80 transition-all">{t('nav.login')}</NavLink></li>
           )}
         </ul>
       </nav>
@@ -395,7 +399,7 @@ const Header: React.FC = () => {
           className="md:hidden bg-dark-gray/95 backdrop-blur-sm border-b border-cyber-gray/50"
         >
           <ul className="container mx-auto px-4 py-4 space-y-4 text-lg">
-            <li><NavLink to="/" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Ana Sayfa</NavLink></li>
+            <li><NavLink to="/" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.home')}</NavLink></li>
 
             {user && !isAdmin && (
               <li>
@@ -424,19 +428,19 @@ const Header: React.FC = () => {
               </li>
             )}
 
-            <li><NavLink to="/all-users" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Gezginler</NavLink></li>
+            <li><NavLink to="/all-users" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.users')}</NavLink></li>
             <li><NavLink to="/chat" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
-              <MessageSquare size={18} /> Ana Sohbet
+              <MessageSquare size={18} /> {t('nav.chat')}
             </NavLink></li>
-            <li><NavLink to="/leaderboard" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Skor Tablosu</NavLink></li>
+            <li><NavLink to="/leaderboard" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.leaderboard')}</NavLink></li>
             {user && (
               <li><NavLink to="/shop" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
-                <ShoppingBag size={18} className="text-yellow-400" /> Siber Dükkan
+                <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}
               </NavLink></li>
             )}
 
-            <li><NavLink to="/creator" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Yapımcı</NavLink></li>
-            <li><NavLink to="/clans" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">Klanlar</NavLink></li>
+            <li><NavLink to="/creator" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.creator')}</NavLink></li>
+            <li><NavLink to="/clans" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.clans')}</NavLink></li>
 
             {isAdmin && (
               <>
@@ -465,11 +469,11 @@ const Header: React.FC = () => {
                     />
                     <span className="hover:text-electric-purple transition-colors">Profil</span>
                   </Link>
-                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">Çıkış</button>
+                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">{t('nav.logout')}</button>
                 </div>
               </li>
             ) : (
-              <li><NavLink to="/login" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 bg-electric-purple text-white text-center rounded-md hover:bg-opacity-80 transition-all">Giriş Yap</NavLink></li>
+              <li><NavLink to="/login" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 bg-electric-purple text-white text-center rounded-md hover:bg-opacity-80 transition-all">{t('nav.login')}</NavLink></li>
             )}
           </ul>
         </motion.div>
