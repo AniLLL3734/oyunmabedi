@@ -29,7 +29,7 @@ Boşluk (Space): Kamera açısını değiştir.`,
     title: '2048',
     description: `Rakamların sessizce dans ettiği bir arenada, bilgeliğinizi kullanarak nihai birliğe ulaşın. Her hareket, kaderinize atılmış bir zardır. O sihirli sayıya ulaşabilecek misiniz?\n\nBirleşimlerin gücü sizinle olsun.\n-FaTaLRhymeR37`,
     type: GameType.HTML5,
-    url: 'https://peppy-unicorn-d7184a.netlify.app/',
+    url: 'https://2048-25o.pages.dev/',
     thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir_1_x5u3gk.png',
     category: 'Bulmaca',
     tags: ['Bulmaca', 'Strateji', 'Sayılar', 'Klasik', 'Zeka'],
@@ -563,18 +563,6 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: ['HTML5', 'Arcade', 'Sonsuz Koşu', 'Dinozor', 'Klasik', 'Skor', 'Basit'],
   controls: 'Space/Yukarı Ok: Zıpla, Aşağı Ok: Eğil.',
 },
-{
-  id: 'angrybirds',
-  title: 'ANGRY BIRDS',
-  description: 'Kötü domuzlar kuşların yumurtalarını çaldı! İntikam zamanı. Sapanını kullanarak kuşları fırlat, domuzların kalelerini yık ve yumurtaları geri al. Bu efsanevi fizik tabanlı bulmaca oyununda nişan al ve ateş et!',
-  type: GameType.HTML5,
-  url: 'https://strong-bonbon-fb59bf.netlify.app/',
-  
-  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir.png',
-  
-  category: 'Bulmaca',
-  tags: ['HTML5', 'Angry Birds', 'Fizik', 'Bulmaca', 'Nişan Alma', 'Yıkım', 'Klasik', 'Kuşlar'],
-  controls: 'Fare: Sapanı ger, nişan al ve bırak.',
-},
+
 
 ];
