@@ -32,6 +32,10 @@ interface ReplyInfo { uid: string; displayName: string; text: string; }
 interface Message { id: string; uid: string; displayName: string; text: string; createdAt: Timestamp; replyingTo?: ReplyInfo; seenBy?: { [uid: string]: Timestamp }; isAiMessage?: boolean; }
 interface PinnedMessage extends Message { pinnedBy: string; }
 interface UserProfile { mutedUntil?: Timestamp; inventory?: any; messageCount?: number; displayName?: string; }
+interface InfractionRecord {
+    offenseCount: number;
+    mutedUntil: Timestamp | null;
+}
 
 const MAX_CHAR_LIMIT = 300;
 const PAGE_SIZE = 50;
@@ -73,6 +77,9 @@ const ChatPage: React.FC = () => {
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
 
+    // YENİ STATE: Kullanıcının sicil kaydını tutar
+    const [infractionRecord, setInfractionRecord] = useState<InfractionRecord | null>(null);
+
     // Kullanıcılar, ayarlar ve sabitlenmiş mesaj için useEffect
     useEffect(() => {
         const fetchUsers = async () => {
@@ -86,8 +93,22 @@ const ChatPage: React.FC = () => {
         const settingsRef = doc(db, 'chat_meta', 'settings');
         const unsubPinned = onSnapshot(pinnedMessageRef, (doc) => { setPinnedMessage(doc.exists() ? doc.data() as PinnedMessage : null); });
         const unsubSettings = onSnapshot(settingsRef, (doc) => { if (doc.exists()) setChatSettings(doc.data() as any); });
+
+        // YENİ useEffect: Kullanıcının ihlal kaydını canlı olarak dinler
+        if (user) {
+            const infractionDocRef = doc(db, "infractions", user.uid);
+            const unsubInfractions = onSnapshot(infractionDocRef, (doc) => {
+                if (doc.exists()) {
+                    setInfractionRecord(doc.data() as InfractionRecord);
+                } else {
+                    setInfractionRecord(null); // Kayıt yoksa null yap
+                }
+            });
+            return () => { unsubPinned(); unsubSettings(); unsubInfractions(); };
+        }
+
         return () => { unsubPinned(); unsubSettings(); };
-    }, []);
+    }, [user]);
 
     // Mesajlar için ana dinleyici
     useEffect(() => {
@@ -150,9 +171,13 @@ const ChatPage: React.FC = () => {
 
         if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
 
-        // ** YENİ: Susturulma Kontrolü **
-        if (userProfile?.mutedUntil && userProfile.mutedUntil.toDate() > new Date()) {
-            const remainingTime = formatRemainingTime(userProfile.mutedUntil.toDate());
+        // --- EN ÖNEMLİ KONTROL: KULLANICI SUSTURULMUŞ MU? ---
+        const infractionDocRef = doc(db, 'infractions', user.uid);
+        const infractionSnap = await getDoc(infractionDocRef);
+        const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
+
+        if (currentInfraction?.mutedUntil && currentInfraction.mutedUntil.toDate() > new Date()) {
+            const remainingTime = formatRemainingTime(currentInfraction.mutedUntil.toDate());
             setChatError(`Susturuldun. Kalan süre: ${remainingTime}.`);
             return;
         }
@@ -230,13 +255,51 @@ const ChatPage: React.FC = () => {
 
             const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
 
-            if (analysis.isToxic && analysis.warningMessage) {
-                console.log(`[OyunMabediAI] İhlal Tespiti: "${messageText}".`);
-                await deleteDoc(messageDocRef);
-                await addDoc(collection(db, 'messages'), {
-                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                    text: analysis.warningMessage, createdAt: serverTimestamp(),
-                });
+            if (analysis.action !== 'NONE' && analysis.warningMessage) {
+                // Admin'leri susturma (fatalrhymer37 hariç)
+                if (isAdmin) {
+                    // Admin mesajını sil ama ceza uygulama
+                    await deleteDoc(messageDocRef);
+                    await addDoc(collection(db, 'messages'), {
+                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                        text: analysis.warningMessage, createdAt: serverTimestamp(),
+                    });
+                } else {
+                    // Normal kullanıcı için ceza uygula
+                    await deleteDoc(messageDocRef);
+                    await addDoc(collection(db, 'messages'), {
+                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                        text: analysis.warningMessage, createdAt: serverTimestamp(),
+                    });
+
+                    // Cezayı kullanıcının kendi siciline işle
+                    const infractionDocRef = doc(db, 'infractions', user.uid);
+                    const currentOffenses = currentInfraction?.offenseCount || 0;
+
+                    let muteUntil: Timestamp | null = null;
+                    const now = new Date();
+
+                    switch (analysis.action) {
+                        case 'DELETE_AND_MUTE_5M':
+                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
+                            break;
+                        case 'DELETE_AND_MUTE_1H':
+                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
+                            break;
+                        case 'DELETE_AND_PERMANENT_BAN':
+                            // Kalıcı ban için çok ileri bir tarih (örn: 100 yıl sonrası)
+                            muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
+                            break;
+                    }
+
+                    if (muteUntil) {
+                        await setDoc(infractionDocRef, {
+                            offenseCount: increment(1),
+                            mutedUntil: muteUntil,
+                            lastOffenseReason: analysis.warningMessage
+                        }, { merge: true }); // 'merge: true' var olan 'offenseCount'u ezmemek için kritik
+                    }
+                }
             }
         } catch (error) {
             console.error("Mesaj gönderme veya moderasyon sırasında hata:", error);

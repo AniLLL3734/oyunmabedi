@@ -75,10 +75,10 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.reporterUserId == request.auth.uid;
     }
     
-    // --- GENEL SOHBET (Sadece yetkisi olanlar görebilir) ---
+    // --- GENEL SOHBET (Davet olmadan giriş açık) ---
     match /messages/{messageId} {
-      allow read: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.chatAccessGranted == true);
-      allow create: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.chatAccessGranted == true && request.resource.data.uid == request.auth.uid);
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
       allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
     }
 
@@ -139,6 +139,15 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid;
       allow read: if isAdmin() || (isAuthenticated() && resource.data.uid == request.auth.uid);
       allow update, delete: if isAdmin();
+    }
+
+    // --- İHLAL KAYITLARI (Kendi Sicilini Kendin Yaz Sistemi) ---
+    match /infractions/{userId} {
+      // Bir kullanıcı SADECE KENDİ sicil belgesini okuyabilir,
+      // oluşturabilir ve güncelleyebilir.
+      // Başkasının sicilini göremez, silemez veya değiştiremez.
+      allow get, create, update: if request.auth.uid == userId;
+      allow list, delete: if false;
     }
 
     // --- DİĞER KOLEKSİYONLAR ---

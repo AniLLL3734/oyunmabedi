@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
@@ -37,7 +38,7 @@ const SignupPage: React.FC = () => {
             setFirebaseError("Kullanıcı adı en az 3 karakter olmalı.");
             return;
         }
-        if (displayName.toLowerCase().includes('admin') && displayName !== 'FaTaLRhymeR37') {
+        if (displayName.toLowerCase().includes('admin') && displayName !== 'FaTaLRhymeR37' && displayName !== 'Padişah2.admın') {
              setFirebaseError('Bu kullanıcı adını seçemezsin.');
              return;
         }
