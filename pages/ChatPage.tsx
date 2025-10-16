@@ -19,8 +19,9 @@ import {
     deleteDoc, Timestamp, setDoc, where
 } from 'firebase/firestore';
 import { Link } from 'react-router-dom';
-import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile } from 'lucide-react';
+import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile, Bot } from 'lucide-react';
 import { checkAndGrantAchievements } from '../src/utils/achievementService';
+import { analyzeMessageWithAI, chatWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
 import AdminTag from '../components/AdminTag';
 import { fortressProfanityCheckINTELLIGENCE as fortressModerationCheck } from '../src/utils/fortressProfanityFilterULTRA';
 import ChatJoinRequestPage from './ChatJoinRequestPage';
@@ -28,7 +29,7 @@ import ProfileAnimation from '../components/ProfileAnimations';
 
 // --- ARAYÜZ TANIMLARI ---
 interface ReplyInfo { uid: string; displayName: string; text: string; }
-interface Message { id: string; uid: string; displayName: string; text: string; createdAt: Timestamp; replyingTo?: ReplyInfo; seenBy?: { [uid: string]: Timestamp }; }
+interface Message { id: string; uid: string; displayName: string; text: string; createdAt: Timestamp; replyingTo?: ReplyInfo; seenBy?: { [uid: string]: Timestamp }; isAiMessage?: boolean; }
 interface PinnedMessage extends Message { pinnedBy: string; }
 interface UserProfile { mutedUntil?: Timestamp; inventory?: any; messageCount?: number; displayName?: string; }
 
@@ -62,6 +63,9 @@ const ChatPage: React.FC = () => {
     const [disclaimerTimer, setDisclaimerTimer] = useState(10);
     const [showDisclaimer, setShowDisclaimer] = useState(true);
     const [isSending, setIsSending] = useState(false);
+    const [isAiResponding, setIsAiResponding] = useState(false);
+    const lastAiCallTimestamp = useRef(0);
+    const AI_COOLDOWN_SECONDS = 20; // Kullanıcılar arası AI komutu bekleme süresi (saniye)
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [chatSettings, setChatSettings] = useState<{
         chatPaused: boolean; chatPauseReason: string; slowMode: boolean; slowModeDelay: number; isChatInvitationless: boolean;
@@ -138,26 +142,107 @@ const ChatPage: React.FC = () => {
         } catch (error) { console.error("Disclaimer kabul edilirken hata:", error); }
     };
 
-    // Mesaj gönderme
+    // ChatPage.tsx içindeki sendMessage fonksiyonunu bununla tamamen değiştirin
+
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (newMessage.trim() === '' || !user || !userProfile || isSending) return;
-        if (chatSettings.chatPaused && !isAdmin) { setChatError(chatSettings.chatPauseReason || 'Sohbet devre dışı.'); return; }
-        setIsSending(true);
-        try {
+        const messageText = newMessage.trim();
+
+        if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
+
+        // ** YENİ: Susturulma Kontrolü **
+        if (userProfile?.mutedUntil && userProfile.mutedUntil.toDate() > new Date()) {
+            const remainingTime = formatRemainingTime(userProfile.mutedUntil.toDate());
+            setChatError(`Susturuldun. Kalan süre: ${remainingTime}.`);
+            return;
+        }
+
+        // --- BÖLÜM 1: BU BİR AI SOHBET KOMUTU MU? ---
+        if (messageText.startsWith('/ai ')) {
+            // Yük Koruması (Rate Limit) Kontrolü
+            const now = Date.now();
+            const timeSinceLastCall = (now - lastAiCallTimestamp.current) / 1000;
+            if (timeSinceLastCall < AI_COOLDOWN_SECONDS) {
+                setChatError(`Sakin ol şampiyon! AI ile konuşmak için ${Math.ceil(AI_COOLDOWN_SECONDS - timeSinceLastCall)} saniye daha beklemelisin.`);
+                return;
+            }
+
+            const question = messageText.substring(4).trim();
+            if (question === '') {
+                setChatError("AI'ya bir soru sormalısın. Örneğin: /ai en iyi oyun hangisi?");
+                return;
+            }
+
+            setIsAiResponding(true);
+            setNewMessage(''); // Input'u temizle
+            lastAiCallTimestamp.current = now;
+
+            // Önce kullanıcının sorusunu sohbete ekle (iyi bir UX için)
             await addDoc(collection(db, 'messages'), {
-                text: newMessage, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
+                text: messageText,
+                uid: user.uid,
+                displayName: userProfile?.displayName || 'Anonim',
                 createdAt: serverTimestamp(),
-                ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text }})
             });
+
+            try {
+                // AI'dan yanıtı al
+                const aiResponse = await chatWithAI(userProfile?.displayName || 'Anonim', question);
+
+                // AI'nın yanıtını sohbete ekle
+                await addDoc(collection(db, 'messages'), {
+                    uid: user.uid, // Orijinal kullanıcıyı referans alır ama...
+                    isAiMessage: true, // ...bu bayrakla AI mesajı olduğunu belirtiriz.
+                    displayName: AI_DISPLAY_NAME,
+                    text: aiResponse,
+                    createdAt: serverTimestamp(),
+                });
+            } catch (error) {
+                setChatError("AI yanıt verirken bir sorunla karşılaştı.");
+            } finally {
+                setIsAiResponding(false);
+                setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+            }
+            return; // İşlemi burada bitir
+        }
+
+        // --- BÖLÜM 2: NORMAL MESAJ & MODERASYON (Eski Kod) ---
+        if (chatSettings.chatPaused && !isAdmin) {
+            setChatError(chatSettings.chatPauseReason || 'Sohbet devre dışı.');
+            return;
+        }
+
+        setIsSending(true);
+        setNewMessage('');
+        handleCancelReply();
+
+        try {
+            const messageDocRef = await addDoc(collection(db, 'messages'), {
+                text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
+                createdAt: serverTimestamp(),
+                ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
+            });
+
             await updateDoc(doc(db, 'users', user.uid), { messageCount: increment(1) });
-            const updatedProfile = { ...userProfile, messageCount: (userProfile?.messageCount || 0) + 1 };
-            checkAndGrantAchievements(updatedProfile, { type: 'MESSAGE_SENT', payload: { updatedProfile } });
-        setNewMessage(''); handleCancelReply();
-        setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
-        } catch(error) { 
-            console.error("Mesaj gönderilemedi:", error); setChatError("Mesaj gönderilemedi.");
-        } finally { setIsSending(false); }
+            // ...başarımlar vs.
+
+            setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+
+            const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+
+            if (analysis.isToxic && analysis.warningMessage) {
+                console.log(`[OyunMabediAI] İhlal Tespiti: "${messageText}".`);
+                await deleteDoc(messageDocRef);
+                await addDoc(collection(db, 'messages'), {
+                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                    text: analysis.warningMessage, createdAt: serverTimestamp(),
+                });
+            }
+        } catch (error) {
+            console.error("Mesaj gönderme veya moderasyon sırasında hata:", error);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     // Mesaj silme
@@ -206,6 +291,25 @@ const ChatPage: React.FC = () => {
                 {messages.map(msg => {
                     const senderIsAdmin = allUsers.get(msg.uid)?.role === 'admin';
                     const messageIsFromCurrentUser = user?.uid === msg.uid;
+                    const messageIsFromAI = msg.isAiMessage; // AI mesajı mı?
+
+                    // === YENİ BÖLÜM: AI MESAJLARI İÇİN ÖZEL RENDER ===
+                    if (messageIsFromAI) {
+                        return (
+                            <div key={msg.id} className="flex items-start gap-3 p-3 my-2 bg-space-black border-l-4 border-electric-purple/70 rounded-r-lg">
+                                <div className="p-2 bg-electric-purple/20 rounded-full">
+                                    <Bot className="text-electric-purple" size={20} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-electric-purple">{msg.displayName}</p>
+                                    <p className="text-ghost-white mt-1" style={{whiteSpace: "pre-wrap"}}>{msg.text}</p>
+                                </div>
+                            </div>
+                        )
+                    }
+                    // === AI BÖLÜMÜ SONU ===
+
+                    // Mevcut kodunuz (normal kullanıcı mesajları için)
                     return (
                         <div key={msg.id} className={`flex items-start gap-3 group relative ${messageIsFromCurrentUser ? 'flex-row-reverse' : 'flex-row'}`}>
                             {!messageIsFromCurrentUser && (
@@ -223,7 +327,7 @@ const ChatPage: React.FC = () => {
                             <div className={`flex gap-2 items-center absolute top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 ${messageIsFromCurrentUser ? 'left-2' : 'right-2'}`}>
                                 <button onClick={() => handleStartReply(msg)} title="Yanıtla"><CornerDownLeft size={16}/></button>
                                 {isAdmin && <button onClick={() => handlePinMessage(msg)} title="Sabitle"><Pin size={16} /></button>}
-                                {(isAdmin || messageIsFromCurrentUser) && <button onClick={() => handleDeleteMessage(msg)} title="Sil"><Trash2 size={16} /></button>}
+                                {(isAdmin || messageIsFromCurrentUser) && <button onClick={() => handleDeleteMessage(msg)} title="Sil"><Trash2 size={16}/></button>}
                             </div>
                         </div>
                     );
@@ -239,7 +343,13 @@ const ChatPage: React.FC = () => {
                         {showEmojiPicker && ( <div className="absolute bottom-full mb-2 w-full bg-dark-gray border border-cyber-gray/50 rounded-lg p-4 z-10"><h3>Emojiler</h3><div className="grid grid-cols-8 gap-2">{getAllEmojis()[0].emojis.map((emoji, index) => ( <button key={index} type="button" onClick={() => insertEmoji(emoji)} className="text-2xl hover:scale-125">{emoji}</button> ))}</div></div> )}
                     </div>
                     <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-4 bg-cyber-gray/50 text-white rounded-md" title="Emoji Ekle"><Smile size={24} /></button>
-                    <button type="submit" disabled={!newMessage.trim() || isSending} className="p-4 bg-electric-purple text-white rounded-md disabled:bg-cyber-gray/50"><Send size={24} /></button>
+                    <button type="submit" disabled={!newMessage.trim() || isSending || isAiResponding} className="p-4 bg-electric-purple text-white rounded-md disabled:bg-cyber-gray/50 flex items-center justify-center w-[64px] h-[56px]">
+                        {isAiResponding ? (
+                            <LoaderCircle size={24} className="animate-spin" />
+                        ) : (
+                            <Send size={24} />
+                        )}
+                    </button>
                 </form>
                 <p className={`text-xs text-right mt-2 font-mono ${getCharCountColor()}`}>{newMessage.length} / {MAX_CHAR_LIMIT}</p>
             </div>

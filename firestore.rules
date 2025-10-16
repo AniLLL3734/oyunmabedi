@@ -43,19 +43,20 @@ service cloud.firestore {
     match /users/{userId} {
       // (list): Kullanıcı adı/email'in alınıp alınmadığını kontrol eden `getDocs` ve
       // `where` sorgularına, giriş yapmamış kullanıcılar için bile izin ver.
-      allow list: if true; 
+      allow list: if true;
 
       // (get): Tek bir kullanıcının detaylı profilini görmek (skor, rol vb.)
       // için mutlaka giriş yapmış olması (`isAuthenticated`) gerekir.
-      allow get: if isAuthenticated(); 
+      allow get: if isAuthenticated();
 
       // (create): Sadece kimliği doğrulanmış bir kullanıcı, kendi UID'si ile
       // eşleşen bir kullanıcı belgesi oluşturabilir.
       allow create: if request.auth.uid == userId;
-      
+
       // (update): Kullanıcı kendi profilini (rol hariç) güncelleyebilir veya admin güncelleyebilir.
+      // AI bot'a susturma ve banlama için update izni
       allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role)
-                      || isAdmin();
+                      || isAdmin() || request.auth.uid == "oyunmabedi-ai-bot-v1";
 
       // (delete): Sadece admin kullanıcı silebilir.
       allow delete: if isAdmin();
@@ -80,6 +81,8 @@ service cloud.firestore {
       allow create: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.chatAccessGranted == true && request.resource.data.uid == request.auth.uid);
       allow delete: if isAdmin() || resource.data.uid == request.auth.uid;
     }
+
+    // Moderasyon kuyruğu artık kullanılmıyor - eski sistemden kalan
 
     // --- KULLANICI-ADMİN DM SİSTEMİ (chats) ---
     match /chats/{chatId} {
