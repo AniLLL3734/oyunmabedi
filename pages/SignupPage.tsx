@@ -72,7 +72,7 @@ const SignupPage: React.FC = () => {
             // Display Name'i güncelle
             await updateProfile(user, { displayName: displayName });
 
-            const role = displayName === 'FaTaLRhymeR37' ? 'admin' : 'user';
+            const role = (displayName === 'FaTaLRhymeR37' || displayName === 'Padişah2.admın') ? 'admin' : 'user';
             const isAdmin = role === 'admin';
             
             // YENİ ve GÜVENLİ YÖNTEM: Batch Write (Toplu Yazma)
