@@ -2,25 +2,28 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
 import { db } from '../src/firebase';
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  doc, 
-  deleteDoc, 
-  updateDoc, 
-  Timestamp, 
-  onSnapshot, 
-  getDocs, 
-  addDoc, 
-  setDoc, 
-  getDoc, 
+import {
+  collection,
+  query,
+  orderBy,
+  doc,
+  deleteDoc,
+  updateDoc,
+  Timestamp,
+  onSnapshot,
+  getDocs,
+  addDoc,
+  setDoc,
+  getDoc,
   where,
   writeBatch,
   increment,
   arrayUnion,
   serverTimestamp,
-  deleteField
+  deleteField,
+  limit,
+  startAfter,
+  getCountFromServer
 } from 'firebase/firestore';
 import {
   LoaderCircle, Users, Gamepad2, Shield, Trash2, MicOff, MessageSquare,
@@ -81,7 +84,7 @@ interface ChatJoinRequestData {
     uid: string;
     displayName: string;
     class: string;
-    schoolNumber: string;
+    name: string;
     reason: string;
     status: 'pending' | 'approved' | 'rejected';
     submittedAt: any;
@@ -1088,8 +1091,8 @@ const AdminPage: React.FC = () => {
                                             <p className="text-sm">{request.class}</p>
                                         </div>
                                         <div>
-                                            <p className="text-xs text-cyber-gray">Okul Numarası:</p>
-                                            <p className="text-sm">{request.schoolNumber}</p>
+                                            <p className="text-xs text-cyber-gray">İsim:</p>
+                                            <p className="text-sm">{request.name}</p>
                                         </div>
                                     </div>
                                     <div className="mt-2">

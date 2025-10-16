@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../src/firebase';
 
 interface ActiveUser {
     uid: string;
@@ -10,6 +10,7 @@ interface ActiveUser {
     avatarUrl?: string;
     lastSeen: Timestamp;
     role?: string;
+    isOnline?: boolean;
 }
 
 // Bu en doğru ve bütçe dostu versiyondur
@@ -23,7 +24,7 @@ export const useActiveUsers = () => {
         const fetchActiveUsers = async () => {
             // Süreyi buradan kolayca değiştirebilirsin (5 dakika)
             const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
-            
+
             const q = query(
                 collection(db, 'users'),
                 where('lastSeen', '>', Timestamp.fromDate(fiveMinutesAgo))
@@ -42,12 +43,13 @@ export const useActiveUsers = () => {
                             avatarUrl: data.avatarUrl,
                             lastSeen: data.lastSeen,
                             role: data.role,
+                            isOnline: data.isOnline || false,
                         });
                     }
                 });
-                
+
                 users.sort((a, b) => b.lastSeen.toMillis() - a.lastSeen.toMillis());
-                
+
                 if (isMounted) {
                     setActiveUsers(users);
                 }
@@ -62,9 +64,9 @@ export const useActiveUsers = () => {
         };
 
         fetchActiveUsers();
-        
+
         // Her 1 dakikada bir listeyi tekrar çekerek güncelle
-        const intervalId = setInterval(fetchActiveUsers, 60 * 1000); 
+        const intervalId = setInterval(fetchActiveUsers, 60 * 1000);
 
         // Bileşen kaldırıldığında interval'ı temizle
         return () => {

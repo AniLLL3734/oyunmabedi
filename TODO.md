@@ -1,8 +1,11 @@
-# Mobile Compatibility Improvements
+# Pagination Implementation for LeaderboardPage.tsx
 
-## Tasks
-- [x] Update Header.tsx: Add hamburger menu for mobile navigation
-- [x] Adjust Layout.tsx: Reduce padding on mobile for more space
-- [x] Improve ChatPage.tsx: Make input and buttons touch-friendly
-- [x] Minor tweaks to HomePage.tsx: Adjust margins/spacing if needed
-- [x] Test mobile responsiveness using browser_action
+## Steps to Complete
+- [ ] Add startAfter import from firebase/firestore
+- [ ] Add state variables for pagination (lastUserDoc, hasMoreUsers, loadingMoreUsers, lastClanDoc, hasMoreClans, loadingMoreClans)
+- [ ] Modify fetchLeaderboard to set pagination states after initial fetch
+- [ ] Add fetchMoreUsers function for loading more users
+- [ ] Add fetchMoreClans function for loading more clans
+- [ ] Add "Load More" button for users leaderboard
+- [ ] Add "Load More" button for clans leaderboard
+- [ ] Update loading states during fetches

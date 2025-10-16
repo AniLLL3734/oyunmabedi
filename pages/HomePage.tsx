@@ -48,6 +48,9 @@ const HomePage: React.FC = () => {
   const [showAdminMessagePopup, setShowAdminMessagePopup] = useState(false);
   const [showGuestWarning, setShowGuestWarning] = useState(false);
 
+  // <-- YENİ: Yeni ürünler modal'ını kontrol etmek için state.
+  const [showNewItemsModal, setShowNewItemsModal] = useState(false);
+
   // Popüler ve Yeni eklenen oyunları çekme fonksiyonu
   const fetchGameLists = useCallback(async () => {
     setNewlyAdded(games.slice(-4).reverse());
@@ -87,13 +90,25 @@ const HomePage: React.FC = () => {
     };
     
     fetchAdminNote();
-    
+
+    // <-- YENİ: Modal'ı gösterme mantığı eklendi.
+    // Benzersiz bir ID ile tarayıcı hafızasını kontrol et.
+    // Yeni bir duyuru eklediğinde bu ID'yi değiştirebilirsin (örn: 'hasSeenHeritageModal-v2').
+    const hasSeenModal = localStorage.getItem('hasSeenHeritageModal');
+    if (!hasSeenModal) {
+      // Küçük bir gecikmeyle modal'ı göster ki kullanıcı sayfayı hemen görüp şaşırmasın.
+      const timer = setTimeout(() => {
+        setShowNewItemsModal(true);
+      }, 2000); // 2 saniye sonra göster
+      return () => clearTimeout(timer);
+    }
+
     // Giriş yapmayan kullanıcılar için uyarı göster
     if (!user) {
       const timer = setTimeout(() => {
         setShowGuestWarning(true);
       }, 3000); // 3 saniye sonra uyarı göster
-      
+
       return () => clearTimeout(timer);
     }
   }, [fetchGameLists, user]);
@@ -162,6 +177,13 @@ const HomePage: React.FC = () => {
     }
   };
 
+  // <-- YENİ: Modal'ı kapatma fonksiyonu
+  const handleCloseNewItemsModal = () => {
+    setShowNewItemsModal(false);
+    // Kullanıcı bu bildirimi bir daha görmesin diye tarayıcı hafızasına kaydet.
+    localStorage.setItem('hasSeenHeritageModal', 'true');
+  };
+
   const filteredGames = shuffledGames.filter(game => {
     const matchesCategory = selectedCategory ? game.category === selectedCategory : true;
     const isSearchQueryActive = searchQuery.trim().toLowerCase();
@@ -174,7 +196,70 @@ const HomePage: React.FC = () => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
-        <AnimatePresence>
+
+            {/* ================================================================ */}
+            {/* <-- YENİ: YENİ ÜRÜNLER DUYURU MODAL'I                           */}
+            {/* ================================================================ */}
+            <AnimatePresence>
+                {showNewItemsModal && (
+                    <motion.div
+                        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            className="bg-dark-gray border-2 border-amber-400/50 rounded-xl p-8 max-w-2xl w-full text-center relative shadow-lg shadow-amber-500/20"
+                            initial={{ scale: 0.8, y: 50 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.8, y: 50 }}
+                        >
+                            <button
+                                onClick={handleCloseNewItemsModal}
+                                className="absolute top-4 right-4 text-cyber-gray hover:text-ghost-white transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                            <div className="mb-6">
+                                <Sparkles className="mx-auto text-amber-400" size={64} />
+                            </div>
+                            <h2 className="text-3xl font-heading mb-4 bg-gradient-to-r from-amber-300 to-yellow-400 bg-clip-text text-transparent">
+                                Yeni Bir Miras Keşfedildi!
+                            </h2>
+                            <div className="text-cyber-gray mb-8 space-y-4">
+                                <p className="text-lg">
+                                    Siber Dükkan'a tarihimizden ilham alan yeni, <span className="text-amber-300 font-bold">ücretsiz</span> arka planlar eklendi.
+                                </p>
+                                <p>
+                                    Fatih Sultan Mehmet gibi tarihi figürlerin dijital yansımalarını profilinde taşı. Bu miras paha biçilemez ve herkesin erişimine açık.
+                                </p>
+                            </div>
+                            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                                <Link
+                                    to="/shop"
+                                    onClick={handleCloseNewItemsModal} // Markete gidince de modal'ı kapat
+                                    className="px-6 py-3 bg-amber-500 hover:bg-amber-600 text-black font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                                >
+                                    <ShoppingBag size={20} />
+                                    Dükkana Git ve Al
+                                </Link>
+                                <button
+                                    onClick={handleCloseNewItemsModal}
+                                    className="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-ghost-white font-bold rounded-lg transition-all"
+                                >
+                                    Daha Sonra
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+
+            {/* ================================================================ */}
+            {/* GERİ KALAN TÜM KOD (Admin Mesajı, Başlık vb.) DEĞİŞMEDEN KALIYOR */}
+            {/* ================================================================ */}
+            <AnimatePresence>
         {showAdminMessagePopup && (
             <motion.div
                 initial={{ opacity: 0, y: -50 }} animate={{ opacity: 1, y: 20 }} exit={{ opacity: 0 }}

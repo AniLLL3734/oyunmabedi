@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { db } from '../src/firebase';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, startAfter } from 'firebase/firestore';
 import { LoaderCircle, Trophy } from 'lucide-react';
 import { useAuth } from '../src/contexts/AuthContext';
 import { Link } from 'react-router-dom';
@@ -55,6 +55,12 @@ const LeaderboardPage: React.FC = () => {
     const [clanLeaderboard, setClanLeaderboard] = useState<ClanScore[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'users' | 'clans'>('users');
+    const [lastUserDoc, setLastUserDoc] = useState<any>(null);
+    const [hasMoreUsers, setHasMoreUsers] = useState(true);
+    const [loadingMoreUsers, setLoadingMoreUsers] = useState(false);
+    const [lastClanDoc, setLastClanDoc] = useState<any>(null);
+    const [hasMoreClans, setHasMoreClans] = useState(true);
+    const [loadingMoreClans, setLoadingMoreClans] = useState(false);
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
@@ -78,6 +84,8 @@ const LeaderboardPage: React.FC = () => {
                     }
                 });
                 setLeaderboard(board);
+                setLastUserDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
+                setHasMoreUsers(querySnapshot.docs.length === 100);
             } catch (error) {
                 console.error("Liderlik tablosu çekilirken hata:", error);
             } finally {
@@ -104,6 +112,8 @@ const LeaderboardPage: React.FC = () => {
                     });
                 });
                 setClanLeaderboard(board);
+                setLastClanDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
+                setHasMoreClans(querySnapshot.docs.length === 100);
             } catch (error) {
                 console.error("Klan liderlik tablosu çekilirken hata:", error);
             }
@@ -112,6 +122,67 @@ const LeaderboardPage: React.FC = () => {
         fetchLeaderboard();
         fetchClanLeaderboard();
     }, []);
+
+    const fetchMoreUsers = async () => {
+        if (!hasMoreUsers || loadingMoreUsers) return;
+        setLoadingMoreUsers(true);
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, orderBy('score', 'desc'), startAfter(lastUserDoc), limit(100));
+
+        try {
+            const querySnapshot = await getDocs(q);
+            const newBoard: UserScore[] = [];
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                if (data.score !== undefined && data.score >= 0) {
+                    newBoard.push({
+                        uid: doc.id,
+                        displayName: data.displayName || 'Anonim',
+                        score: data.score,
+                        avatarUrl: data.avatarUrl,
+                        role: data.role
+                    });
+                }
+            });
+            setLeaderboard(prev => [...prev, ...newBoard]);
+            setLastUserDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
+            setHasMoreUsers(querySnapshot.docs.length === 100);
+        } catch (error) {
+            console.error("Daha fazla kullanıcı çekilirken hata:", error);
+        } finally {
+            setLoadingMoreUsers(false);
+        }
+    };
+
+    const fetchMoreClans = async () => {
+        if (!hasMoreClans || loadingMoreClans) return;
+        setLoadingMoreClans(true);
+        const clansRef = collection(db, 'clans');
+        const q = query(clansRef, orderBy('totalScore', 'desc'), startAfter(lastClanDoc), limit(100));
+
+        try {
+            const querySnapshot = await getDocs(q);
+            const newBoard: ClanScore[] = [];
+            querySnapshot.forEach(doc => {
+                const data = doc.data();
+                newBoard.push({
+                    id: doc.id,
+                    name: data.name,
+                    emblem: data.emblem,
+                    totalScore: data.totalScore || 0,
+                    memberCount: data.memberCount || 0,
+                    level: data.level || 1
+                });
+            });
+            setClanLeaderboard(prev => [...prev, ...newBoard]);
+            setLastClanDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
+            setHasMoreClans(querySnapshot.docs.length === 100);
+        } catch (error) {
+            console.error("Daha fazla klan çekilirken hata:", error);
+        } finally {
+            setLoadingMoreClans(false);
+        }
+    };
 
     if (isLoading) {
         return (
@@ -184,6 +255,24 @@ const LeaderboardPage: React.FC = () => {
                                 <span className="text-xl font-heading font-black text-electric-purple">{player.score.toLocaleString()} SKOR</span>
                              </motion.div>
                          ))}
+                         {hasMoreUsers && (
+                             <div className="flex justify-center mt-8">
+                                 <button
+                                     onClick={fetchMoreUsers}
+                                     disabled={loadingMoreUsers}
+                                     className="px-6 py-3 bg-electric-purple text-white rounded-lg hover:bg-electric-purple/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                 >
+                                     {loadingMoreUsers ? (
+                                         <>
+                                             <LoaderCircle className="animate-spin inline mr-2" size={16} />
+                                             Yükleniyor...
+                                         </>
+                                     ) : (
+                                         'Daha Fazla Yükle'
+                                     )}
+                                 </button>
+                             </div>
+                         )}
                      </div>
                 </>
             ) : (
@@ -210,6 +299,24 @@ const LeaderboardPage: React.FC = () => {
                                 <span className="text-xl font-heading font-black text-electric-purple">{clan.totalScore.toLocaleString()} TOPLAM SKOR</span>
                             </motion.div>
                         ))}
+                        {hasMoreClans && (
+                            <div className="flex justify-center mt-8">
+                                <button
+                                    onClick={fetchMoreClans}
+                                    disabled={loadingMoreClans}
+                                    className="px-6 py-3 bg-electric-purple text-white rounded-lg hover:bg-electric-purple/80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                                >
+                                    {loadingMoreClans ? (
+                                        <>
+                                            <LoaderCircle className="animate-spin inline mr-2" size={16} />
+                                            Yükleniyor...
+                                        </>
+                                    ) : (
+                                        'Daha Fazla Yükle'
+                                    )}
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </>
             )}

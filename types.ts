@@ -20,6 +20,7 @@ export interface Game {
 export enum ShopItemType {
   AVATAR_FRAME = 'avatar_frame',
   PROFILE_ANIMATION = 'profile_animation',
+  PROFILE_BACKGROUND = 'profile_background',
   SPECIAL_TITLE = 'special_title',
   TEMPORARY_ACHIEVEMENT = 'temporary_achievement',
   SPECIAL_EMOJI = 'special_emoji'
@@ -32,21 +33,24 @@ export interface ShopItem {
   type: ShopItemType;
   price: number;
   category: string;
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  rarity: string;
   preview?: string; // Önizleme için
   duration?: number; // Geçici ürünler için süre (dakika)
   isActive?: boolean; // Aktif mi?
+  imageUrl?: string; // Profil arka planları için
 }
 
 export interface UserInventory {
   avatarFrames: string[];
   profileAnimations: string[];
   specialTitles: string[];
-  temporaryAchievements: { id: string; expiresAt: Date }[];
+  temporaryAchievements: { id: string; expiresAt: Date | any }[];
   specialEmojis: string[];
+  profileBackgrounds?: string[];
   activeAvatarFrame?: string;
   activeProfileAnimation?: string;
   activeSpecialTitle?: string;
+  activeProfileBackground?: string;
 }
 
 // === RAPORLAMA SİSTEMİ TYPES ===

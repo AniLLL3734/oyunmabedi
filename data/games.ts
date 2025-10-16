@@ -1,6 +1,20 @@
 import { Game, GameType } from '../types';
 
-export const games: Game[] = [
+// Bakımda olan oyunların linklerinden kimliklerini bir diziye topluyoruz.
+const maintenanceGameUrls = [
+  'strong-bonbon-fb59bf',
+  'peppy-unicorn-d7184a',
+  'willowy-klepon-e302e0',
+  'stunning-cassata-487c6f',
+  'spontaneous-kitsune-5c1bc2',
+  'effortless-entremet-bbbdf3',
+  'superlative-basbousa-f1feb7',
+  'legendary-capybara-30b443',
+  'peppy-begonia-b67b48',
+];
+
+// Orijinal oyun listesi
+const originalGames: Game[] = [
   {
     id: 'bloxorz',
     title: 'Bloxorz',
@@ -306,13 +320,8 @@ SPACE: Hızlanmak için basılı tut.`,
     title: 'Oyun Mabedi: SON SİPER',
     description: `Dalga dalga gelen düşmanlara karşı son savunma hattını koru.\n\nYükseltmeleri akıllıca seç ve en uzun süre hayatta kal.\n-FaTaLRhymeR37`,
     type: GameType.HTML5,
-
-    // BURAYI DEĞİŞTİR: dist klasörünü Netlify'a yükledikten sonra sana verilen linki buraya yapıştır.
     url: 'https://eloquent-cheesecake-bc9592.netlify.app/', 
-
-    // BURAYI DEĞİŞTİR: Oyunun güzel bir ekran görüntüsünü alıp yükle ve linkini buraya yapıştır.
     thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20221936.png', 
-
     category: 'Savunma',
     tags: ['HTML5', 'Arcade', 'Savunma', 'Shooter', 'Yükseltme', 'Sonsuz Dalga', 'Strateji'],
     controls: `Fare: Nişan al Ve Basılıt tutarak ateş et.`,
@@ -320,12 +329,9 @@ SPACE: Hızlanmak için basılı tut.`,
   id: 'basketball-random',
   title: 'BASKETBALL RANDOM',
   description: `Basketbol burada en eğlenceli ve rastgele haliyle karşınızda. Basketball Random'da tek tuşla iki farklı ragdoll basketbolcuyu kontrol ederek sayı atmaya çalışın. Her basket farklı bir sahaya geçmenizi sağlar! Değişen toplar, değişen oyuncular ve değişen sahalar sizi şaşırtmasın!`,
-  type: GameType.HTML5, // Assuming GameType.HTML5 corresponds to a 'HTML5' string
+  type: GameType.HTML5, 
   url: 'https://stately-frangollo-ff654c.netlify.app/',
-
-  // GÜNCELLENDİ: Thumbnail URL'si isteğiniz üzerine bu formatta oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/resim1.jpg', 
-  
   category: 'Spor',
   tags: ['HTML5', 'Arcade', 'Spor', '2 Kişilik', 'Basketbol', 'Ragdoll', 'Fizik'],
   controls: `1. Oyuncu: "W" / 2. Oyuncu: "YUKARI YÖN TUŞU"`,
@@ -334,12 +340,9 @@ SPACE: Hızlanmak için basılı tut.`,
   id: 'klasik-yilan',
   title: 'KLASİK YILAN OYUNU',
   description: 'Nostaljik atari klasiği artık tarayıcınızda. Yemleri toplayarak yılanı büyütün, duvarlara veya kendinize çarpmadan en yüksek puanı elde etmeye çalışın!',
-  type: GameType.HTML5, // Assuming GameType.HTML5 corresponds to a 'HTML5' string
+  type: GameType.HTML5,
   url: 'https://dashing-jelly-76bdb9.netlify.app/',
-  
-  // GÜNCELLENDİ: Thumbnail URL'si isteğiniz üzerine bu formatta oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-14%20225521.png', 
-  
   category: 'Klasik',
   tags: ['HTML5', 'Arcade', 'Klasik', 'Yılan', 'Beceri', 'Sonsuz'],
   controls: `Yön Tuşları: Yılanı hareket ettir.`,
@@ -350,10 +353,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Müzikle senkronize bir şekilde zıplayın, uçun ve engellerden kaçın! Bu hızlı tempolu ritim platform oyununda reflekslerinizi test edin ve imkansız seviyeleri geçmeye çalışın!',
   type: GameType.HTML5,
   url: 'https://serene-cascaron-d5f4f5.netlify.app/',
-  
-  // GÜNCELLENDİ: Thumbnail URL'si, verdiğin GitHub linkindeki dosya adıyla ve senin yönteminle oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-20%20190746.png', 
-  
   category: 'Beceri',
   tags: ['HTML5', 'Platform', 'Müzik', 'Ritim', 'Beceri', 'Zor', 'Tek Tuş'],
   controls: `Boşluk Tuşu / Sol Tık: Zıpla / Uç.`,
@@ -364,10 +364,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Huysuz bekçi ve köpeğinden kaç! Trenlerin üzerinden zıpla, engellerden sıyrıl ve metroyu boydan boya geç. Bu efsanevi sonsuz koşu oyununda jetpack\'ler ve kaykaylarla en yüksek skora ulaş!',
   type: GameType.HTML5,
   url: 'https://bright-boba-e08359.netlify.app/',
-  
-  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir111.jpg', 
-  
   category: 'Beceri',
   tags: ['HTML5', 'Sonsuz Koşu', 'Beceri', 'Arcade', 'Refleks', '3D'],
   controls: 'Yön Tuşları / Mouse Sürükleme: Sağa-sola hareket et, zıpla, yuvarlan.',
@@ -378,10 +375,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Neon dünyasında hızla aşağı yuvarlanan bir topu kontrol et! Dar yollarda kalmaya çalış, kırmızı engellerden kaçın ve ne kadar uzağa gidebileceğini gör. Bu 3D sonsuz koşu oyununda reflekslerin sınırlarını zorla!',
   type: GameType.HTML5,
   url: 'https://spiffy-kleicha-44b0d5.netlify.app/',
-  
-  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(4).jpg', 
-  
   category: 'Beceri',
   tags: ['HTML5', 'Sonsuz Koşu', '3D', 'Beceri', 'Refleks', 'Hız', 'Top Oyunu'],
   controls: 'Sol/Sağ Yön Tuşları: Topu yönlendir.',
@@ -392,10 +386,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Gerçekçi bir sürüş deneyimine hazır ol! Bu 3D araba simülatöründe şehrin sokaklarında serbestçe dolaş, görevleri tamamla veya sadece hızın tadını çıkar. Farklı araçları test et ve sürüş yeteneklerini göster!',
   type: GameType.HTML5,
   url: 'https://courageous-syrniki-7ec2cc.netlify.app/',
-  
-  // Thumbnail URL'si, senin yönteminle GitHub linkindeki dosya adından oluşturuldu.
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/https://github.com/AniLLL3734/GAMEARCHIVE/blob/main/thumbnails/Ekran%20g%C3%B6r%C3%BCnt%C3%BCs%C3%BC%202025-09-21%20011748.png', 
-  
   category: 'Simülasyon',
   tags: ['HTML5', 'Simülasyon', 'Araba', 'Sürüş', '3D', 'Yarış'],
   controls: `W,A,S,D / Yön Tuşları: Arabayı sür.\nBoşluk Tuşu: El freni.\nC Tuşu: Kamera açısını değiştir.`,
@@ -406,9 +397,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Boşlukta süzülen meyvelerin kaderi, bir anlık keskin bir refleksle çizilir. Her bir dilim, bir sanat; her bir bomba ise kaçınılmaz bir sondur. Bakalım senin kılıcın, bu renkli kaosun içinde ne kadar süre ahenkle dans edebilecek? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://fruitninja-9zb.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/fruit.jpg',
-  
   category: 'Beceri',
   tags: ['HTML5', 'Arcade', 'Beceri', 'Meyve', 'Kesme', 'Refleks', 'Klasik'],
   controls: 'Mouse Hareketi: Kılıcı savur.',
@@ -417,16 +406,9 @@ SPACE: Hızlanmak için basılı tut.`,
   id: 'oyun-mabedi-island-clash',
   title: 'Oyun Mabedi: ISLAND CLASH',
   description: 'Ufukta beliren düşman dalgaları, cennet adanın huzurunu tehdit ediyor. Zekan, en ölümcül silahındır. Kulelerini stratejik olarak yerleştir, antik güçleri serbest bırak ve bu topraklara ait olanı koru. -FaTaLRhymeR37',
-
-  // Bu bir SWF (Flash) oyunu olduğu için tipini belirtiyoruz.
   type: GameType.SWF,
-
-  // URL'yi, GitHub linkindeki dosya adından senin yönteminle oluşturdum.
-  // Bu A2.swf dosyasını, 'ttmtaldosyalar' Netlify projenin ana dizinine yüklemelisin.
   url: 'https://ttmtaldosyalar.netlify.app/A2.swf',
-
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/IC.jpg',
-
   category: 'Strateji',
   tags: ['SWF', 'Flash', 'Strateji', 'Kule Savunma', 'Savaş', 'Ada'],
   controls: 'Mouse: Kuleleri seç ve yerleştir.',
@@ -437,9 +419,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Zeminin buzla kaplı olması, hız için bir bahane değil, bir davettir. Karlı tepelerde motorunla taklalar at, devasa engelleri aş ve bitiş çizgisine en çılgın şekilde ulaş. Donmuş yollar, sadece en cesurları ödüllendirir. -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://motox3mwinter.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/download.jpeg',
-  
   category: 'Yarış',
   tags: ['HTML5', 'Yarış', 'Motor', 'Beceri', 'Fizik', 'Platform', 'Kış'],
   controls: 'W / Yukarı Ok: Hızlan\nS / Aşağı Ok: Fren\nA / Sol Ok: Geri Yaslan\nD / Sağ Ok: Öne Eğil',
@@ -450,9 +430,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Her bir blok, yeni bir ihtimal. Hayal gücünün sınırlarında bir evren yarat ya da bilinmeyenin derinliklerinde hayatta kalmaya çalış. Bu pikselli gerçeklikte, kuralları sadece sen koyarsın. Unutma, en derin mağaralar en nadir hazineleri saklar. -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://mc152222.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/MC.jpg',
-  
   category: 'Sandbox',
   tags: ['HTML5', 'Sandbox', 'Macera', 'Hayatta Kalma', 'Yaratıcılık', 'İnşa Etme', 'Klasik'],
   controls: 'W,A,S,D: Hareket\nBoşluk Tuşu: Zıpla\nMouse Sol Tık: Kır / Vur\nMouse Sağ Tık: Blok Koy\nE Tuşu: Envanter\nSohbet: T',
@@ -463,9 +441,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Gözlerini kamaştıran renklerin ve geometrinin ortasında, inanılmaz bir hızla boşluğa doğru süzülüyorsun. Reflekslerin, seni bir sonraki anomaliye taşıyacak tek para birimi. Bu hipnotik tünelde ne kadar süre hayatta kalabilir, ne kadar derine inebilirsin? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://tunnelrush-70k.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/CT1.jpg',
-  
   category: 'Beceri',
   tags: ['HTML5', 'Sonsuz Koşu', '3D', 'Beceri', 'Refleks', 'Hız', 'Tünel'],
   controls: 'Sol/Sağ Yön Tuşları: Yön Değiştir.',
@@ -475,12 +451,8 @@ SPACE: Hızlanmak için basılı tut.`,
   title: 'PAPER.IO 2',
   description: 'Boş bir tuvaldesin ve her hareketin ardında bir iz bırakıyor. Bölgeni genişlet, rakiplerinin zayıf anını kolla ve bu pikselli arazinin tek hakimi ol. Unutma, en büyük imparatorluklar bile, savunmasız bir kuyruktan yıkılabilir. -FaTaLRhymeR37',
   type: GameType.HTML5,
-  
-  // URL'yi verdiğin gibi ekledim. "https" eklemeyi unutma!
   url: 'https://paperio-2vg.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/icon512.png',
-  
   category: 'IO Oyunları',
   tags: ['HTML5', 'IO', 'Çok Oyunculu', 'Beceri', 'Strateji', 'Rekabetçi'],
   controls: 'W,A,S,D / Yön Tuşları / Mouse: Hareket et.',
@@ -491,9 +463,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Zaman ve yer çekimi, sadece aşılması gereken iki küçük engeldir. Dev testereler, patlayan variller ve imkansız rampalar seni bekliyor. Bu arenada stilin, hızından daha önemlidir. En çılgın taklaları at ve zaferin adrenalini hisset. -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://motox3m2.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/icon.jpg',
-  
   category: 'Yarış',
   tags: ['HTML5', 'Yarış', 'Motor', 'Beceri', 'Fizik', 'Platform', 'Aksiyon'],
   controls: 'W / Yukarı Ok: Hızlan\nS / Aşağı Ok: Fren\nA / Sol Ok: Geri Yaslan\nD / Sağ Ok: Öne Eğil',
@@ -504,9 +474,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Küçük bir canavarın açlığı, fizik yasalarını yeniden yazdırabilir. İpleri doğru zamanda kes, baloncukları patlat ve Om Nom\'u şekerine kavuştur. Her hamle bir bilmece, her bölüm yeni bir zeka testi. En kısa yoldan zafere ulaşabilir misin? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://ctr-29l.pages.dev/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/logo.png',
-  
   category: 'Zeka',
   tags: ['HTML5', 'Zeka', 'Bulmaca', 'Fizik', 'Sevimli', 'Strateji', 'Klasik'],
   controls: 'Mouse: İpleri kesmek için sürükle.',
@@ -517,9 +485,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Sonsuz sarı odalarda kayboldun. Vızıldayan ışıkların altında yalnız değilsin. Çıkışı bulmaya çalış ama dikkatli ol, duvarların gözleri olabilir.',
   type: GameType.HTML5,
   url: 'https://beamish-chaja-5ce738.netlify.app/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(4).jpg',
-  
   category: 'Korku',
   tags: ['HTML5', 'Korku', 'Hayatta Kalma', 'Labirent', 'Gerilim', 'Keşif'],
   controls: 'WASD: Hareket, Mouse: Etrafa bak, Shift: Koş, E: Etkileşim',
@@ -530,9 +496,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Savaş alanına gir, tankını yükselt ve düşmanlarını yok et. Her seviyede daha da güçlen. Patlamaya hazır mısın? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://peppy-begonia-b67b48.netlify.app/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/awstanks2.png',
-  
   category: 'Aksiyon',
   tags: ['HTML5', 'Aksiyon', 'Savaş', 'Tank', 'Vurma', 'Yükseltme', 'Arena'],
   controls: 'WASD/Ok Tuşları: Hareket, Mouse: Nişan al ve ateş et.',
@@ -543,9 +507,7 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'Hız, hassasiyet ve parkur yeteneklerini birleştir. Her bölüm daha da zorlaşan bu platform oyununda bayrağa ulaşabilir misin? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://legendary-capybara-30b443.netlify.app/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/ovo.jpg',
-  
   category: 'Platform',
   tags: ['HTML5', 'Platform', 'Parkur', 'Beceri', 'Hızlı', 'Zor', 'Çöp Adam'],
   controls: 'Ok Tuşları/WASD: Hareket et, Yukarı Ok: Zıpla, Aşağı Ok: Kay/Yere Vur.',
@@ -556,13 +518,78 @@ SPACE: Hızlanmak için basılı tut.`,
   description: 'İnternet yok mu? Sorun değil! T-Rex ile kaktüslerin üzerinden atla, engellerden kaç ve en yüksek skoru hedefle. Bu klasik sonsuz koşu oyununda ne kadar ileri gidebilirsin? -FaTaLRhymeR37',
   type: GameType.HTML5,
   url: 'https://stunning-cassata-487c6f.netlify.app/',
-  
   thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/indir%20(3).png',
-  
   category: 'Arcade',
   tags: ['HTML5', 'Arcade', 'Sonsuz Koşu', 'Dinozor', 'Klasik', 'Skor', 'Basit'],
   controls: 'Space/Yukarı Ok: Zıpla, Aşağı Ok: Eğil.',
 },
+{
+  id: 'armor-mayhem',
+  title: 'Armor Mayhem',
+  description: 'Gezegenin sonsuz enerji kristali için savaşan bir askersin! Zırhını kuşan, silahlarını özelleştir ve bu hızlı tempolu platform savaş oyununda rakiplerini alt et. Zafer seni bekliyor!',
+  type: GameType.SWF,
+  url: 'https://ttmtaldosyalar.netlify.app/armor-mayhem-1021579f9.swf',
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/ARMOR%20MAYHEM.jpg',
+  category: 'Aksiyon',
+  tags: ['SWF', 'Flash', 'Aksiyon', 'Savaş', 'Platform', 'Silah', 'Fütüristik', 'Nişan'],
+  controls: 'WASD/Yön Tuşları: Hareket. Mouse: Nişan al ve ateş et.',
+},
+{
+  id: 'cactus-mccoy-2',
+  title: 'Cactus McCoy 2',
+  description: 'Dikenli kahramanımız yeni bir macerayla geri döndü! Kadim Calavera Haritası\'nın sırlarını çözmek için yola çık. Onlarca farklı silahı kullanarak düşmanlarını patakla, gizli hazineleri bul ve antik harabelerde yolunu aç. Vahşi Batı\'nın en cesur kaktüsü sensin!',
+  type: GameType.SWF,
+  url: 'https://ttmtaldosyalar.netlify.app/cactus-mccoy-2-12456fdd9.swf',
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/MCCOYY.jpg',
+  category: 'Macera',
+  tags: ['SWF', 'Flash', 'Macera', 'Platform', 'Aksiyon', 'Dövüş', 'Kaktüs', 'Vahşi Batı'],
+  controls: 'Yön Tuşları: Hareket. A: Zıpla. S: Saldır.',
+},
+{
+  id: 'canabalt',
+  title: 'Canabalt',
+  description: 'Yıkılan bir şehirden kaçarken, tek bir tuşla binaların üzerinden atla! Sonsuz koşu türünü başlatan bu efsanevi oyunda reflekslerin ve zamanlaman her şey demek. Ne kadar uzağa gidebilirsin?',
+  type: GameType.SWF,
+  url: 'https://ttmtaldosyalar.netlify.app/canabalt-44579cba.swf',
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/CANABALT.jpg',
+  category: 'Aksiyon',
+  tags: ['SWF', 'Flash', 'Aksiyon', 'Platform', 'Sonsuz Koşu', 'Koşu', 'Tek Tuş', 'Piksel', 'Retro'],
+  controls: 'X, C veya Boşluk: Zıpla.',
+},
+{
+  id: 'armed-with-wings-3',
+  title: 'Armed with Wings 3',
+  description: 'Eşsiz siyah-beyaz sanat tarzıyla karanlık bir dünyaya adım at. Yıkılmış bir imparatorlukta, kılıcını ve sadık kartalını kullanarak adaleti ara. Bu sinematik platform ve dövüş oyununda kaderini kendin çiz.',
+  type: GameType.SWF,
+  url: 'https://ttmtaldosyalar.netlify.app/armed-with-wings-3-735479f9.swf',
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Armed%20with%20Wings%203.jpg',
+  category: 'Aksiyon',
+  tags: ['SWF', 'Flash', 'Aksiyon', 'Macera', 'Platform', 'Dövüş', 'Siyah Beyaz', 'Kartal', 'Sinematik', 'Sanatsal'],
+  controls: 'Yön Tuşları: Hareket. A: Saldırı. S: Kartalını gönder. W: Zıpla.',
+},
 
 
 ];
+
+
+// Dışa aktarılacak son oyun listesi
+// Bu kod, orijinal listeyi tarar ve bakımda olan oyunları günceller.
+export const games: Game[] = originalGames.map(game => {
+  // Oyunun URL'sinin bakım listesindeki kimliklerden birini içerip içermediğini kontrol et
+  const isMaintenance = maintenanceGameUrls.some(maintenanceUrl => 
+    game.url.includes(maintenanceUrl)
+  );
+
+  // Eğer oyun bakımda ise açıklamasını değiştir
+  if (isMaintenance) {
+    return {
+      ...game, // Oyunun diğer özelliklerini koru
+      description: 'Bu oyun şu an bakım aşamasındadır.', // Açıklamayı güncelle
+      // İstersen URL'yi de geçersiz kılabilirsin, mesela:
+      // url: '#',
+    };
+  }
+  
+  // Eğer oyun bakımda değilse olduğu gibi bırak
+  return game;
+});

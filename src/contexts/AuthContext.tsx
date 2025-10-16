@@ -93,6 +93,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     favoriteGame: isAdminUser ? 'Retro Games' : undefined,
                     lastLogin: new Date(),
                     isOnline: false,
+                    lastSeen: serverTimestamp(),
                     friends: [],
                     blockedUsers: [],
                     notificationsEnabled: true,
