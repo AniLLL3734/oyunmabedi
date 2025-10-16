@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile, Bot } from 'lucide-react';
 import { checkAndGrantAchievements } from '../src/utils/achievementService';
-import { analyzeMessageWithAI, chatWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
+import { analyzeMessageWithAI, chatWithAI, spontaneousCommentWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
 import AdminTag from '../components/AdminTag';
 import { fortressProfanityCheckINTELLIGENCE as fortressModerationCheck } from '../src/utils/fortressProfanityFilterULTRA';
 import ChatJoinRequestPage from './ChatJoinRequestPage';
@@ -298,6 +298,25 @@ const ChatPage: React.FC = () => {
                             mutedUntil: muteUntil,
                             lastOffenseReason: analysis.warningMessage
                         }, { merge: true }); // 'merge: true' var olan 'offenseCount'u ezmemek için kritik
+                    }
+                }
+            } else {
+                // Moderasyon geçerse, %15 şansla spontane AI yorumu ekle
+                if (Math.random() < 0.15) {
+                    try {
+                        const aiComment = await spontaneousCommentWithAI(userProfile?.displayName || 'Anonim', messageText);
+                        if (aiComment) {
+                            await addDoc(collection(db, 'messages'), {
+                                uid: user.uid, // Orijinal kullanıcıyı referans alır
+                                isAiMessage: true,
+                                displayName: AI_DISPLAY_NAME,
+                                text: aiComment,
+                                createdAt: serverTimestamp(),
+                            });
+                        }
+                    } catch (error) {
+                        console.error("Spontane AI yorum hatası:", error);
+                        // Hata durumunda sessiz kal
                     }
                 }
             }
