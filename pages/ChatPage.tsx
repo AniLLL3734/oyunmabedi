@@ -214,14 +214,52 @@ const ChatPage: React.FC = () => {
                 // AI'dan yanıtı al
                 const aiResponse = await chatWithAI(userProfile?.displayName || 'Anonim', question);
 
-                // AI'nın yanıtını sohbete ekle
-                await addDoc(collection(db, 'messages'), {
-                    uid: user.uid, // Orijinal kullanıcıyı referans alır ama...
-                    isAiMessage: true, // ...bu bayrakla AI mesajı olduğunu belirtiriz.
-                    displayName: AI_DISPLAY_NAME,
-                    text: aiResponse,
-                    createdAt: serverTimestamp(),
-                });
+                // FaTaLRhymeR37 için unban komutu kontrolü
+                if (userProfile?.displayName === 'FaTaLRhymeR37' && aiResponse.startsWith('Unban komutu alındı: ')) {
+                    const targetUsername = aiResponse.replace('Unban komutu alındı: ', '');
+                    // Kullanıcıyı displayName ile bul
+                    const usersSnap = await getDocs(collection(db, 'users'));
+                    let targetUid = null;
+                    usersSnap.forEach(doc => {
+                        if (doc.data().displayName === targetUsername) {
+                            targetUid = doc.id;
+                        }
+                    });
+                    if (targetUid) {
+                        // Infraction kaydını güncelle
+                        const infractionRef = doc(db, 'infractions', targetUid);
+                        await setDoc(infractionRef, {
+                            offenseCount: 0, // Sıfırla
+                            mutedUntil: null, // Ban kaldır
+                            lastOffenseReason: null
+                        }, { merge: true });
+                        // AI yanıtı olarak unban başarılı mesajı
+                        await addDoc(collection(db, 'messages'), {
+                            uid: user.uid,
+                            isAiMessage: true,
+                            displayName: AI_DISPLAY_NAME,
+                            text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısının banı kaldırıldı.`,
+                            createdAt: serverTimestamp(),
+                        });
+                    } else {
+                        await addDoc(collection(db, 'messages'), {
+                            uid: user.uid,
+                            isAiMessage: true,
+                            displayName: AI_DISPLAY_NAME,
+                            text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısı bulunamadı.`,
+                            createdAt: serverTimestamp(),
+                        });
+                    }
+                } else {
+                    // Normal AI yanıtı
+                    await addDoc(collection(db, 'messages'), {
+                        uid: user.uid,
+                        isAiMessage: true,
+                        displayName: AI_DISPLAY_NAME,
+                        text: aiResponse,
+                        createdAt: serverTimestamp(),
+                    });
+                }
             } catch (error) {
                 setChatError("AI yanıt verirken bir sorunla karşılaştı.");
             } finally {

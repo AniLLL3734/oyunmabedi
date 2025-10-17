@@ -145,8 +145,8 @@ service cloud.firestore {
     match /infractions/{userId} {
       // Bir kullanıcı SADECE KENDİ sicil belgesini okuyabilir,
       // oluşturabilir ve güncelleyebilir.
-      // Başkasının sicilini göremez, silemez veya değiştiremez.
-      allow get, create, update: if request.auth.uid == userId;
+      // Adminler başkalarının sicilini güncelleyebilir (unban için).
+      allow get, create, update: if request.auth.uid == userId || isAdmin();
       allow list, delete: if false;
     }
 

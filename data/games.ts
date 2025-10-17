@@ -567,6 +567,17 @@ SPACE: Hızlanmak için basılı tut.`,
   tags: ['SWF', 'Flash', 'Aksiyon', 'Macera', 'Platform', 'Dövüş', 'Siyah Beyaz', 'Kartal', 'Sinematik', 'Sanatsal'],
   controls: 'Yön Tuşları: Hareket. A: Saldırı. S: Kartalını gönder. W: Zıpla.',
 },
+{
+  id: 'funny-shooter-2',
+  title: 'Funny Shooter 2',
+  description: 'Komik ve renkli bir birinci şahıs nişancı (FPS) oyununda, tuhaf görünümlü kırmızı adamlara karşı amansız bir mücadeleye gir. Çeşitli silahları kullanarak dalga dalga gelen düşmanları yok et, yükseltmeler satın al ve bu eğlenceli ve kaotik arenada ne kadar süre hayatta kalabileceğini göster!',
+  type: GameType.HTML5,
+  url: 'https://6xgames.com/classroom/funny-shooter/?gd_sdk_referrer_url=https://6xgames.com/play/funny-shooter-3d',
+  thumbnail: 'https://ttmtaldosyalar.netlify.app/thumbnails/Funny%20Shooter%202.jpg',
+  category: 'Aksiyon',
+  tags: ['HTML5', 'Aksiyon', 'Nişan', '3D', 'Komik', 'FPS', 'Hayatta Kalma', 'Silah', 'Vurma'],
+  controls: 'WASD: Hareket. Fare Sol Tık: Ateş et. Fare Sağ Tık: Nişan al. R: Şarjör değiştir. Boşluk: Zıpla. Shift: Koş.',
+},
 
 
 ];
