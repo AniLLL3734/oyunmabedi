@@ -65,21 +65,22 @@ const ClanCard: React.FC<{ clan: Clan; userClanId?: string | null; onJoin: (clan
           <p className="flex items-center gap-2"><Zap size={16} /> Tecrübe: {clan.experience?.toLocaleString() || '0'}</p>
         </div>
       </div>
-      {isMember ? (
-        <Link to={`/clan/${clan.id}`} className="mt-4 w-full px-4 py-2 bg-green-600 text-white rounded-md font-semibold hover:bg-green-700 text-center block transition-all duration-200">
+      <div className="mt-4 space-y-2">
+        <Link to={`/clan/${clan.id}`} className={`w-full px-4 py-2 rounded-md font-semibold text-center block transition-all duration-200 ${
+          isMember ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+        }`}>
           Klanı Görüntüle
         </Link>
-      ) : (
-        <button
-          onClick={() => onJoin(clan.id)}
-          disabled={isJoining || !!userClanId}
-          className={`mt-4 w-full px-4 py-2 rounded-md font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
-            !!userClanId ? 'bg-gray-800 text-gray-500' : 'bg-electric-purple text-white hover:bg-purple-700'
-          }`}
-        >
-          {!!userClanId ? 'Klanın Var' : 'Katıl'}
-        </button>
-      )}
+        {!userClanId && (
+          <button
+            onClick={() => onJoin(clan.id)}
+            disabled={isJoining}
+            className="w-full px-4 py-2 bg-electric-purple text-white rounded-md font-semibold hover:bg-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Katıl
+          </button>
+        )}
+      </div>
     </motion.div>
   );
 };

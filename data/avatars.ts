@@ -19,6 +19,13 @@ export const availableAvatars: Avatar[] = [
     { id: 'male_4', url: '/avatars/erkek-4.jpg', gender: 'male' },
     { id: 'male_5', url: '/avatars/erkek-5.jpg', gender: 'male' },
     { id: 'male_6', url: '/avatars/erkek-6.jpg', gender: 'male' },
+    { id: 'male_7', url: '/avatars/erkek-7.png', gender: 'male' },
+    { id: 'male_8', url: '/avatars/erkek-8.png', gender: 'male' },
+    { id: 'male_9', url: '/avatars/erkek-9.png', gender: 'male' },
+    { id: 'male_10', url: '/avatars/erkek-10.png', gender: 'male' },
+
+    
+    
 
     
     // Kadın Avatarları
@@ -28,6 +35,8 @@ export const availableAvatars: Avatar[] = [
     // --- YENİ EKLENEN AVATARLAR ---
     { id: 'female_4', url: '/avatars/kız-4.jpg', gender: 'female' },
     { id: 'female_5', url: '/avatars/kız-5.jpg', gender: 'female' },
-    { id: 'female_6', url: '/avatars/kız-6.jpg', gender: 'female' }
+    { id: 'female_6', url: '/avatars/kız-6.jpg', gender: 'female' },
+    { id: 'female_7', url: '/avatars/kız-7.png', gender: 'female' },
+    { id: 'female_8', url: '/avatars/kız-8.png', gender: 'female' }
 
 ];
