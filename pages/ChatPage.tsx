@@ -163,8 +163,6 @@ const ChatPage: React.FC = () => {
         } catch (error) { console.error("Disclaimer kabul edilirken hata:", error); }
     };
 
-    // ChatPage.tsx içindeki sendMessage fonksiyonunu bununla tamamen değiştirin
-
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         const messageText = newMessage.trim();
@@ -182,8 +180,64 @@ const ChatPage: React.FC = () => {
             return;
         }
 
-        // --- BÖLÜM 1: BU BİR AI SOHBET KOMUTU MU? ---
-        if (messageText.startsWith('/ai ')) {
+        // --- ADIM 1: HER MESAJI İSTİSNASIZ MODERASYONA SOK ---
+        const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+
+        // --- ADIM 2: MODERASYON KARARINI UYGULA ---
+        if (analysis.action !== 'NONE' && analysis.warningMessage) {
+            // Admin'leri susturma (fatalrhymer37 hariç)
+            if (isAdmin) {
+                // Admin mesajını sil ama ceza uygulama
+                // Önce mesajı ekle (silmek için)
+                const tempMessageRef = await addDoc(collection(db, 'messages'), {
+                    text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
+                    createdAt: serverTimestamp(),
+                });
+                await deleteDoc(tempMessageRef);
+                await addDoc(collection(db, 'messages'), {
+                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                    text: analysis.warningMessage, createdAt: serverTimestamp(),
+                });
+            } else {
+                // Normal kullanıcı için ceza uygula
+                await addDoc(collection(db, 'messages'), {
+                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                    text: analysis.warningMessage, createdAt: serverTimestamp(),
+                });
+
+                // Cezayı kullanıcının kendi siciline işle
+                const currentOffenses = currentInfraction?.offenseCount || 0;
+
+                let muteUntil: Timestamp | null = null;
+                const now = new Date();
+
+                switch (analysis.action) {
+                    case 'DELETE_AND_MUTE_5M':
+                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
+                        break;
+                    case 'DELETE_AND_MUTE_1H':
+                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
+                        break;
+                    case 'DELETE_AND_PERMANENT_BAN':
+                        // Kalıcı ban için çok ileri bir tarih (örn: 100 yıl sonrası)
+                        muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
+                        break;
+                }
+
+                if (muteUntil) {
+                    await setDoc(infractionDocRef, {
+                        offenseCount: increment(1),
+                        mutedUntil: muteUntil,
+                        lastOffenseReason: analysis.warningMessage
+                    }, { merge: true }); // 'merge: true' var olan 'offenseCount'u ezmemek için kritik
+                }
+            }
+            console.log(`Moderasyon uygulandı: ${analysis.action}`);
+            return; // Moderasyon uygulandı, işlemi burada bitir
+        }
+
+        // --- ADIM 3: MESAJ TEMİZSE, AI İLE İLGİLİ Mİ DİYE BAK ---
+        if (messageText.toLowerCase().startsWith('/ai ')) {
             // Yük Koruması (Rate Limit) Kontrolü
             const now = Date.now();
             const timeSinceLastCall = (now - lastAiCallTimestamp.current) / 1000;
@@ -215,8 +269,8 @@ const ChatPage: React.FC = () => {
                 const aiResponse = await chatWithAI(userProfile?.displayName || 'Anonim', question);
 
                 // FaTaLRhymeR37 için unban komutu kontrolü
-                if (userProfile?.displayName === 'FaTaLRhymeR37' && aiResponse.startsWith('Unban komutu alındı: ')) {
-                    const targetUsername = aiResponse.replace('Unban komutu alındı: ', '');
+                if (userProfile?.displayName === 'FaTaLRhymeR37' && aiResponse.startsWith('[ADMIN_COMMAND]UNBAN:')) {
+                    const targetUsername = aiResponse.replace('[ADMIN_COMMAND]UNBAN:', '');
                     // Kullanıcıyı displayName ile bul
                     const usersSnap = await getDocs(collection(db, 'users'));
                     let targetUid = null;
@@ -266,10 +320,10 @@ const ChatPage: React.FC = () => {
                 setIsAiResponding(false);
                 setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
             }
-            return; // İşlemi burada bitir
+            return; // AI işlemi bitti
         }
 
-        // --- BÖLÜM 2: NORMAL MESAJ & MODERASYON (Eski Kod) ---
+        // --- ADIM 4: NORMAL MESAJ GÖNDER VE SPONTANE YORUM KONTROLÜ ---
         if (chatSettings.chatPaused && !isAdmin) {
             setChatError(chatSettings.chatPauseReason || 'Sohbet devre dışı.');
             return;
@@ -291,75 +345,26 @@ const ChatPage: React.FC = () => {
 
             setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
 
-            const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
-
-            if (analysis.action !== 'NONE' && analysis.warningMessage) {
-                // Admin'leri susturma (fatalrhymer37 hariç)
-                if (isAdmin) {
-                    // Admin mesajını sil ama ceza uygulama
-                    await deleteDoc(messageDocRef);
-                    await addDoc(collection(db, 'messages'), {
-                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                        text: analysis.warningMessage, createdAt: serverTimestamp(),
-                    });
-                } else {
-                    // Normal kullanıcı için ceza uygula
-                    await deleteDoc(messageDocRef);
-                    await addDoc(collection(db, 'messages'), {
-                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                        text: analysis.warningMessage, createdAt: serverTimestamp(),
-                    });
-
-                    // Cezayı kullanıcının kendi siciline işle
-                    const infractionDocRef = doc(db, 'infractions', user.uid);
-                    const currentOffenses = currentInfraction?.offenseCount || 0;
-
-                    let muteUntil: Timestamp | null = null;
-                    const now = new Date();
-
-                    switch (analysis.action) {
-                        case 'DELETE_AND_MUTE_5M':
-                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
-                            break;
-                        case 'DELETE_AND_MUTE_1H':
-                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
-                            break;
-                        case 'DELETE_AND_PERMANENT_BAN':
-                            // Kalıcı ban için çok ileri bir tarih (örn: 100 yıl sonrası)
-                            muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
-                            break;
+            // Moderasyon geçerse, %15 şansla spontane AI yorumu ekle
+            if (Math.random() < 0.15) {
+                try {
+                    const aiComment = await spontaneousCommentWithAI(userProfile?.displayName || 'Anonim', messageText);
+                    if (aiComment) {
+                        await addDoc(collection(db, 'messages'), {
+                            uid: user.uid, // Orijinal kullanıcıyı referans alır
+                            isAiMessage: true,
+                            displayName: AI_DISPLAY_NAME,
+                            text: aiComment,
+                            createdAt: serverTimestamp(),
+                        });
                     }
-
-                    if (muteUntil) {
-                        await setDoc(infractionDocRef, {
-                            offenseCount: increment(1),
-                            mutedUntil: muteUntil,
-                            lastOffenseReason: analysis.warningMessage
-                        }, { merge: true }); // 'merge: true' var olan 'offenseCount'u ezmemek için kritik
-                    }
-                }
-            } else {
-                // Moderasyon geçerse, %15 şansla spontane AI yorumu ekle
-                if (Math.random() < 0.15) {
-                    try {
-                        const aiComment = await spontaneousCommentWithAI(userProfile?.displayName || 'Anonim', messageText);
-                        if (aiComment) {
-                            await addDoc(collection(db, 'messages'), {
-                                uid: user.uid, // Orijinal kullanıcıyı referans alır
-                                isAiMessage: true,
-                                displayName: AI_DISPLAY_NAME,
-                                text: aiComment,
-                                createdAt: serverTimestamp(),
-                            });
-                        }
-                    } catch (error) {
-                        console.error("Spontane AI yorum hatası:", error);
-                        // Hata durumunda sessiz kal
-                    }
+                } catch (error) {
+                    console.error("Spontane AI yorum hatası:", error);
+                    // Hata durumunda sessiz kal
                 }
             }
         } catch (error) {
-            console.error("Mesaj gönderme veya moderasyon sırasında hata:", error);
+            console.error("Mesaj gönderme sırasında hata:", error);
         } finally {
             setIsSending(false);
         }
