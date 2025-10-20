@@ -21,28 +21,21 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     try {
-        // Yeni fonksiyonu kullanarak çıkış yap ve cooldown süresini başlat
         if (signOutAndSetCooldown) {
             await signOutAndSetCooldown();
         } else {
-            // Geriye dönük uyumluluk için eski yöntem
             localStorage.setItem('accountCreationCooldown', Date.now().toString());
         }
         navigate('/');
     } catch(error) { console.error("Çıkış hatası:", error); }
   };
 
-  // ==============================================================================
-  //                 İŞTE KRİTİK DÜZELTME BURADA
-  // ==============================================================================
   useEffect(() => {
-    // Aktif olan dinleyiciyi (unsubscribe fonksiyonunu) tutacak TEK bir değişken tanımla.
     let unsubscribe: (() => void) | null = null;
     let notificationsUnsubscribe: (() => void) | null = null;
     
     if (user) {
         if (isAdmin) {
-            // --- ADMİN DİNLEYİCİSİ ---
             const chatsRef = collection(db, 'chats');
             const q = query(
                 chatsRef, 
@@ -57,7 +50,6 @@ const Header: React.FC = () => {
             });
 
         } else {
-            // --- KULLANICI DİNLEYİCİSİ ---
             const userDocRef = doc(db, 'users', user.uid);
             unsubscribe = onSnapshot(userDocRef, (snapshot) => {
                 if (snapshot.exists()) {
@@ -68,7 +60,6 @@ const Header: React.FC = () => {
                 console.error("Kullanıcı bildirim dinleyicisinde hata:", error);
             });
             
-            // --- ÖZEL SOHBET ODASI BİLDİRİMLERİ ---
             const notificationsQuery = query(
                 collection(db, 'notifications'),
                 where('userId', '==', user.uid),
@@ -81,7 +72,6 @@ const Header: React.FC = () => {
                 console.log('Notification snapshot:', snapshot.size, snapshot.docs.map(doc => doc.data()));
                 
                 if (!snapshot.empty) {
-                    // Process all notifications, not just the first one
                     snapshot.docChanges().forEach((change) => {
                         if (change.type === 'added') {
                             const notification = change.doc.data();
@@ -90,7 +80,6 @@ const Header: React.FC = () => {
                             setHasPrivateChatNotification(true);
                             setPrivateChatRoomId(notification.roomId);
                             
-                            // Show toast notification
                             if (notification.type === 'private_chat_invite') {
                                 const toastId = toast.custom((t) => (
                                     <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-dark-gray shadow-lg rounded-lg pointer-events-auto flex ring-1 ring-electric-purple ring-opacity-5`}>
@@ -113,7 +102,6 @@ const Header: React.FC = () => {
                                             <button
                                                 onClick={() => {
                                                     toast.dismiss(t.id);
-                                                    // Mark as read and navigate to chat room
                                                     markNotificationAsRead(notification.roomId);
                                                     navigate(`/admin-chat/${notification.roomId}`);
                                                 }}
@@ -125,17 +113,13 @@ const Header: React.FC = () => {
                                     </div>
                                 ), { duration: 10000 });
                                 
-                                // Automatically navigate to chat room after 3 seconds
                                 const redirectTimer = setTimeout(() => {
-                                    // Dismiss the toast and navigate
                                     toast.dismiss(toastId);
                                     markNotificationAsRead(notification.roomId);
                                     navigate(`/admin-chat/${notification.roomId}`);
                                 }, 3000);
                                 
-                                // Clear the timer if the toast is dismissed manually
                                 const clearTimer = () => clearTimeout(redirectTimer);
-                                // Store timer ID for cleanup
                                 (window as any).toastTimers = (window as any).toastTimers || {};
                                 (window as any).toastTimers[toastId] = clearTimer;
                             } else if (notification.type === 'private_chat_closed') {
@@ -160,7 +144,6 @@ const Header: React.FC = () => {
                                             <button
                                                 onClick={() => {
                                                     toast.dismiss(t.id);
-                                                    // Mark as read and navigate to home
                                                     markNotificationAsRead(notification.roomId);
                                                     navigate('/');
                                                 }}
@@ -172,17 +155,13 @@ const Header: React.FC = () => {
                                     </div>
                                 ), { duration: 10000 });
                                 
-                                // Automatically navigate to home after 3 seconds
                                 const redirectTimer = setTimeout(() => {
-                                    // Dismiss the toast and navigate
                                     toast.dismiss(toastId);
                                     markNotificationAsRead(notification.roomId);
                                     navigate('/');
                                 }, 3000);
                                 
-                                // Clear the timer if the toast is dismissed manually
                                 const clearTimer = () => clearTimeout(redirectTimer);
-                                // Store timer ID for cleanup
                                 (window as any).toastTimers = (window as any).toastTimers || {};
                                 (window as any).toastTimers[toastId] = clearTimer;
                             }
@@ -197,16 +176,12 @@ const Header: React.FC = () => {
             });
         }
     } else {
-        // Kullanıcı yoksa tüm bildirimleri temizle.
         setHasUnreadAdminMessage(false);
         setHasUnreadDmsForAdmin(false);
         setHasPrivateChatNotification(false);
         setPrivateChatRoomId(null);
     }
     
-    // TEMİZLİK FONKSİYONU: useEffect'in sonunda SADECE BİR KERE çağrılır.
-    // Component kaldırıldığında veya 'user'/'isAdmin' değiştiğinde,
-    // HANGİ dinleyici aktif olursa olsun, bu fonksiyon onu kapatır.
     return () => {
       if (unsubscribe) {
         unsubscribe();
@@ -215,7 +190,7 @@ const Header: React.FC = () => {
         notificationsUnsubscribe();
       }
     };
-  }, [user, isAdmin]);
+  }, [user, isAdmin, navigate]);
 
   const markNotificationAsRead = async (roomId: string) => {
     if (!user) return;
@@ -241,7 +216,6 @@ const Header: React.FC = () => {
     }
   };
 
-  // "Adminle Sohbet" butonu (kullanıcı için)
   const handleGoToAdminChat = () => {
     if (!user) return;
     const adminUid = "WXdz4GWVqTb9SwihXFN9nh0LJVn2";
@@ -257,7 +231,6 @@ const Header: React.FC = () => {
       <nav className="container mx-auto flex justify-between items-center p-4">
         <Link to="/" className="text-2xl font-heading font-bold hover:text-electric-purple transition-colors">Oyun Mabedi</Link>
 
-        {/* Hamburger Menu Button - Mobile */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className="md:hidden p-2 text-ghost-white hover:text-electric-purple transition-colors"
@@ -265,7 +238,6 @@ const Header: React.FC = () => {
           <Menu size={24} />
         </button>
 
-        {/* Desktop Navigation */}
         <ul className="hidden md:flex items-center space-x-6 text-lg">
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.home')}</NavLink></motion.div></li>
 
@@ -309,11 +281,7 @@ const Header: React.FC = () => {
             <MessageSquare size={18} /> {t('nav.chat')}
           </NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.leaderboard')}</NavLink></motion.div></li>
-          {user && (
-            <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/betting" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
-              <Zap size={18} className="text-yellow-400" /> Bahisler
-            </NavLink></motion.div></li>
-          )}
+          
           {user && (
             <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
               <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}
@@ -370,7 +338,6 @@ const Header: React.FC = () => {
                           : 'border-cyber-gray hover:border-electric-purple'
                     }`}
                   />
-                  {/* Aktif çerçeve efekti */}
                   {userProfile.inventory?.activeAvatarFrame && (
                     <div className={`absolute inset-0 rounded-full animate-pulse ${
                       userProfile.inventory.activeAvatarFrame === 'neon_frame' 
@@ -395,7 +362,6 @@ const Header: React.FC = () => {
         </ul>
       </nav>
 
-      {/* Mobile Navigation Menu */}
       {isMobileMenuOpen && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
@@ -438,11 +404,7 @@ const Header: React.FC = () => {
               <MessageSquare size={18} /> {t('nav.chat')}
             </NavLink></li>
             <li><NavLink to="/leaderboard" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.leaderboard')}</NavLink></li>
-            {user && (
-              <li><NavLink to="/betting" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
-                <Zap size={18} className="text-yellow-400" /> Bahisler
-              </NavLink></li>
-            )}
+            
             {user && (
               <li><NavLink to="/shop" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
                 <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}

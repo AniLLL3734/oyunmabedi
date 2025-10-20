@@ -5,6 +5,17 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getDatabase } from 'firebase/database';
 
+// --- DEBUG BAŞLANGIÇ: Ortam Değişkenlerini Kontrol Et ---
+// Bu bölüm, .env.local dosyasındaki değişkenlerin doğru okunup okunmadığını
+// tarayıcı konsolunda (F12) görmenizi sağlar.
+console.log("--- .env.local Değişkenleri Kontrol Ediliyor ---");
+console.log("VITE_FIREBASE_API_KEY:", import.meta.env.VITE_FIREBASE_API_KEY);
+console.log("VITE_FIREBASE_AUTH_DOMAIN:", import.meta.env.VITE_FIREBASE_AUTH_DOMAIN);
+console.log("VITE_FIREBASE_PROJECT_ID:", import.meta.env.VITE_FIREBASE_PROJECT_ID);
+console.log("-----------------------------------------------");
+// --- DEBUG SONU ---
+
+
 // .env.local dosyasındaki değişkenleri import.meta.env üzerinden oku
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -23,4 +34,3 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const dbRTDB = getDatabase(app);
-

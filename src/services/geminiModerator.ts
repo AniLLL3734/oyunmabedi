@@ -81,28 +81,43 @@ export interface ModerationResult {
  */
 async function generateContentWithFallback(prompt: string): Promise<string> {
     // Önce AI'ın aktif olup olmadığını kontrol edelim
-    if (!model || allKeysExhausted || !isAiActive) {
+    if (!isAiActive) {
+        throw new Error("AI şu anda aktif değil.");
+    }
+
+    if (allKeysExhausted || !model) {
         throw new Error("AI şu anda aktif değil veya tüm API anahtarları limitini doldurdu.");
     }
 
-    try {
-        const result = await model.generateContent(prompt);
-        return result.response.text();
-    } catch (error) {
-        // Hatanın bir '429 Rate Limit' hatası olup olmadığını kontrol ediyoruz.
-        // Hata logunda gördüğümüz '429' ve 'Quota' kelimeleriyle eşleştiriyoruz.
-        if (error instanceof GoogleGenerativeAIFetchError && error.message.includes('429')) {
-            switchToNextApiKey(); // Anahtar değiştir!
-            if (!allKeysExhausted && model) {
-                console.log("Yeni anahtarla istek tekrarlanıyor...");
-                // Yeni anahtarla isteği BİR KERE daha tekrarla.
-                const retryResult = await model.generateContent(prompt);
-                return retryResult.response.text();
+    let triedKeys = 0;
+    while (triedKeys < API_KEY_POOL.length && !allKeysExhausted) {
+        try {
+            const result = await model.generateContent(prompt);
+            return result.response.text();
+        } catch (error) {
+            // Hatanın bir '429 Rate Limit' hatası olup olmadığını kontrol ediyoruz.
+            if (error instanceof GoogleGenerativeAIFetchError && error.message.includes('429')) {
+                console.warn(`API Anahtarı limitini doldurdu, bir sonrakine geçiliyor...`);
+                switchToNextApiKey(); // Anahtar değiştir!
+                triedKeys++;
+                // Kısa bir bekleme ekleyerek API'yi fazla yüklememek için
+                if (!allKeysExhausted) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            } else {
+                // 429 dışı hatalar için hemen çık
+                throw error;
             }
         }
-        // Eğer 429 hatası değilse veya tüm anahtarlar bittiyse, hatayı yukarı fırlat.
-        throw error;
     }
+
+    // Tüm anahtarlar denendiyse ve hala hata varsa
+    if (allKeysExhausted) {
+        throw new Error("AI şu anda aktif değil veya tüm API anahtarları limitini doldurdu.");
+    }
+
+    // Beklenmedik durum
+    throw new Error("AI ile bağlantı kurulamadı.");
 }
 
 
