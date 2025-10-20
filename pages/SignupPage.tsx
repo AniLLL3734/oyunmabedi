@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
@@ -28,10 +28,23 @@ const SignupPage: React.FC = () => {
     const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm();
     const navigate = useNavigate();
     const [firebaseError, setFirebaseError] = useState<string | null>(null);
+    const [cooldownRemaining, setCooldownRemaining] = useState<number>(0);
 
     const onSubmit = async (data: any) => {
         setFirebaseError(null);
         const displayName = data.username.trim();
+
+        // 0. ADIM: Cooldown kontrolü
+        const cooldownTimestamp = localStorage.getItem('accountCreationCooldown');
+        if (cooldownTimestamp) {
+            const elapsed = Date.now() - parseInt(cooldownTimestamp);
+            const cooldownDuration = 30 * 60 * 1000; // 30 dakika
+            if (elapsed < cooldownDuration) {
+                const remaining = Math.ceil((cooldownDuration - elapsed) / 1000);
+                setFirebaseError(`Yeni hesap oluşturmak için ${Math.floor(remaining / 60)} dakika ${remaining % 60} saniye beklemelisin.`);
+                return;
+            }
+        }
 
         // 1. ADIM: Temel doğrulamalar
         if (displayName.length < 3) {
@@ -127,9 +140,30 @@ const SignupPage: React.FC = () => {
             }
         }
     };
-    
-    // Cooldown useEffect ve render kısmını sildim, çünkü ana sorun o değil.
-    // İstersen tekrar eklersin, ama önce temel akışı düzeltelim.
+
+    // Cooldown kontrolü için useEffect
+    useEffect(() => {
+        const checkCooldown = () => {
+            const cooldownTimestamp = localStorage.getItem('accountCreationCooldown');
+            if (cooldownTimestamp) {
+                const elapsed = Date.now() - parseInt(cooldownTimestamp);
+                const cooldownDuration = 30 * 60 * 1000; // 30 dakika
+                if (elapsed < cooldownDuration) {
+                    const remaining = Math.ceil((cooldownDuration - elapsed) / 1000);
+                    setCooldownRemaining(remaining);
+                } else {
+                    setCooldownRemaining(0);
+                }
+            } else {
+                setCooldownRemaining(0);
+            }
+        };
+
+        checkCooldown();
+        const interval = setInterval(checkCooldown, 1000); // Her saniye güncelle
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-center items-center py-12">
@@ -170,8 +204,13 @@ const SignupPage: React.FC = () => {
                         {errors.password && <p className="text-red-500 text-xs mt-1">{errors.password.message as string}</p>}
                     </div>
                     {firebaseError && <p className="text-red-500 text-center">{firebaseError}</p>}
-                    <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
-                         {isSubmitting ? 'Hesap Oluşturuluyor...' : 'Sisteme Katıl'}
+                    {cooldownRemaining > 0 && (
+                        <p className="text-yellow-500 text-center">
+                            Yeni hesap oluşturmak için {Math.floor(cooldownRemaining / 60)} dakika {cooldownRemaining % 60} saniye beklemelisin.
+                        </p>
+                    )}
+                    <button type="submit" disabled={isSubmitting || cooldownRemaining > 0} className="w-full py-3 px-4 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
+                         {isSubmitting ? 'Hesap Oluşturuluyor...' : cooldownRemaining > 0 ? 'Bekleme Süresi Devam Ediyor...' : 'Sisteme Katıl'}
                     </button>
                 </form>
                 <p className="text-center text-cyber-gray">

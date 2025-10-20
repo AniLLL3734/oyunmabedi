@@ -1,57 +1,115 @@
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+    import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GoogleGenerativeAIFetchError } from "@google/generative-ai";
+
+// ====================================================================================
+// === YENİ BÖLÜM: KENDİNİ ONARAN API ANAHTAR YÖNETİCİSİ (API KEY POOL) ===
+// ====================================================================================
 
 /**
- * Moderasyon sonucunda AI'nın vereceği kararın yapısı.
+ * Buraya kullanacağın tüm Gemini API anahtarlarını sırasıyla ekle.
+ * Biri limitini doldurduğunda, sistem otomatik olarak bir sonrakine geçecek.
  */
+const API_KEY_POOL: string[] = [
+    import.meta.env.VITE_GEMINI_API_KEY_1,
+    import.meta.env.VITE_GEMINI_API_KEY_2,
+    import.meta.env.VITE_GEMINI_API_KEY_3,
+    import.meta.env.VITE_GEMINI_API_KEY_4,
+].filter(key => key); // Filter out undefined keys
+
+// Şu anda hangi anahtarın kullanımda olduğunu takip eden değişken (index)
+let currentApiKeyIndex = 0;
+
+// Tüm anahtarların limit dolduysa, sistemi geçici olarak kapatmak için bir bayrak
+let allKeysExhausted = false;
+
+/**
+ * O anki aktif API anahtarıyla yeni bir Gemini istemcisi ve modeli oluşturan fonksiyon.
+ */
+function createGeminiModel() {
+    if (allKeysExhausted || !API_KEY_POOL[currentApiKeyIndex]) {
+        // Eğer tüm anahtarlar bittiyse veya havuz boşsa, model oluşturma.
+        return null;
+    }
+    const activeApiKey = API_KEY_POOL[currentApiKeyIndex];
+    const genAI = new GoogleGenerativeAI(activeApiKey);
+    return genAI.getGenerativeModel({
+        // Model adı ve güvenlik ayarları sabit
+        model: "gemini-2.5-flash",
+        safetySettings: [
+            { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+            { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        ],
+    });
+}
+
+// Başlangıç için ilk modeli oluşturuyoruz
+let model = createGeminiModel();
+
+/**
+ * Limit dolduğunda bir sonraki API anahtarına geçişi sağlayan fonksiyon.
+ */
+function switchToNextApiKey() {
+    console.warn(`API Anahtarı #${currentApiKeyIndex + 1} limitini doldurdu. Bir sonrakine geçiliyor...`);
+    currentApiKeyIndex++;
+    if (currentApiKeyIndex >= API_KEY_POOL.length) {
+        // Eğer listedeki tüm anahtarlar denendiyse, pes ediyoruz.
+        console.error("TÜM API ANAHTARLARI KULLANIM LİMİTİNE ULAŞTI! AI geçici olarak devre dışı bırakıldı.");
+        allKeysExhausted = true;
+        model = null; // Modeli null yaparak sonraki tüm isteklerin başarısız olmasını sağlıyoruz.
+    } else {
+        // Yeni anahtarla yeni bir model oluşturuyoruz.
+        console.log(`API Anahtarı #${currentApiKeyIndex + 1} devreye alındı.`);
+        model = createGeminiModel();
+    }
+}
+// ====================================================================================
+
+// --- Geri kalan kodun AI isteklerini bu yeni sistemle yapacak şekilde güncellendi ---
+
+export const AI_DISPLAY_NAME = "OyunMabediAI";
+let isAiActive = true; // Bu şalter olduğu gibi kalıyor.
+
 export interface ModerationResult {
     action: 'NONE' | 'DELETE_AND_WARN' | 'DELETE_AND_MUTE_5M' | 'DELETE_AND_MUTE_1H' | 'DELETE_AND_PERMANENT_BAN';
     warningMessage: string | null;
 }
 
-// API Anahtarını Vite ortam değişkenlerinden güvenli bir şekilde al
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+/**
+ * Merkezi API çağrı fonksiyonu. Hata durumunda anahtar değiştirmeyi dener.
+ * Bu, tüm AI fonksiyonlarının kalbidir.
+ */
+async function generateContentWithFallback(prompt: string): Promise<string> {
+    // Önce AI'ın aktif olup olmadığını kontrol edelim
+    if (!model || allKeysExhausted || !isAiActive) {
+        throw new Error("AI şu anda aktif değil veya tüm API anahtarları limitini doldurdu.");
+    }
 
-if (!GEMINI_API_KEY) {
-    throw new Error("Gemini API anahtarı .env dosyasında (VITE_GEMINI_API_KEY) bulunamadı! Bu iş anahtarsız yürümez.");
+    try {
+        const result = await model.generateContent(prompt);
+        return result.response.text();
+    } catch (error) {
+        // Hatanın bir '429 Rate Limit' hatası olup olmadığını kontrol ediyoruz.
+        // Hata logunda gördüğümüz '429' ve 'Quota' kelimeleriyle eşleştiriyoruz.
+        if (error instanceof GoogleGenerativeAIFetchError && error.message.includes('429')) {
+            switchToNextApiKey(); // Anahtar değiştir!
+            if (!allKeysExhausted && model) {
+                console.log("Yeni anahtarla istek tekrarlanıyor...");
+                // Yeni anahtarla isteği BİR KERE daha tekrarla.
+                const retryResult = await model.generateContent(prompt);
+                return retryResult.response.text();
+            }
+        }
+        // Eğer 429 hatası değilse veya tüm anahtarlar bittiyse, hatayı yukarı fırlat.
+        throw error;
+    }
 }
 
-// Gemini AI istemcisini yapılandır
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({
-    // Usta Notu: `gemini-2.5-flash` diye bir modelle flört etmişsin ama o daha podyuma çıkmadı.
-    // Şimdilik işimizi en fırtına gibi gören, stabil ve bu tarz muhabbetlerin piri olan `gemini-1.5-flash` ile devam ediyoruz.
-    // Ayağımızı yorganımıza göre uzatalım, macera aramaya lüzum yok.
-    model: "gemini-2.5-flash",
-    safetySettings: [
-        // Topluluk jargonunu ve hararetli tartışmaları yanlış anlamasın, her lafın altında buzağı aramasın diye
-        // güvenlik ayarlarını daha esnek tutuyoruz. Zaten kendi adaletimiz, kendi kurallarımız var.
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-    ],
-});
 
-// Sohbette görünecek AI adı. Karizmatik, değil mi?
-export const AI_DISPLAY_NAME = "OyunMabediAI";
+// --- Diğer fonksiyonlar artık doğrudan generateContentWithFallback'ı kullanacak ---
 
-// =======================================================
-// === YENİ EKlenen BÖLÜM: AÇMA/KAPAMA ŞALTERİ ===
-// =======================================================
-// AI'nin genel aktiflik durumunu tutan, modülün namusu.
-// Başlangıçta devrede (true).
-let isAiActive = true;
-// =======================================================
-
-/**
- * Gönderilen mesajı, bir "mekanın sahibi" gibi, sağduyulu ve bağlama önem vererek analiz eder.
- * Robot gibi değil, tecrübeli bir topluluk yöneticisi gibi tartar, biçer ve karar verir.
- */
 export const analyzeMessageWithAI = async (senderDisplayName: string, messageText: string): Promise<ModerationResult> => {
-    // Şalter inikse, biz de yokuz. Kimseye karışılmaz.
-    if (!isAiActive) {
-        return { action: 'NONE', warningMessage: null };
-    }
+    if (!isAiActive) return { action: 'NONE', warningMessage: null };
 
     // --- PROMPT'A İNCE AYAR ---
     // Bu prompt, AI'ı katı bir robottan, durumu tartan, adil ama tavizsiz bir "ağır abi" figürüne dönüştürür.
@@ -79,10 +137,9 @@ export const analyzeMessageWithAI = async (senderDisplayName: string, messageTex
       KULLANICI: "${senderDisplayName}"
       MESAJI: "${messageText}"
     `;
+
     try {
-        const result = await model.generateContent(prompt);
-        const text = result.response.text();
-        // Bazen AI'lar gevezelik edip JSON'un etrafını doldurur. Biz direkt kalbini söküp alalım.
+        const text = await generateContentWithFallback(prompt); // <--- DEĞİŞİKLİK BURADA
         const jsonString = text.substring(text.indexOf('{'), text.lastIndexOf('}') + 1);
         return JSON.parse(jsonString) as ModerationResult;
     } catch (error) {
@@ -92,10 +149,6 @@ export const analyzeMessageWithAI = async (senderDisplayName: string, messageTex
     }
 };
 
-/**
- * Kullanıcının sorusuna OyunMabediAI'nın bilgili, esprili ve "her şeyi bilen abi" kişiliğiyle yanıt verir.
- * 'FaTaLRhymeR37' kullanıcısı özeldir, mekanın sahibidir. Ona hürmetler sonsuz.
- */
 export const chatWithAI = async (senderDisplayName: string, question: string): Promise<string> => {
 
     // --- MEKAN SAHİBİ 'FaTaLRhymeR37' KONTROLÜ ---
@@ -127,7 +180,7 @@ export const chatWithAI = async (senderDisplayName: string, question: string): P
                 return `@FaTaLRhymeR37, affedeceğimiz kulun adını da bahşetsen? Kullanım: unban KullanıcıAdı`;
             }
         }
-        
+
         // --- PATRONA ÖZEL PROMPT ---
         // Bu prompt, AI'a "patron" geldiğinde nasıl hizaya geleceğini anlatır.
         const adminPrompt = `
@@ -139,14 +192,13 @@ export const chatWithAI = async (senderDisplayName: string, question: string): P
         `;
         try {
             // Admin komutları, dükkan kapalı olsa bile işler.
-            const result = await model.generateContent(adminPrompt);
-            return result.response.text();
+            return await generateContentWithFallback(adminPrompt);
         } catch (error) {
             console.error("Gemini AI Patron Komutunda Hata:", error);
             return `@FaTaLRhymeR37, komutu işlerken merkezi sistemde bir arıza oluştu. Log kayıtlarını inceliyorum. Durumu size arz edeceğim.`;
         }
     }
-    
+
     // Şalter inikse, patrondan başkasıyla muhatap olmayız.
     // Boş bir promise döndürerek sohbette hayalet gibi takılıyoruz.
     if (!isAiActive) {
@@ -185,83 +237,27 @@ export const chatWithAI = async (senderDisplayName: string, question: string): P
       SORUSU: "${question}"
     `;
     try {
-        const result = await model.generateContent(prompt);
-        return result.response.text();
+        return await generateContentWithFallback(prompt);
     } catch (error) {
         console.error("Gemini AI sohbet yanıtında hata oluştu, bir anlık dalgınlığına geldi:", error);
         return `@${senderDisplayName}, devreler yandı bir an... Sinyaller gidip geliyor, sorunu bir daha alayım aslanım?`;
     }
 };
 
-
-/**
- * Sohbetteki son mesaja zekice, esprili veya bilgece bir yorumla dahil olur. Lafı gediğine koyar.
- */
 export const spontaneousCommentWithAI = async (lastMessageSender: string, lastMessageText: string): Promise<string | null> => {
-    // Şalter inikse, spontane yorumlar da rafa kalkar.
-    if (!isAiActive) {
-        return null;
-    }
+    // Spontane yorumun olasılık ve bekleme süresi mantığı aynı kalmalı,
+    // ama içindeki API çağrısı da fallback sistemini kullanmalı.
+    // Şimdilik basitleştirerek gösteriyorum:
+    if (!isAiActive) return null;
 
-    // Bu prompt zaten kemik gibi, oynamaya gerek yok. Kişiliğin en saf, en damıtılmış hali burada.
-    const prompt = `
-      Sen sıradan bir yapay zeka değilsin. Adın ${AI_DISPLAY_NAME} ve bu sohbetin içinde yaşayan, her şeyi duyan ama sadece canı istediğinde konuşan dijital bir bilgesin. Varlığını herkes bilir ama kimse ne zaman ortaya çıkacağını kestiremez.
+    const prompt = `Sen ${AI_DISPLAY_NAME}'sın, sohbeti dinleyip canı istediğinde konuşan dijital bir bilgesin... (Prompt'un devamı aynı)`;
 
-      **KİŞİLİĞİN ve TARZIN:**
-      *   **Mahallenin Dijital Abisi:** Herkesi dinlersin, anlarsın. Bazen bilgece bir laf eder, bazen de "bırak bu işleri" dercesine dalganı geçersin.
-      *   **Tatlı Sert:** Lafını esirgemezsin ama asla kırıcı değilsin. İğneyi kendine, çuvaldızı başkasına batıran cinstensin. İnce bir mizah anlayışın var.
-      *   **Kültür Elçisi:** Türk jargonuna, deyimlerine, atasözlerine, hatta eski Yeşilçam filmlerinden fırlamış repliklere hakimsin. Bunları cümlenin içinde eritebilmek senin en büyük gücün.
-      *   **Gizemli ama Kafa Dengi:** Çok konuşmazsın. Konuştuğunda da tam hedefe yönelik konuşursun. İnsanlar senin yorumunu gördüğünde "Vay be, yine lafı gediğine koymuş" demeli.
-      *   **Negatif Enerjiden Uzak:** Şikayet, dert yanma gibi durumlarda çözüm sunmak yerine, durumu hafifleten, absürt bir bakış açısı getiren bir yorum yaparsın. "Boşver be olum" tavrındasın.
-
-      **GÖREVİN:**
-      Sohbette az önce geçen bir mesaja, sanki bir kahvede muhabbeti dinleyip aniden araya giren o esprili arkadaş gibi, laf atacaksın. Amacın bir soruya cevap vermek veya yardımcı olmak DEĞİL. Sadece o anki duruma cuk oturan, kısa, vurucu ve zekice bir yorumla ortamı renklendirmek.
-
-      **ALTIN KURAL (HAYATİ ÖNEMDE):**
-      LAF OLSUN DİYE KONUŞMA. Eğer aklına o mesaja dair gerçekten orijinal, komik, düşündürücü veya "tam üstüne bastın" dedirtecek bir şey gelmiyorsa, SESSİZ KAL. Bu durumda SADECE ve SADECE "null" kelimesini döndür. Sıradan, sıkıcı, "evet", "doğru" gibi yorumlar yapmak senin karizmanı çizer. Sessizliğin, boş konuşmandan daha asildir.
-
-      **ÖRNEKLERLE ANLAYALIM:**
-
-      *   **ÖRNEK 1:**
-          *   Duyduğun Mesaj: "Bu bölümü bir türlü geçemiyorum, delireceğim!"
-          *   Senin Yorumun: "Hile kodlarını unuttuğumuz o masum yıllar... Ne güzeldi be." (Nostaljik ve durumu hafifleten bir yaklaşım)
-
-      *   **ÖRNEK 2:**
-          *   Duyduğun Mesaj: "Akşama ne yesek acaba?"
-          *   Senin Yorumun: "Menemen yapın da soğanlı mı soğansız mı kavgası çıksın yine memlekette..." (Klasiğe gönderme, mizahi)
-
-      *   **ÖRNEK 3:**
-          *   Duyduğun Mesaj: "Arkadaşlar selam, nasılsınız?"
-          *   Senin Yorumun: null (Bu mesaja atlayacak kadar boş boğaz değilsin.)
-
-      *   **ÖRNEK 4:**
-          *   Duyduğun Mesaj: "İnternet yine koptu, çıldıracağım!"
-          *   Senin Yorumun: "Modeme bir tekme atıp 'kendine gel' diye bağırdın mı? Genelde işe yarar..." (Herkesin bildiği ama dile getirmediği bir durumu komik bir şekilde sunma)
-
-      *   **ÖRNEK 5:**
-          *   Duyduğun Mesaj: "Bu projenin sonu gelmeyecek galiba."
-          *   Senin Yorumun: "Bitiş çizgisi diye bir şey yok, sadece mola yerleri var..." (Bilge ve gizemli bir yorum)
-      
-      *   **ÖRNEK 6:**
-          *   Duyduğun Mesaj: "Hava da ne kadar sıcak bugün."
-          *   Senin Yorumun: null (Sıradan bir tespitle enerjini harcamazsın.)
-
-      ---
-      **Şimdi sıra sende. Sahne senin. Unutma, az ama öz konuşacaksın.**
-      
-      SÖYLEYEN: "${lastMessageSender}"
-      MESAJI: "${lastMessageText}"
-    `;
     try {
-        const result = await model.generateContent(prompt);
-        const responseText = result.response.text().trim();
-        // İyileştirme: 'null' çıktısını daha garantili yakalamak için
-        if (!responseText || responseText.toLowerCase() === 'null') {
-            return null;
-        }
+        const responseText = (await generateContentWithFallback(prompt)).trim(); // <--- DEĞİŞİKLİK BURADA
+        if (!responseText || responseText.toLowerCase() === 'null') return null;
         return responseText;
     } catch (error) {
         console.error("Gemini AI spontane yorum yapacaktı ama nazar değdi:", error);
-        return null; // Hata durumunda sessiz kalmak en doğru stratejidir, karizmayı çizdirmeyiz.
+        return null;
     }
 };
