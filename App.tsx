@@ -27,7 +27,6 @@ const AuthlessChatPage = React.lazy(() => import('./pages/AuthlessChatPage'));
 const DirectMessagesPage = React.lazy(() => import('./pages/DirectMessagesPage'));
 const ChatRoomPage = React.lazy(() => import('./pages/ChatRoomPage'));
 const ShopPage = React.lazy(() => import('./pages/ShopPage'));
-const BettingPage = React.lazy(() => import('./pages/BettingPage'));
 const ClanPage = React.lazy(() => import('./pages/ClanPage'));
 // DÜZELTME 1: ClanDetailPage de lazy import ile yüklenecek
 const ClanDetailPage = React.lazy(() => import('./pages/ClanDetailPage'));
@@ -105,7 +104,6 @@ const App: React.FC = () => {
                         {/* DÜZELTME 2: /clan/:clanId için eksik olan rota eklendi. */}
                         {/* Klanları görmek için giriş yapmak gerektiğinden bunu da PrivateRoute içine alıyoruz. */}
                         <Route path="/clan/:clanId" element={<PrivateRoute><ClanDetailPage /></PrivateRoute>} />
-                        <Route path="/betting" element={<PrivateRoute><BettingPage /></PrivateRoute>} />
 
                     </Routes>
                 </AnimatePresence>
