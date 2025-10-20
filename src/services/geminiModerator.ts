@@ -33,7 +33,7 @@ function createGeminiModel() {
     const genAI = new GoogleGenerativeAI(activeApiKey);
     return genAI.getGenerativeModel({
         // Model adı ve güvenlik ayarları sabit
-        model: "gemini-2.5-flash",
+        model: "gemini-1.5-flash",
         safetySettings: [
             { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
             { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
