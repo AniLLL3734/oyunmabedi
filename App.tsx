@@ -27,6 +27,7 @@ const AuthlessChatPage = React.lazy(() => import('./pages/AuthlessChatPage'));
 const DirectMessagesPage = React.lazy(() => import('./pages/DirectMessagesPage'));
 const ChatRoomPage = React.lazy(() => import('./pages/ChatRoomPage'));
 const ShopPage = React.lazy(() => import('./pages/ShopPage'));
+const BettingPage = React.lazy(() => import('./pages/BettingPage'));
 const ClanPage = React.lazy(() => import('./pages/ClanPage'));
 // DÜZELTME 1: ClanDetailPage de lazy import ile yüklenecek
 const ClanDetailPage = React.lazy(() => import('./pages/ClanDetailPage'));

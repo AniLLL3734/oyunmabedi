@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useAuth, UserProfileData } from '../src/contexts/AuthContext';
 import { auth, db } from '../src/firebase';
 import { collection, query, where, onSnapshot, doc, limit, orderBy, getDocs, writeBatch } from 'firebase/firestore';
-import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X, Menu, Languages } from 'lucide-react';
+import { Shield, MessagesSquare, MessageCircle, Mail, ShoppingBag, MessageSquare, X, Menu, Languages, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useTranslation } from 'react-i18next';
 
@@ -310,6 +310,11 @@ const Header: React.FC = () => {
           </NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.leaderboard')}</NavLink></motion.div></li>
           {user && (
+            <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/betting" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
+              <Zap size={18} className="text-yellow-400" /> Bahisler
+            </NavLink></motion.div></li>
+          )}
+          {user && (
             <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
               <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}
             </NavLink></motion.div></li>
@@ -433,6 +438,11 @@ const Header: React.FC = () => {
               <MessageSquare size={18} /> {t('nav.chat')}
             </NavLink></li>
             <li><NavLink to="/leaderboard" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 hover:text-electric-purple transition-colors">{t('nav.leaderboard')}</NavLink></li>
+            {user && (
+              <li><NavLink to="/betting" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
+                <Zap size={18} className="text-yellow-400" /> Bahisler
+              </NavLink></li>
+            )}
             {user && (
               <li><NavLink to="/shop" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2 py-2 hover:text-electric-purple transition-colors">
                 <ShoppingBag size={18} className="text-yellow-400" /> {t('nav.shop')}
