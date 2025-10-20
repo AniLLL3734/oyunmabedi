@@ -105,7 +105,8 @@ const App: React.FC = () => {
                         {/* DÜZELTME 2: /clan/:clanId için eksik olan rota eklendi. */}
                         {/* Klanları görmek için giriş yapmak gerektiğinden bunu da PrivateRoute içine alıyoruz. */}
                         <Route path="/clan/:clanId" element={<PrivateRoute><ClanDetailPage /></PrivateRoute>} />
-                        
+                        <Route path="/betting" element={<PrivateRoute><BettingPage /></PrivateRoute>} />
+
                     </Routes>
                 </AnimatePresence>
             </Suspense> 
