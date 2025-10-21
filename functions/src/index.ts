@@ -42,8 +42,8 @@ const GAME_CONFIG = {
 
 const DAILY_BET_LIMIT = 100000;
 
-export const placeBet = functions.region("europe-west1").https.onCall(
-    async (data, context) => {
+export const placeBet = functions.https.onCall(
+    async (data: any, context: any) => {
       if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -78,7 +78,7 @@ export const placeBet = functions.region("europe-west1").https.onCall(
                 "not-found", "Kullanıcı bulunamadı.");
           }
 
-          const userData = userDoc.data()!;
+          const userData: any = userDoc.data();
           const currentScore = userData.score || 0;
 
           if (currentScore < amount) {
@@ -103,7 +103,7 @@ export const placeBet = functions.region("europe-west1").https.onCall(
 
           let win = false;
           let multiplier = 0;
-          let outcome: string | number | { value: number; suit: string };
+          let outcome: string | number | { value: number; suit: string } = "";
           let winnings = 0;
 
           switch (game) {
@@ -195,12 +195,13 @@ export const placeBet = functions.region("europe-west1").https.onCall(
           });
 
           const finalUserData = await transaction.get(userRef);
+          const finalData: any = finalUserData.data();
 
           return {
             result: win ? "win" : "lose",
             winnings: win ? winnings : -amount,
             netGain: win ? winnings - amount : -amount,
-            newScore: finalUserData.data()!.score,
+            newScore: finalData.score,
             outcome: outcome,
           };
         });
@@ -219,6 +220,278 @@ export const placeBet = functions.region("europe-west1").https.onCall(
 );
 
 // ===============================================
+// OYUN 1: LİMAN TALANI (DOCK PLUNDER) FONKSİYONU
+// ===============================================
+
+interface GameState {
+    id: string;
+    grid: ({ isOpen: boolean; isOfficer: boolean; } | { isOfficer: boolean; isOpen?: undefined; })[];
+    isOver: boolean;
+    multiplier: number;
+    officerCount: number;
+    betAmount: number;
+    revealedCount: number;
+    userId: string;
+}
+
+// Güvenli çarpan tablosu (kasa avantajı içerir)
+// [officerCount][revealedCount] -> multiplier
+const MULTIPLIERS: { [key: number]: number[] } = {
+    1: [1.03, 1.08, 1.15, 1.22, 1.30, 1.40, 1.55, 1.70, 1.90, 2.15, 2.40, 2.75, 3.20, 3.75, 4.50, 5.50, 7.00, 9.00, 12.00, 16.00, 24.00, 40.00, 80.00, 200.00],
+    3: [1.12, 1.28, 1.47, 1.70, 1.98, 2.30, 2.70, 3.20, 3.85, 4.65, 5.70, 7.00, 8.80, 11.20, 14.50, 19.00, 25.00, 35.00, 50.00, 80.00, 130.00, 300.00],
+    5: [1.23, 1.52, 1.89, 2.36, 2.95, 3.70, 4.70, 6.00, 7.80, 10.20, 13.50, 18.00, 24.50, 34.00, 48.00, 70.00, 100.00, 170.00, 300.00, 1000.00],
+    10: [1.65, 2.70, 4.40, 7.20, 11.80, 19.50, 32.00, 54.00, 90.00, 150.00, 250.00, 450.00, 800.00, 1500.00, 5000.00],
+};
+
+// Oyun mantığını işleyecek ana Cloud Function
+export const playDockPlunder = functions.https.onCall(async (data: any, context: any) => {
+    const uid = context.auth?.uid;
+    if (!uid) {
+        throw new functions.https.HttpsError("unauthenticated", "Lütfen giriş yapın.");
+    }
+    
+    const { action, betAmount, officerCount, gameId, cellIndex } = data;
+    const userRef = db.doc(`users/${uid}`);
+
+    // --- YENİ OYUN BAŞLATMA ---
+    if (action === "startGame") {
+        const userDoc = await userRef.get();
+        const userData: any = userDoc.data();
+        if (!userDoc.exists || userData.score < betAmount) {
+            throw new functions.https.HttpsError("failed-precondition", "Yetersiz bakiye.");
+        }
+        
+        // Bahsi hesaptan düş
+        await userRef.update({ score: admin.firestore.FieldValue.increment(-betAmount) });
+
+        const grid = Array(25).fill(false);
+        let officersPlaced = 0;
+        while (officersPlaced < officerCount) {
+            const index = Math.floor(Math.random() * 25);
+            if (!grid[index]) {
+                grid[index] = true;
+                officersPlaced++;
+            }
+        }
+        
+        const newGame: any = {
+            grid: grid.map((isOfficer: boolean) => ({ isOfficer })), // Secret grid
+            isOver: false,
+            multiplier: 1,
+            officerCount,
+            betAmount,
+            revealedCount: 0,
+            userId: uid,
+        };
+        const gameRef = await db.collection("dockPlunderGames").add(newGame);
+        newGame.id = gameRef.id;
+
+        return { gameState: getClientGameState(newGame) };
+    }
+
+    const gameDocRef = db.doc(`dockPlunderGames/${gameId}`);
+    const gameDoc = await gameDocRef.get();
+    const gameData: any = gameDoc.data();
+
+    if (!gameDoc.exists || gameData.userId !== uid) {
+        throw new functions.https.HttpsError("not-found", "Oyun bulunamadı veya size ait değil.");
+    }
+
+    if (gameData.isOver) {
+        throw new functions.https.HttpsError("failed-precondition", "Bu oyun zaten bitti.");
+    }
+
+    // --- SANDIK AÇMA ---
+    if (action === "revealCell") {
+        if (gameData.grid[cellIndex].isOfficer) { // YAKALANDI
+            await gameDocRef.update({ isOver: true, grid: gameData.grid.map((c: any) => ({...c, isOpen: true})) }); // Oyuncuya tümünü göster
+            gameData.isOver = true;
+        } else { // BAŞARILI
+            gameData.revealedCount++;
+            const newMultiplier = MULTIPLIERS[gameData.officerCount][gameData.revealedCount-1];
+            await gameDocRef.update({ 
+                revealedCount: admin.firestore.FieldValue.increment(1),
+                multiplier: newMultiplier || gameData.multiplier, // Tablo dışına çıkarsa son çarpanı koru
+            });
+            gameData.multiplier = newMultiplier;
+            
+            // Grid'deki tek bir hücreyi güncelle
+            const clientGridUpdate = gameData.grid.map((c: any, i: number) => i === cellIndex ? {isOpen: true, isOfficer: false} : (c.isOpen ? c : {isOpen: false, isOfficer: false}));
+            gameData.grid = clientGridUpdate;
+
+        }
+        return { gameState: getClientGameState(gameData) };
+    }
+
+    // --- PARAYI ÇEKME (CASH OUT) ---
+    if (action === "cashOut") {
+        if(gameData.revealedCount === 0) {
+            throw new functions.https.HttpsError("failed-precondition", "Henüz bir kutu açmadınız.");
+        }
+        const payout = Math.floor(gameData.betAmount * gameData.multiplier);
+        await userRef.update({ score: admin.firestore.FieldValue.increment(payout) });
+        await gameDocRef.update({ isOver: true });
+
+        return { payout };
+    }
+
+    throw new functions.https.HttpsError("invalid-argument", "Geçersiz işlem.");
+});
+
+// Oyuncuya gönderilecek güvenli oyun state'ini hazırlar
+function getClientGameState(serverState: any) {
+    return {
+        id: serverState.id,
+        grid: Array(25).fill({}).map((_: any, index: number) => {
+            const serverCell = serverState.grid[index];
+            if (serverCell?.isOpen) {
+                 return {isOpen: true, isOfficer: serverCell.isOfficer };
+            }
+            return {isOpen: false, isOfficer: false};
+        }),
+        isOver: serverState.isOver,
+        multiplier: serverState.multiplier,
+        betAmount: serverState.betAmount,
+    }
+}
+
+// ===============================================
+// OYUN 2: BORSA SİMÜLASYONU (INVESTMENT) FONKSİYONU
+// ===============================================
+
+interface Company {
+    ticker: string;
+    basePrice: number;
+    volatility: number; // 0.1 (düşük) - 0.5 (yüksek) arası
+}
+
+const companiesData: Company[] = [
+    { ticker: "NVA", basePrice: 150, volatility: 0.2 },
+    { ticker: "CYB", basePrice: 80, volatility: 0.4 },
+    { ticker: "SOL", basePrice: 200, volatility: 0.1 },
+    { ticker: "QNT", basePrice: 40, volatility: 0.6 },
+];
+
+export const manageInvestment = functions.https.onCall(async (data: any, context: any) => {
+    const uid = context.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError("unauthenticated", "Giriş yapmalısınız.");
+
+    const { action, companyTicker, amount, investmentId } = data;
+    const userRef = db.doc(`users/${uid}`);
+
+    if (action === "buy") {
+        const company = companiesData.find(c => c.ticker === companyTicker);
+        if (!company) throw new functions.https.HttpsError("not-found", "Şirket bulunamadı.");
+        
+        const userDoc = await userRef.get();
+        const userData: any = userDoc.data();
+        if (!userDoc.exists || userData.score < amount) {
+            throw new functions.https.HttpsError("failed-precondition", "Yetersiz bakiye.");
+        }
+
+        await userRef.update({ score: admin.firestore.FieldValue.increment(-amount) });
+        
+        const investment = {
+            userId: uid,
+            companyTicker,
+            investedAmount: amount,
+            purchasePrice: company.basePrice,
+            status: "active",
+            resolveTime: admin.firestore.Timestamp.fromMillis(Date.now() + 5 * 60 * 1000), // 5 dakika vade
+        };
+        await db.collection("investments").add(investment);
+        return { success: true };
+    }
+
+    if (action === "resolve") {
+        const invRef = db.doc(`investments/${investmentId}`);
+        const invDoc = await invRef.get();
+
+        if (!invDoc.exists || invDoc.data()?.userId !== uid) {
+            throw new functions.https.HttpsError("not-found", "Yatırım bulunamadı.");
+        }
+        
+        const investment: any = invDoc.data();
+        if (investment?.status !== 'active') throw new functions.https.HttpsError("failed-precondition", "Bu yatırım zaten sonuçlanmış.");
+        if (investment.resolveTime.toMillis() > Date.now()) {
+            throw new functions.https.HttpsError("failed-precondition", "Yatırımın vadesi henüz dolmadı.");
+        }
+
+        const company = companiesData.find(c => c.ticker === investment.companyTicker)!;
+        
+        // Kasa avantajı burada: -0.49 yerine -0.5 olsa tamamen adil olurdu.
+        const performanceFactor = (Math.random() - 0.49) * 2; // -0.98 ile +1.02 arası
+        const priceChange = company.basePrice * company.volatility * performanceFactor;
+        const finalPrice = Math.max(1, company.basePrice + priceChange);
+        
+        const payout = Math.floor((finalPrice / investment.purchasePrice) * investment.investedAmount);
+
+        await userRef.update({ score: admin.firestore.FieldValue.increment(payout) });
+        await invRef.update({ status: "resolved", finalPrice, payout });
+        
+        return { success: true, payout, investedAmount: investment.investedAmount };
+    }
+
+    throw new functions.https.HttpsError("invalid-argument", "Geçersiz işlem.");
+});
+
+// ===============================================
+// OYUN 3: SLOT MAKİNESİ (SLOT MACHINE) FONKSİYONU
+// ===============================================
+
+const REELS = [
+    ["GEM", "STAR", "BOMB", "ROCKET", "STAR", "BOMB", "STAR"], // Nadir semboller (GEM, ROCKET) daha az
+    ["STAR", "BOMB", "GEM", "BOMB", "ROCKET", "STAR", "BOMB"],
+    ["BOMB", "STAR", "ROCKET", "STAR", "BOMB", "GEM", "STAR"],
+];
+
+const PAYOUTS: {[key: string]: number} = {
+    "GEM-GEM-GEM": 50,
+    "ROCKET-ROCKET-ROCKET": 25,
+    "STAR-STAR-STAR": 10,
+    // Diğer özel kombinasyonlar...
+};
+
+export const playSlots = functions.https.onCall(async (data: any, context: any) => {
+    const uid = context.auth?.uid;
+    if (!uid) throw new functions.https.HttpsError("unauthenticated", "Giriş yapmalısınız.");
+    
+    const { betAmount } = data;
+    if (betAmount <= 0) throw new functions.https.HttpsError("invalid-argument", "Geçersiz bahis miktarı.");
+
+    const userRef = db.doc(`users/${uid}`);
+    const userDoc = await userRef.get();
+    const userData: any = userDoc.data();
+    if (!userDoc.exists || userData.score < betAmount) {
+        throw new functions.https.HttpsError("failed-precondition", "Yetersiz bakiye.");
+    }
+    
+    // Önce bahsi düş
+    await userRef.update({ score: admin.firestore.FieldValue.increment(-betAmount) });
+    
+    // Sonucu belirle
+    const finalReels = REELS.map(reel => reel[Math.floor(Math.random() * reel.length)]);
+    const resultKey = finalReels.join("-");
+    
+    let payout = PAYOUTS[resultKey] ? PAYOUTS[resultKey] * betAmount : 0;
+    
+    // Küçük kazanç: İki STAR gelirse... (Kasa avantajını dengelemek için)
+    if (payout === 0) {
+        const starCount = finalReels.filter(s => s === 'STAR').length;
+        if (starCount === 2) {
+            payout = betAmount * 2;
+        }
+    }
+
+    // Kazanç varsa hesaba ekle
+    if(payout > 0){
+        await userRef.update({ score: admin.firestore.FieldValue.increment(payout) });
+    }
+    
+    return { finalReels, payout };
+});
+
+// ===============================================
 // AI MODERASYON FONKSİYONU
 // ===============================================
 
@@ -229,7 +502,7 @@ if (!GEMINI_API_KEY) {
 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
+  model: "gemini-2.5-flash",
   safetySettings: [
     {
       category: HarmCategory.HARM_CATEGORY_HARASSMENT,

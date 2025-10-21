@@ -1,5 +1,6 @@
 @import 'tailwindcss';
-/* src/index.css DOSYASINA EKLENECEK KOD */
+
+/* Your custom CSS can go here if needed */
 
 @tailwind base;
 @tailwind components;

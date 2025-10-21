@@ -32,6 +32,8 @@ const ClanPage = React.lazy(() => import('./pages/ClanPage'));
 const ClanDetailPage = React.lazy(() => import('./pages/ClanDetailPage'));
 // Admin Chat Page
 const AdminChatPage = React.lazy(() => import('./pages/AdminChatPage'));
+// Betting Page
+const BettingPage = React.lazy(() => import('./pages/BettingPage'));
 
 
 const PageLoader = () => (
@@ -100,6 +102,7 @@ const App: React.FC = () => {
                         <Route path="/dm/:chatId" element={<PrivateRoute><ChatRoomPage /></PrivateRoute>} />
                         <Route path="/clans" element={<PrivateRoute><ClanPage /></PrivateRoute>} />
                         <Route path="/admin-chat/:roomId" element={<PrivateRoute><AdminChatPage /></PrivateRoute>} />
+                        <Route path="/betting" element={<PrivateRoute><BettingPage /></PrivateRoute>} />
                         
                         {/* DÜZELTME 2: /clan/:clanId için eksik olan rota eklendi. */}
                         {/* Klanları görmek için giriş yapmak gerektiğinden bunu da PrivateRoute içine alıyoruz. */}

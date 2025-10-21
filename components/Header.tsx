@@ -281,6 +281,9 @@ const Header: React.FC = () => {
             <MessageSquare size={18} /> {t('nav.chat')}
           </NavLink></motion.div></li>
           <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/leaderboard" style={({ isActive }) => (isActive ? activeStyle : {})}>{t('nav.leaderboard')}</NavLink></motion.div></li>
+          <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/betting" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
+            <Zap size={18} className="text-yellow-400" /> Skor Bahsi
+          </NavLink></motion.div></li>
           
           {user && (
             <li><motion.div variants={navItemVariants} whileHover="hover"><NavLink to="/shop" style={({ isActive }) => (isActive ? activeStyle : {})} className="flex items-center gap-1">
