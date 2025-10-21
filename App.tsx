@@ -1,8 +1,9 @@
 // DOSYA: App.tsx
 
-import React, { Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { Suspense } from 'react';
 import Layout from './components/Layout';
 import { LoaderCircle, AlertTriangle, MousePointer, Ban } from 'lucide-react';
 import PrivateRoute from './src/components/PrivateRoute';
@@ -42,37 +43,69 @@ const PageLoader = () => (
   </div>
 );
 
-const AfkWarning = () => (
-    <motion.div 
+const AfkWarning = ({ onUserActive }: { onUserActive: () => void }) => {
+  const [timeLeft, setTimeLeft] = useState<number>(30); // 30 seconds countdown
+  
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          // Auto-logout after 30 seconds
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
+  return (
+    <div 
         id="afk-warning-overlay" 
-        className="fixed inset-0 bg-space-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-center p-8 z-[9998]"
-        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-space-black/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-8 z-[9998]"
     >
         <AlertTriangle size={64} className="text-yellow-400 mb-6 animate-pulse" />
         <h2 className="text-4xl font-black font-heading bg-clip-text text-transparent bg-gradient-to-r from-yellow-300 to-orange-400 mb-3">Zaman Akışında Bir Duraksama...</h2>
-        <p className="text-lg text-cyber-gray max-w-lg">Görünüşe göre sinyal zayıfladı. Evren, yalnızca onu deneyimleyenler için genişler. Sen yokken skor kazanımı duraklatıldı.</p>
-        <p className="mt-8 flex items-center justify-center gap-4 text-white font-semibold text-xl tracking-wider">
-            <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ repeat: Infinity, duration: 1.5 }}><MousePointer size={28} /></motion.div>
+        <p className="text-lg text-cyber-gray max-w-lg mb-6">Görünüşe göre sinyal zayıfladı. Evren, yalnızca onu deneyimleyenler için genişler. Sen yokken skor kazanımı duraklatıldı.</p>
+        
+        <div className="bg-dark-gray/50 border border-cyber-gray/30 rounded-lg p-6 mb-6">
+          <p className="text-electric-purple font-bold mb-2">Otomatik Çıkış</p>
+          <p className="text-3xl font-mono text-yellow-400 mb-4">{timeLeft}s</p>
+          <p className="text-sm text-cyber-gray">Herhangi bir aktivite algılanmazsa sistemden otomatik çıkılacak</p>
+        </div>
+        
+        <button 
+          onClick={onUserActive}
+          className="px-6 py-3 bg-electric-purple hover:bg-purple-600 text-white font-bold rounded-lg transition-all transform hover:scale-105 flex items-center gap-2"
+        >
+          <MousePointer size={20} />
+          Devam Et
+        </button>
+        
+        <div className="mt-8 flex items-center justify-center gap-4 text-white font-semibold text-xl tracking-wider">
+            <div className="animate-pulse"><MousePointer size={28} /></div>
             Varlığını kanıtla.
-        </p>
-    </motion.div>
-);
+        </div>
+    </div>
+  );
+};
 
 const BlockedWarning = () => (
-    <motion.div 
+    <div 
         className="fixed inset-0 bg-red-900/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-8 z-[9999]"
-        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
     >
         <Ban size={72} className="text-red-400 mb-6" />
         <h2 className="text-5xl font-black font-heading text-red-300 mb-3">Anomali Tespit Edildi</h2>
         <p className="text-xl text-red-200 max-w-lg">Sistem, adil olmayan bir avantaj elde etmeye yönelik bir aktivite algıladı. Bu oturum için tüm dinamik özellikler durduruldu. Sayfayı yenilemek gerekebilir.</p>
-    </motion.div>
+    </div>
 );
 
 
 const App: React.FC = () => {
   const location = useLocation();
-  const { isAfk, isBlocked } = useScoreSystem(); 
+  const { isBlocked } = useScoreSystem(); 
   usePresence();
   useDailyRewards();
 
@@ -114,7 +147,6 @@ const App: React.FC = () => {
         </Layout>
         
         <AnimatePresence>
-            {isAfk && !isBlocked && <AfkWarning />}
             {isBlocked && <BlockedWarning />}
         </AnimatePresence>
     </>

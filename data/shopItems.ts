@@ -68,9 +68,7 @@ export const shopItems: ShopItem[] = [
 
   // === GEÇİCİ BAŞARIMLAR ===
   { id: 'afk_master_24h', name: 'AFK Ustası (24 Saat)', description: 'AFK süresini 3 saate çıkarır.', type: ShopItemType.TEMPORARY_ACHIEVEMENT, price: 1500, category: 'temporary_achievements', rarity: 'common', duration: 1440 },
-  { id: 'speed_demon_24h', name: 'Hız Canavarı (24 Saat)', description: '1.5x skor çarpanı kazanın.', type: ShopItemType.TEMPORARY_ACHIEVEMENT, price: 4000, category: 'temporary_achievements', rarity: 'rare', duration: 1440 },
   { id: 'lucky_charm_7d', name: 'Şans Tılsımı (7 Gün)', description: 'Günlük ödülü 2x yapar.', type: ShopItemType.TEMPORARY_ACHIEVEMENT, price: 6000, category: 'temporary_achievements', rarity: 'epic', duration: 10080 },
-  { id: 'time_lord_29h', name: 'Zaman Lordu (29 Saat)', description: '2x skor çarpanı kazanın.', type: ShopItemType.TEMPORARY_ACHIEVEMENT, price: 25000, category: 'temporary_achievements', rarity: 'legendary', duration: 1740 },
 
   // === ÖZEL EMOJİLER ===
   { id: 'cyber_emojis', name: 'Siber Emoji Seti', description: 'Dijital evrene özel emoji koleksiyonu.', type: ShopItemType.SPECIAL_EMOJI, price: 500, category: 'special_emojis', rarity: 'common' },
