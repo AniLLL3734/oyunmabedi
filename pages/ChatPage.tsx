@@ -459,7 +459,7 @@ const ChatPage: React.FC = () => {
             <div className="p-3 mb-2 bg-dark-gray/80 border border-cyber-gray/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                     <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                    <h3 className="font-heading text-electric-purple">Frekans Aktifliği ({activeUsers.length})</h3>
+                    <h3 className="font-heading text-electric-purple">Şu An Sohbette Aktif Kişiler ({activeUsers.length})</h3>
                 </div>
                 <div className="flex flex-wrap gap-2">
                     {activeUsers.slice(0, 20).map((activeUser) => (

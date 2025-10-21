@@ -13,6 +13,7 @@ const API_KEY_POOL: string[] = [
     import.meta.env.VITE_GEMINI_API_KEY_2,
     import.meta.env.VITE_GEMINI_API_KEY_3,
     import.meta.env.VITE_GEMINI_API_KEY_4,
+    import.meta.env.VITE_GEMINI_API_KEY_5,
 ].filter(key => key); // Filter out undefined keys
 
 // Şu anda hangi anahtarın kullanımda olduğunu takip eden değişken (index)
