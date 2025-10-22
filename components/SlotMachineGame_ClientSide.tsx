@@ -66,8 +66,19 @@ const SlotMachineGame: React.FC<SlotMachineProps> = ({ onUpdate, userScore }) =>
   }, []);
 
   const handleSpin = async () => {
-    if (betAmount <= 0 || betAmount > userScore) {
-      setResultMessage("Geçersiz bahis veya yetersiz bakiye.");
+    // Minimum ve maksimum bahis limitleri
+    if (betAmount < 5) {
+      setResultMessage("Minimum bahis 5 puandır.");
+      return;
+    }
+    
+    if (betAmount > 500) {
+      setResultMessage("Maksimum bahis 500 puandır.");
+      return;
+    }
+    
+    if (betAmount > userScore) {
+      setResultMessage("Yetersiz bakiye.");
       return;
     }
     
@@ -152,8 +163,18 @@ const SlotMachineGame: React.FC<SlotMachineProps> = ({ onUpdate, userScore }) =>
         </AnimatePresence>
 
         <div className="w-full flex gap-4">
-            <input type="number" value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className='w-full bg-gray-900 p-3 rounded-lg border border-gray-700' />
+            <input 
+              type="number" 
+              value={betAmount} 
+              onChange={(e) => setBetAmount(Number(e.target.value))} 
+              className='w-full bg-gray-900 p-3 rounded-lg border border-gray-700' 
+              min="5" 
+              max="500"
+            />
             <button onClick={handleSpin} disabled={isSpinning} className='w-full py-3 bg-red-600 rounded-lg font-bold'>ÇEVİR</button>
+        </div>
+        <div className="text-sm text-gray-400 mt-2">
+          Bahis aralığı: 5 - 500 puan
         </div>
     </div>
   );

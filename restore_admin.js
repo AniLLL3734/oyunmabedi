@@ -61,8 +61,8 @@ async function restoreAdminAccount() {
       avatarUrl: '/avatars/varsayilan.jpg', // Dilerseniz özel bir admin avatarı yapabilirsiniz
 
       // Skor ve Başarımlar
-      score: 405000,
-      highestScore: 405000,
+      score: 1000000,
+      highestScore: 1000000,
       achievements: allAchievements,
       level: 100,
       experience: 1000000,

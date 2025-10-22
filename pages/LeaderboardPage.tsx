@@ -9,6 +9,7 @@ import { useAuth } from '../src/contexts/AuthContext';
 import { Link } from 'react-router-dom';
 import AdminTag from '../components/AdminTag';
 
+// Arayüzler (Değişiklik yok)
 interface UserScore {
     uid: string;
     displayName: string;
@@ -26,7 +27,7 @@ interface ClanScore {
     level: number;
 }
 
-// Podyum kartı için küçük bir yardımcı bileşen
+// PodiumCard Bileşeni (Değişiklik yok)
 const PodiumCard: React.FC<{ user: UserScore, rank: number, color: string, shadowColor: string, scale?: number }> = ({ user, rank, color, shadowColor, scale = 1 }) => {
     return (
         <motion.div 
@@ -50,6 +51,7 @@ const PodiumCard: React.FC<{ user: UserScore, rank: number, color: string, shado
 };
 
 const LeaderboardPage: React.FC = () => {
+    // State tanımlamaları (Değişiklik yok)
     const { user, userProfile } = useAuth();
     const [leaderboard, setLeaderboard] = useState<UserScore[]>([]);
     const [clanLeaderboard, setClanLeaderboard] = useState<ClanScore[]>([]);
@@ -63,18 +65,25 @@ const LeaderboardPage: React.FC = () => {
     const [loadingMoreClans, setLoadingMoreClans] = useState(false);
 
     useEffect(() => {
-        const fetchLeaderboard = async () => {
+        const fetchInitialData = async () => {
             setIsLoading(true);
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, orderBy('score', 'desc'), limit(100));
-
             try {
-                const querySnapshot = await getDocs(q);
-                const board: UserScore[] = [];
-                querySnapshot.forEach(doc => {
+                // OPTİMİZASYON 4: Paralel Veri Çekme
+                // Kullanıcı ve klan sorgularını aynı anda başlatarak bekleme süresini azaltıyoruz.
+                const usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(50));
+                const clansQuery = query(collection(db, 'clans'), orderBy('totalScore', 'desc'), limit(50));
+                
+                const [usersSnapshot, clansSnapshot] = await Promise.all([
+                    getDocs(usersQuery),
+                    getDocs(clansQuery)
+                ]);
+
+                // Kullanıcı verilerini işle
+                const usersBoard: UserScore[] = [];
+                usersSnapshot.forEach(doc => {
                     const data = doc.data();
                     if (data.score !== undefined && data.score >= 0) {
-                         board.push({
+                         usersBoard.push({
                             uid: doc.id,
                             displayName: data.displayName || 'Anonim',
                             score: data.score,
@@ -83,26 +92,16 @@ const LeaderboardPage: React.FC = () => {
                         });
                     }
                 });
-                setLeaderboard(board);
-                setLastUserDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-                setHasMoreUsers(querySnapshot.docs.length === 100);
-            } catch (error) {
-                console.error("Liderlik tablosu çekilirken hata:", error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
+                setLeaderboard(usersBoard);
+                setLastUserDoc(usersSnapshot.docs[usersSnapshot.docs.length - 1]);
+                // OPTİMİZASYON 3: Daha Az Veri Çekme kontrolü (100 yerine 50)
+                setHasMoreUsers(usersSnapshot.docs.length === 50);
 
-        const fetchClanLeaderboard = async () => {
-            const clansRef = collection(db, 'clans');
-            const q = query(clansRef, orderBy('totalScore', 'desc'), limit(100));
-
-            try {
-                const querySnapshot = await getDocs(q);
-                const board: ClanScore[] = [];
-                querySnapshot.forEach(doc => {
+                // Klan verilerini işle
+                const clansBoard: ClanScore[] = [];
+                clansSnapshot.forEach(doc => {
                     const data = doc.data();
-                    board.push({
+                    clansBoard.push({
                         id: doc.id,
                         name: data.name,
                         emblem: data.emblem,
@@ -111,23 +110,27 @@ const LeaderboardPage: React.FC = () => {
                         level: data.level || 1
                     });
                 });
-                setClanLeaderboard(board);
-                setLastClanDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-                setHasMoreClans(querySnapshot.docs.length === 100);
+                setClanLeaderboard(clansBoard);
+                setLastClanDoc(clansSnapshot.docs[clansSnapshot.docs.length - 1]);
+                // OPTİMİZASYON 3: Daha Az Veri Çekme kontrolü (100 yerine 50)
+                setHasMoreClans(clansSnapshot.docs.length === 50);
+
             } catch (error) {
-                console.error("Klan liderlik tablosu çekilirken hata:", error);
+                console.error("Liderlik tabloları çekilirken hata:", error);
+            } finally {
+                setIsLoading(false);
             }
         };
 
-        fetchLeaderboard();
-        fetchClanLeaderboard();
+        fetchInitialData();
     }, []);
 
     const fetchMoreUsers = async () => {
         if (!hasMoreUsers || loadingMoreUsers) return;
         setLoadingMoreUsers(true);
         const usersRef = collection(db, 'users');
-        const q = query(usersRef, orderBy('score', 'desc'), startAfter(lastUserDoc), limit(100));
+        // OPTİMİZASYON 3: Daha Az Veri Çekme (limit 100 -> 50)
+        const q = query(usersRef, orderBy('score', 'desc'), startAfter(lastUserDoc), limit(50));
 
         try {
             const querySnapshot = await getDocs(q);
@@ -146,7 +149,8 @@ const LeaderboardPage: React.FC = () => {
             });
             setLeaderboard(prev => [...prev, ...newBoard]);
             setLastUserDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-            setHasMoreUsers(querySnapshot.docs.length === 100);
+            // OPTİMİZASYON 3: Daha Az Veri Çekme kontrolü (100 yerine 50)
+            setHasMoreUsers(querySnapshot.docs.length === 50);
         } catch (error) {
             console.error("Daha fazla kullanıcı çekilirken hata:", error);
         } finally {
@@ -158,7 +162,8 @@ const LeaderboardPage: React.FC = () => {
         if (!hasMoreClans || loadingMoreClans) return;
         setLoadingMoreClans(true);
         const clansRef = collection(db, 'clans');
-        const q = query(clansRef, orderBy('totalScore', 'desc'), startAfter(lastClanDoc), limit(100));
+        // OPTİMİZASYON 3: Daha Az Veri Çekme (limit 100 -> 50)
+        const q = query(clansRef, orderBy('totalScore', 'desc'), startAfter(lastClanDoc), limit(50));
 
         try {
             const querySnapshot = await getDocs(q);
@@ -176,7 +181,8 @@ const LeaderboardPage: React.FC = () => {
             });
             setClanLeaderboard(prev => [...prev, ...newBoard]);
             setLastClanDoc(querySnapshot.docs[querySnapshot.docs.length - 1]);
-            setHasMoreClans(querySnapshot.docs.length === 100);
+            // OPTİMİZASYON 3: Daha Az Veri Çekme kontrolü (100 yerine 50)
+            setHasMoreClans(querySnapshot.docs.length === 50);
         } catch (error) {
             console.error("Daha fazla klan çekilirken hata:", error);
         } finally {
@@ -184,6 +190,7 @@ const LeaderboardPage: React.FC = () => {
         }
     };
 
+    // JSX (Değişiklik yok)
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full py-20">
@@ -314,7 +321,7 @@ const LeaderboardPage: React.FC = () => {
                                     ) : (
                                         'Daha Fazla Yükle'
                                     )}
-                                </button>
+                                 </button>
                             </div>
                         )}
                     </div>

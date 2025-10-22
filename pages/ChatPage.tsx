@@ -19,7 +19,7 @@ import {
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile, Bot } from 'lucide-react';
 import { checkAndGrantAchievements } from '../src/utils/achievementService';
-import { analyzeMessageWithAI, chatWithAI, spontaneousCommentWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
+import { analyzeMessageWithAI, chatWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
 import AdminTag from '../components/AdminTag';
 import { fortressProfanityCheckINTELLIGENCE as fortressModerationCheck } from '../src/utils/fortressProfanityFilterULTRA';
 import ChatJoinRequestPage from './ChatJoinRequestPage';
@@ -75,7 +75,7 @@ const ChatPage: React.FC = () => {
     const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-    const [disclaimerTimer, setDisclaimerTimer] = useState(10);
+    const [disclaimerTimer, setDisclaimerTimer] = useState(0);
     const [showDisclaimer, setShowDisclaimer] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [isAiResponding, setIsAiResponding] = useState(false);
@@ -84,7 +84,7 @@ const ChatPage: React.FC = () => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [chatSettings, setChatSettings] = useState<{
         chatPaused: boolean; chatPauseReason: string; slowMode: boolean; slowModeDelay: number; isChatInvitationless: boolean;
-    }>({ chatPaused: false, chatPauseReason: '', slowMode: false, slowModeDelay: 0, isChatInvitationless: false });
+    }>({ chatPaused: false, chatPauseReason: '', slowMode: false, slowModeDelay: 0, isChatInvitationless: true });
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
     const [infractionRecord, setInfractionRecord] = useState<InfractionRecord | null>(null);
@@ -220,7 +220,7 @@ const ChatPage: React.FC = () => {
                     setShowDisclaimer(false);
                 } else {
                     setShowDisclaimer(true);
-                    setDisclaimerTimer(10);
+                    setDisclaimerTimer(0);
                 }
             } catch (error) {
                 console.error("Disclaimer kontrol hatası", error);
@@ -230,15 +230,8 @@ const ChatPage: React.FC = () => {
         checkDisclaimer();
     }, [user]);
 
-    // Zamanlayıcı
-    useEffect(() => {
-        if (!showDisclaimer || disclaimerTimer <= 0) return;
-        const timerId = setInterval(() => { setDisclaimerTimer(prev => prev - 1); }, 1000);
-        return () => clearInterval(timerId);
-    }, [showDisclaimer, disclaimerTimer]);
-
     const handleAcceptDisclaimer = async () => {
-        if (!user || disclaimerTimer > 0) return;
+        if (!user) return;
         try {
             await updateDoc(doc(db, 'users', user.uid), { hasAcceptedChatDisclaimer: true, disclaimerAcceptedAt: serverTimestamp() });
             setShowDisclaimer(false);
@@ -261,52 +254,7 @@ const ChatPage: React.FC = () => {
             return;
         }
 
-        const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
-
-        if (analysis.action !== 'NONE' && analysis.warningMessage) {
-            if (isAdmin) {
-                const tempMessageRef = await addDoc(collection(db, 'messages'), {
-                    text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
-                    createdAt: serverTimestamp(),
-                });
-                await deleteDoc(tempMessageRef);
-                await addDoc(collection(db, 'messages'), {
-                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                    text: analysis.warningMessage, createdAt: serverTimestamp(),
-                });
-            } else {
-                await addDoc(collection(db, 'messages'), {
-                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                    text: analysis.warningMessage, createdAt: serverTimestamp(),
-                });
-
-                let muteUntil: Timestamp | null = null;
-                const now = new Date();
-
-                switch (analysis.action) {
-                    case 'DELETE_AND_MUTE_5M':
-                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
-                        break;
-                    case 'DELETE_AND_MUTE_1H':
-                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
-                        break;
-                    case 'DELETE_AND_PERMANENT_BAN':
-                        muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
-                        break;
-                }
-
-                if (muteUntil) {
-                    await setDoc(infractionDocRef, {
-                        offenseCount: increment(1),
-                        mutedUntil: muteUntil,
-                        lastOffenseReason: analysis.warningMessage
-                    }, { merge: true });
-                }
-            }
-            console.log(`Moderasyon uygulandı: ${analysis.action}`);
-            return;
-        }
-
+        // '/ai' komutu ile başlayan mesajların mantığı, moderasyona tabi olmadığı için mevcut haliyle kalacak
         if (messageText.toLowerCase().startsWith('/ai ')) {
             const now = Date.now();
             const timeSinceLastCall = (now - lastAiCallTimestamp.current) / 1000;
@@ -386,30 +334,72 @@ const ChatPage: React.FC = () => {
         handleCancelReply();
 
         try {
-            await addDoc(collection(db, 'messages'), {
+            // 1. Adım: Mesajı hemen veritabanına ekle
+            const messageRef = await addDoc(collection(db, 'messages'), {
                 text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
                 createdAt: serverTimestamp(),
                 ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
             });
 
-            await updateDoc(doc(db, 'users', user.uid), { messageCount: increment(1) });
-            
-            setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
-
-            if (Math.random() < 0.15) {
+            // 2. Adım: Arka planda moderasyon işlemini başlat
+            (async () => {
                 try {
-                    const aiComment = await spontaneousCommentWithAI(userProfile?.displayName || 'Anonim', messageText);
-                    if (aiComment) {
-                        await addDoc(collection(db, 'messages'), {
-                            uid: user.uid,
-                            isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                            text: aiComment, createdAt: serverTimestamp(),
-                        });
+                    // Moderasyon kontrolünü yap
+                    const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+
+                    // Eğer moderasyon sonucunda mesajın silinmesi gerekiyorsa
+                    if (analysis.action !== 'NONE' && analysis.warningMessage) {
+                        if (isAdmin) {
+                            // Admin mesajlarını silip uyarı mesajı gönder
+                            await deleteDoc(messageRef);
+                            await addDoc(collection(db, 'messages'), {
+                                uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                                text: analysis.warningMessage, createdAt: serverTimestamp(),
+                            });
+                        } else {
+                            // Normal kullanıcı mesajlarını silip uyarı mesajı gönder
+                            await deleteDoc(messageRef);
+
+                            await addDoc(collection(db, 'messages'), {
+                                uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                                text: analysis.warningMessage, createdAt: serverTimestamp(),
+                            });
+
+                            let muteUntil: Timestamp | null = null;
+                            const now = new Date();
+
+                            switch (analysis.action) {
+                                case 'DELETE_AND_MUTE_5M':
+                                    muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
+                                    break;
+                                case 'DELETE_AND_MUTE_1H':
+                                    muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
+                                    break;
+                                case 'DELETE_AND_PERMANENT_BAN':
+                                    muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
+                                    break;
+                            }
+
+                            if (muteUntil) {
+                                await setDoc(infractionDocRef, {
+                                    offenseCount: increment(1),
+                                    mutedUntil: muteUntil,
+                                    lastOffenseReason: analysis.warningMessage
+                                }, { merge: true });
+                            }
+                        }
+                        console.log(`Moderasyon uygulandı: ${analysis.action}`);
                     }
                 } catch (error) {
-                    console.error("Spontane AI yorum hatası:", error);
+                    console.error("Arka planda moderasyon işlemi sırasında hata:", error);
                 }
-            }
+            })();
+
+            // 3. Adım: Diğer işlemleri yap
+            await updateDoc(doc(db, 'users', user.uid), { messageCount: increment(1) });
+        
+            setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
+
         } catch (error) {
             console.error("Mesaj gönderme sırasında hata:", error);
         } finally {
@@ -449,8 +439,7 @@ const ChatPage: React.FC = () => {
     
     if (authLoading) return <div className="flex justify-center items-center h-screen"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>;
     if (!user) return <div className="text-center py-20"><h1 className="text-4xl font-heading">Erişim Reddedildi</h1><p className="mt-4 text-cyber-gray">Giriş yapmalısın.</p><Link to="/login" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">Giriş Yap</Link></div>;
-    if (!isAdmin && !userProfile?.chatAccessGranted && !chatSettings.isChatInvitationless) return <ChatJoinRequestPage />;
-    if (showDisclaimer) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"><motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-lg shadow-2xl shadow-electric-purple/20"><h2 className="text-2xl font-heading text-electric-purple mb-4 flex items-center gap-3"><ShieldAlert size={28}/> FREKANSA BAĞLANMADAN ÖNCE...</h2><div className="space-y-4 text-ghost-white"><p className="text-yellow-400 font-semibold">Bu sinyale katılarak, aşağıdaki temel yasaları kabul etmiş olursun:</p><ul className="list-none pl-2 space-y-3 text-cyber-gray border-l-2 border-electric-purple/50"><li className="pl-4"><span className="font-bold text-ghost-white">KURAL I:</span> Kişisel veri paylaşımı ve reklam yapmak yasaktır.</li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL II:</span> Ailevi, şahsi ve kutsal değerlere hakaret veya tehdit <span className="font-bold text-red-500">yasaktır.</span></li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL III:</span> Gönderdiğin her sinyalin tek sorumlusu sensin.</li></ul></div><div className="mt-6 flex items-center justify-end gap-4"><span className="text-cyber-gray font-mono tracking-widest">{disclaimerTimer < 10 ? `0${disclaimerTimer}`: disclaimerTimer}</span><button onClick={handleAcceptDisclaimer} disabled={disclaimerTimer > 0} className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all ${disclaimerTimer > 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-80'}`}>Anladım, Sorumluluğu Alıyorum</button></div></motion.div></div>;
+    if (showDisclaimer) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"><motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-lg shadow-2xl shadow-electric-purple/20"><h2 className="text-2xl font-heading text-electric-purple mb-4 flex items-center gap-3"><ShieldAlert size={28}/> FREKANSA BAĞLANMADAN ÖNCE...</h2><div className="space-y-4 text-ghost-white"><p className="text-yellow-400 font-semibold">Bu sinyale katılarak, aşağıdaki temel yasaları kabul etmiş olursun:</p><ul className="list-none pl-2 space-y-3 text-cyber-gray border-l-2 border-electric-purple/50"><li className="pl-4"><span className="font-bold text-ghost-white">KURAL I:</span> Kişisel veri paylaşımı ve reklam yapmak yasaktır.</li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL II:</span> Ailevi, şahsi ve kutsal değerlere hakaret veya tehdit <span className="font-bold text-red-500">yasaktır.</span></li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL III:</span> Gönderdiğin her sinyalin tek sorumlusu sensin.</li></ul></div><div className="mt-6 flex items-center justify-end gap-4"><span className="text-cyber-gray font-mono tracking-widest">{disclaimerTimer < 10 ? `0${disclaimerTimer}`: disclaimerTimer}</span><button onClick={handleAcceptDisclaimer} className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all hover:bg-opacity-80`}>Anladım, Sorumluluğu Alıyorum</button></div></motion.div></div>;
     
     // ... JSX Kısmında Aktif Kullanıcıları Göster ...
     return (
@@ -517,7 +506,7 @@ const ChatPage: React.FC = () => {
                                     </ProfileAnimation>
                                 </Link>
                             )}
-                            <motion.div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                            <motion.div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} >
                                 {!messageIsFromCurrentUser && (senderIsAdmin ? <AdminTag name={msg.displayName} /> : <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 hover:underline">{msg.displayName}</Link>)}
                                 {msg.replyingTo && (<div className="mb-2 p-2 border-l-2 bg-black/20 text-xs opacity-80"><p className="font-bold">{msg.replyingTo.displayName}</p><p className="truncate">{msg.replyingTo.text}</p></div>)}
                                 <p className="text-ghost-white" style={{whiteSpace: "pre-wrap"}}>{msg.text}</p>

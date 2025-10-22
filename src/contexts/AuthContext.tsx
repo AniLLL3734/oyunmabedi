@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, onAuthStateChanged, signOut } from 'firebase/auth';
+import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 
@@ -87,10 +87,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     joinDate: isAdminUser ? new Date('2023-01-01') : new Date(),
                     messageCount: isAdminUser ? 5000 : 0,
                     playedGames: isAdminUser ? ['game1', 'game2'] : [],
-                    level: isAdminUser ? 100 : undefined,
-                    experience: isAdminUser ? 1000000 : undefined,
-                    totalPlayTime: isAdminUser ? 100000 : undefined,
-                    favoriteGame: isAdminUser ? 'Retro Games' : undefined,
+                    // Remove undefined fields for non-admin users
+                    ...(isAdminUser && {
+                        level: 100,
+                        experience: 1000000,
+                        totalPlayTime: 100000,
+                        favoriteGame: 'Retro Games'
+                    }),
                     lastLogin: new Date(),
                     isOnline: false,
                     lastSeen: serverTimestamp(),
@@ -126,10 +129,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Yeni eklenen fonksiyon: Çıkış yaparken cooldown süresini başlatır
   const signOutAndSetCooldown = async () => {
-    if (user) {
+    // Use the current user from state
+    const currentUser = user;
+    
+    if (currentUser) {
       try {
         // Kullanıcının Firestore belgesini güncelle
-        const userDocRef = doc(db, 'users', user.uid);
+        const userDocRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userDocRef, {
           lastLogoutTime: new Date() // Çıkış zamanını kaydet
         });
@@ -139,7 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     
     // Firebase auth oturumunu kapat
-    await signOut(auth);
+    await firebaseSignOut(auth);
     
     // LocalStorage'a da çıkış zamanını kaydet (client tarafı için)
     localStorage.setItem('accountCreationCooldown', Date.now().toString());

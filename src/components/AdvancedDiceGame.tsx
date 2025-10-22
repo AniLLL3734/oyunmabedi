@@ -117,7 +117,18 @@ const AdvancedDiceGame: React.FC<DiceGameProps> = ({ userScore, onGameUpdate }) 
 
 
     const handleBet = () => {
-        if (!selectedNumber || isLoading || betAmount <= 0 || betAmount > userScore) return;
+        // Minimum ve maksimum bahis limitleri
+        if (betAmount < 10) {
+            alert("Minimum bahis 10 puandır.");
+            return;
+        }
+        
+        if (betAmount > 1000) {
+            alert("Maksimum bahis 1000 puandır.");
+            return;
+        }
+        
+        if (!selectedNumber || isLoading || betAmount > userScore) return;
         
         // Hile tespiti durumunda, oyuncu hep kaybeder ama bunu çaktırmayız.
         if (cheaterFlag.current) {
@@ -206,10 +217,20 @@ const AdvancedDiceGame: React.FC<DiceGameProps> = ({ userScore, onGameUpdate }) 
             </div>
 
             <div className="flex gap-4 items-center">
-                <input type="number" value={betAmount} onChange={(e) => setBetAmount(Number(e.target.value))} className='w-full bg-gray-800 p-3 rounded-lg border border-gray-600' />
+                <input 
+                  type="number" 
+                  value={betAmount} 
+                  onChange={(e) => setBetAmount(Number(e.target.value))} 
+                  className='w-full bg-gray-800 p-3 rounded-lg border border-gray-600' 
+                  min="10" 
+                  max="1000"
+                />
                 <button onClick={handleBet} disabled={isLoading || !selectedNumber} className='w-full py-3 bg-purple-600 rounded-lg font-bold text-lg disabled:bg-gray-700 disabled:cursor-not-allowed'>
                     Zarı At
                 </button>
+            </div>
+            <div className="text-sm text-gray-400 mt-2 text-center">
+              Bahis aralığı: 10 - 1000 puan
             </div>
         </div>
     );

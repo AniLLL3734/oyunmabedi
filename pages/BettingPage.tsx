@@ -60,7 +60,7 @@ const gameIntroductions = {
     name: 'Galaktik Ganimet',
     description: 'Klasik slot makinesi oyunu. Sembollerin hizalanmasına göre kazanç elde edersiniz.',
     rules: [
-      'Bahis miktarınızı seçin',
+      'Bahis miktarınızı seçin (5-500 puan arası)',
       'Çevir butonuna tıklayın',
       'Slot sembollerinin hizalanmasını bekleyin',
       'Aynı sembollerin hizalanmasına göre kazanç elde edersiniz'
@@ -75,7 +75,7 @@ const gameIntroductions = {
     name: 'Şans Zarı',
     description: '1-6 arasında bir sayı seçin ve zar atın. Tahmininiz doğruysa kazanırsınız.',
     rules: [
-      'Bahis miktarınızı seçin',
+      'Bahis miktarınızı seçin (10-1000 puan arası)',
       '1-6 arasında bir sayı tahmin edin',
       'Zarı atın',
       'Tahmininiz doğruysa 5.5 katı kazanırsınız'
@@ -218,7 +218,7 @@ const BettingPage: React.FC = () => {
                       <div>
                         <h3 className="font-bold">{game.name}</h3>
                         <p className="text-sm text-gray-400">
-                          Bahis: {game.minBet} - {game.maxBet}
+                          Bahis aralığı: {game.minBet} - {game.maxBet}
                         </p>
                       </div>
                     </div>
