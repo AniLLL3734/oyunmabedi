@@ -176,6 +176,36 @@ const ChatPage: React.FC = () => {
         return () => unsubscribe();
     }, [allUsers]); // allUsers yüklendiğinde tekrar çalışıp admin bilgilerini günceller
 
+    // YENİ: Chat ayarlarını ve sabitlenmiş mesajı dinle
+    useEffect(() => {
+        // Chat ayarlarını dinle
+        const settingsRef = doc(db, 'chat_meta', 'settings');
+        const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setChatSettings(docSnap.data() as any);
+            }
+        }, (error) => {
+            console.error("Chat ayarları dinlenirken hata:", error);
+        });
+
+        // Sabitlenmiş mesajı dinle
+        const pinnedMessageRef = doc(db, 'chat_meta', 'pinned_message');
+        const unsubscribePinned = onSnapshot(pinnedMessageRef, (docSnap) => {
+            if (docSnap.exists()) {
+                setPinnedMessage(docSnap.data() as PinnedMessage);
+            } else {
+                setPinnedMessage(null);
+            }
+        }, (error) => {
+            console.error("Sabitlenmiş mesaj dinlenirken hata:", error);
+        });
+
+        return () => {
+            unsubscribeSettings();
+            unsubscribePinned();
+        };
+    }, []);
+
     // ===================================================================================
     // ESKİ KODLAR (Değişiklik yok)
     // ===================================================================================
@@ -244,6 +274,12 @@ const ChatPage: React.FC = () => {
 
         if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
         
+        // Chat paused check - moved to the beginning
+        if (chatSettings.chatPaused && !isAdmin) {
+            setChatError(chatSettings.chatPauseReason || 'Sohbet devre dışı.');
+            return;
+        }
+
         const infractionDocRef = doc(db, 'infractions', user.uid);
         const infractionSnap = await getDoc(infractionDocRef);
         const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
@@ -321,11 +357,6 @@ const ChatPage: React.FC = () => {
                 setIsAiResponding(false);
                 setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
             }
-            return;
-        }
-
-        if (chatSettings.chatPaused && !isAdmin) {
-            setChatError(chatSettings.chatPauseReason || 'Sohbet devre dışı.');
             return;
         }
 
@@ -476,7 +507,7 @@ const ChatPage: React.FC = () => {
             
             {chatSettings.chatPaused && <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-red-900/50 border border-red-700/50 rounded-lg text-sm"><div className="flex items-start gap-3"><ShieldAlert className="text-red-400 mt-1 flex-shrink-0" size={18}/><div><p className="font-bold text-red-300">Sohbet Durduruldu</p><p className="text-red-200">{chatSettings.chatPauseReason || 'Sohbet şu anda devre dışı.'}</p></div></div></motion.div>}
             {pinnedMessage && <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="p-3 mb-2 bg-yellow-900/50 border border-yellow-700/50 rounded-lg flex items-start gap-3 text-sm"><Pin className="text-yellow-400 mt-1 flex-shrink-0" size={18}/><div className="flex-1"><p className="font-bold text-yellow-300">Sabitlenmiş Mesaj</p><p className="text-yellow-200">"{pinnedMessage.text}" - <span className="font-semibold">{pinnedMessage.displayName}</span></p></div>{isAdmin && (<button onClick={handleUnpinMessage} className="p-1 rounded-full hover:bg-yellow-700/50"><X className="text-yellow-400" size={16}/></button>)}</motion.div>}
-            <div className={`flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50 ${chatSettings.chatPaused ? 'filter blur-sm' : ''}`}>
+            <div className={`flex-1 overflow-y-auto p-4 space-y-4 bg-dark-gray/50 rounded-t-lg border border-b-0 border-cyber-gray/50 ${chatSettings.chatPaused && !isAdmin ? 'blur-sm' : ''}`}>
                 {hasMore && (<div className="text-center my-4"><button onClick={loadMoreMessages} disabled={loadingMore} className="text-cyber-gray hover:text-electric-purple text-sm font-semibold">{loadingMore ? 'Yükleniyor...' : 'Geçmiş Mesajları Yükle'}</button></div>)}
                 {messages.map(msg => {
                     const senderIsAdmin = allUsers.get(msg.uid)?.role === 'admin';
@@ -530,7 +561,7 @@ const ChatPage: React.FC = () => {
                         {showEmojiPicker && ( <div className="absolute bottom-full mb-2 w-full bg-dark-gray border border-cyber-gray/50 rounded-lg p-4 z-10"><h3>Emojiler</h3><div className="grid grid-cols-8 gap-2">{getAllEmojis()[0].emojis.map((emoji, index) => ( <button key={index} type="button" onClick={() => insertEmoji(emoji)} className="text-2xl hover:scale-125">{emoji}</button> ))}</div></div> )}
                     </div>
                     <button type="button" onClick={() => setShowEmojiPicker(!showEmojiPicker)} className="p-4 bg-cyber-gray/50 text-white rounded-md" title="Emoji Ekle"><Smile size={24} /></button>
-                    <button type="submit" disabled={!newMessage.trim() || isSending || isAiResponding} className="p-4 bg-electric-purple text-white rounded-md disabled:bg-cyber-gray/50 flex items-center justify-center w-[64px] h-[56px]">
+                    <button type="submit" disabled={!newMessage.trim() || isSending || isAiResponding || (chatSettings.chatPaused && !isAdmin)} className="p-4 bg-electric-purple text-white rounded-md disabled:bg-cyber-gray/50 flex items-center justify-center w-[64px] h-[56px]">
                         {isAiResponding ? ( <LoaderCircle size={24} className="animate-spin" /> ) : ( <Send size={24} /> )}
                     </button>
                 </form>
