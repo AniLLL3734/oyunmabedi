@@ -80,6 +80,32 @@ const ProfilePage: React.FC = () => {
                     // Kullanıcının e-postasını al
                     const email = userData.email || (currentUser?.email || null);
                     setUserEmail(email);
+                    
+                    // PADİŞAH2.ADMIN için özel arka planı otomatik ekle
+                    if (email === 'padisah2admin@ttmtal.com' && userData.inventory) {
+                        // Kullanıcının zaten bu arka planı olup olmadığını kontrol et
+                        if (!userData.inventory.profileBackgrounds?.includes('bg_padisah2admin')) {
+                            // Özel arka planı kullanıcı envanterine ekle
+                            const updatedInventory = {
+                                ...userData.inventory,
+                                profileBackgrounds: [
+                                    ...(userData.inventory.profileBackgrounds || []),
+                                    'bg_padisah2admin'
+                                ]
+                            };
+                            
+                            // Firestore'da güncelle
+                            await updateDoc(userRef, {
+                                inventory: updatedInventory
+                            });
+                            
+                            // Yerel state'i güncelle
+                            setProfile(prev => prev ? {
+                                ...prev,
+                                inventory: updatedInventory
+                            } : null);
+                        }
+                    }
                 } else if (isMounted) {
                     setProfile(null);
                 }
@@ -147,7 +173,10 @@ const ProfilePage: React.FC = () => {
     const getBackgroundUrl = () => {
         // Önce özel arka planı kontrol et
         if (userEmail && specialBackgrounds[userEmail]) {
-            return specialBackgrounds[userEmail];
+            // PADİŞAH2.ADMIN için özel kontrol
+            if (userEmail === 'padisah2admin@ttmtal.com') {
+                return specialBackgrounds[userEmail];
+            }
         }
         
         // Daha sonra aktif arka planı kontrol et
@@ -279,8 +308,15 @@ const ProfilePage: React.FC = () => {
                     <p className="text-cyber-gray mb-6">Siber dükkandan satın alınan eşsiz ürünler.</p>
                     
                     {/* Profil Arka Planları */}
-                    {profile.inventory.profileBackgrounds && profile.inventory.profileBackgrounds.length > 0 && (<div className="mb-8"><h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2"><Palette className="text-green-400" size={20}/>Profil Arka Planları</h3><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{profile.inventory.profileBackgrounds.map(bgId => {const bg = shopItems.find(i => i.id === bgId);if(!bg)return null;const isActive = profile.inventory?.activeProfileBackground === bgId;const canInteract = currentUser?.uid === userId;return(<motion.div key={bgId} className={`p-4 rounded-lg border text-center transition-all ${isActive?'border-yellow-400 bg-yellow-400/10 ring-2 ring-yellow-400/50':'border-green-400/50 bg-dark-gray/50'}`} whileHover={{scale:canInteract?1.05:1}}><img src={bg.imageUrl} alt={bg.name} className="w-full h-16 object-cover rounded-md mb-2 filter brightness-75"/><p className="text-sm font-bold text-ghost-white mb-2">{bg.name}</p>{canInteract && (<button onClick={()=>isActive?handleUnequipShopItem('profileBackground'):handleEquipShopItem('profileBackground', bgId)} className={`px-3 py-1 rounded text-xs font-bold transition-all ${isActive?'bg-red-500 hover:bg-red-600 text-white':'bg-green-500 hover:bg-green-600 text-white'}`}>{isActive?'Kaldır':'Uygula'}</button>)}</motion.div>);})}</div></div>)}
+                    {profile.inventory.profileBackgrounds && profile.inventory.profileBackgrounds.length > 0 && (<div className="mb-8"><h3 className="text-xl font-bold text-ghost-white mb-4 flex items-center gap-2"><Palette className="text-green-400" size={20}/>Profil Arka Planları</h3><div className="grid grid-cols-2 md:grid-cols-4 gap-4">{profile.inventory.profileBackgrounds.map(bgId => {const bg = shopItems.find(i => i.id === bgId);if(!bg)return null;const isActive = profile.inventory?.activeProfileBackground === bgId;const canInteract = currentUser?.uid === userId;
+
+                    // PADİŞAH2.ADMIN için özel kontrol
+                    if (bg.id === 'bg_padisah2admin' && currentUser?.email !== 'padisah2admin@ttmtal.com') {
+                      return null;
+                    }
                     
+                    return(<motion.div key={bgId} className={`p-4 rounded-lg border text-center transition-all ${isActive?'border-yellow-400 bg-yellow-400/10 ring-2 ring-yellow-400/50':'border-green-400/50 bg-dark-gray/50'}`} whileHover={{scale:canInteract?1.05:1}}><img src={bg.imageUrl} alt={bg.name} className="w-full h-16 object-cover rounded-md mb-2 filter brightness-75"/><p className="text-sm font-bold text-ghost-white mb-2">{bg.name}</p>{canInteract && (<button onClick={()=>isActive?handleUnequipShopItem('profileBackground'):handleEquipShopItem('profileBackground', bgId)} className={`px-3 py-1 rounded text-xs font-bold transition-all ${isActive?'bg-red-500 hover:bg-red-600 text-white':'bg-green-500 hover:bg-green-600 text-white'}`}>{isActive?'Kaldır':'Uygula'}</button>)}</motion.div>);})}</div></div>)}
+
                     {/* DÜZELTİLDİ: Eksik bırakılan diğer tüm koleksiyon bölümleri eklendi. */}
                     
                     {/* Avatar Çerçeveleri */}

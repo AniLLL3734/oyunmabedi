@@ -43,7 +43,9 @@ export const shopItems: ShopItem[] = [
   { id: 'bg_fenerbahce', name: 'Fenerbahçe Enerjisi', description: 'Sarı-lacivert veri akışları ve parlayan kanarya formu.', type: ShopItemType.PROFILE_BACKGROUND, price: 15000, category: 'profile_backgrounds', rarity: 'epic', imageUrl: '/profile/fenerbahce.png' },
   { id: 'bg_besiktas', name: 'Kara Kartalın Gölgesi', description: 'Siyah-beyaz dijital kodlardan oluşan kanatlarını açmış bir kartal.', type: ShopItemType.PROFILE_BACKGROUND, price: 15000, category: 'profile_backgrounds', rarity: 'epic', imageUrl: '/profile/besiktas.png' },
   { id: 'bg_trabzonspor', name: 'Karadeniz Fırtınası', description: 'Bordo-mavi şimşekler ve dijital parçacıklardan oluşan bir fırtına.', type: ShopItemType.PROFILE_BACKGROUND, price: 15000, category: 'profile_backgrounds', rarity: 'epic', imageUrl: '/profile/trabzonspor.png' },
- 
+  // PADİŞAH2.ADMIN için özel arka plan
+  { id: 'bg_padisah2admin', name: 'Padishah2.Admin Özel Arka Planı', description: 'Padishah2.Admin kullanıcısına özel özel arka plan.', type: ShopItemType.PROFILE_BACKGROUND, price: 0, category: 'profile_backgrounds', rarity: 'legendary', imageUrl: '/profile/utku.jpg' },
+
   // === TARİHİ MİRAS ARKA PLANLARI (ÜCRETSİZ) ===
   {
     id: 'bg_fatih',
