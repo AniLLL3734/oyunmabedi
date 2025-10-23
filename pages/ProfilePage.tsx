@@ -10,6 +10,8 @@ import { games } from '../data/games';
 import { useAuth } from '../src/contexts/AuthContext';
 import AdminTag from '../components/AdminTag';
 import ProfileAnimation from '../components/ProfileAnimations';
+import { specialBackgrounds } from '../data/specialBackgrounds';
+import { specialTitles } from '../data/specialTitles';
 
 // GÜNCELLENDİ: Arayüze arka plan envanteri eklendi.
 interface UserProfile {
@@ -40,6 +42,7 @@ interface UserProfile {
         activeSpecialTitle?: string;
         activeProfileBackground?: string;
     };
+    email?: string; // Yeni eklenen satır
 }
 
 const titles: { [key: string]: string } = {
@@ -60,6 +63,7 @@ const ProfilePage: React.FC = () => {
     const { user: currentUser, loading: authLoading } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
 
     useEffect(() => {
         if (authLoading || !userId) return;
@@ -71,7 +75,11 @@ const ProfilePage: React.FC = () => {
                 const userRef = doc(db, 'users', userId);
                 const userSnap = await getDoc(userRef);
                 if (isMounted && userSnap.exists()) {
-                    setProfile(userSnap.data() as UserProfile);
+                    const userData = userSnap.data() as UserProfile;
+                    setProfile(userData);
+                    // Kullanıcının e-postasını al
+                    const email = userData.email || (currentUser?.email || null);
+                    setUserEmail(email);
                 } else if (isMounted) {
                     setProfile(null);
                 }
@@ -85,7 +93,7 @@ const ProfilePage: React.FC = () => {
 
         fetchProfile();
         return () => { isMounted = false; };
-    }, [userId, authLoading]);
+    }, [userId, authLoading, currentUser]);
 
     const handleSelectTitle = async (achievementId: string) => {
         if (!currentUser || currentUser.uid !== userId) return;
@@ -135,8 +143,34 @@ const ProfilePage: React.FC = () => {
     const allAchievements = profile.role === 'admin' ? [...achievementsList, adminTitle] : achievementsList;
     const earnedAchievements = profile.achievements || [];
 
-    const activeBgItem = shopItems.find(item => item.id === profile.inventory?.activeProfileBackground);
-    const backgroundUrl = activeBgItem?.imageUrl || '/profile/bayrak.png';
+    // Özel arka planı belirle
+    const getBackgroundUrl = () => {
+        // Önce özel arka planı kontrol et
+        if (userEmail && specialBackgrounds[userEmail]) {
+            return specialBackgrounds[userEmail];
+        }
+        
+        // Daha sonra aktif arka planı kontrol et
+        const activeBgItem = shopItems.find(item => item.id === profile?.inventory?.activeProfileBackground);
+        if (activeBgItem?.imageUrl) {
+            return activeBgItem.imageUrl;
+        }
+        
+        // Varsayılan arka plan
+        return '/profile/bayrak.png';
+    };
+
+    const backgroundUrl = getBackgroundUrl();
+
+    // Özel unvanı belirle
+    const getSpecialTitle = () => {
+        if (userEmail && specialTitles[userEmail]) {
+            return specialTitles[userEmail];
+        }
+        return null;
+    };
+
+    const specialTitle = getSpecialTitle();
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -153,9 +187,39 @@ const ProfilePage: React.FC = () => {
                             <img src={profile.avatarUrl || `https://ui-avatars.com/api/?name=${profile.displayName}&background=1a1a2e&color=ffffff`} alt={profile.displayName || 'Anonim'} className={`w-24 h-24 rounded-full border-4 object-cover ${profile.inventory?.activeAvatarFrame === 'neon_frame'?'border-electric-purple shadow-neon-purple ring-4 ring-cyan-400/50':profile.inventory?.activeAvatarFrame === 'hologram_frame'?'border-purple-400 shadow-purple-400 ring-4 ring-purple-400/50':profile.inventory?.activeAvatarFrame === 'golden_frame'?'border-yellow-400 shadow-yellow-400 ring-4 ring-yellow-400/50':profile.inventory?.activeAvatarFrame === 'matrix_frame'?'border-green-400 shadow-green-400 ring-4 ring-green-400/50':profile.inventory?.activeAvatarFrame === 'fire_frame'?'border-red-400 shadow-red-400 ring-4 ring-red-400/50':'border-electric-purple shadow-neon-purple'}`}/>
                         </ProfileAnimation>
                     </div>
-                    {profile.role === 'admin' ? (<div className="text-center w-full"><AdminTag name={profile.displayName || 'Anonim'} className="text-4xl md:text-5xl font-heading mt-4" variant="crown" /><div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-2 md:gap-4"><span className="px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/50 rounded-full text-yellow-300 text-sm font-bold animate-admin-pulse">👑 MİMAR</span><span className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/50 rounded-full text-purple-300 text-sm font-bold animate-admin-float">⚡ SİSTEM YÖNETİCİSİ</span></div></div>) : (<h1 className="text-4xl md:text-5xl font-heading mt-4 flex items-center justify-center gap-3">{profile.displayName || 'Anonim'}{profile.gender === 'male' && <span title="Erkek" className="text-blue-400 text-2xl">♂</span>}{profile.gender === 'female' && <span title="Kadın" className="text-pink-400 text-2xl">♀</span>}</h1>)}
-                    {profile.selectedTitle && titles[profile.selectedTitle] && (<p className="text-lg text-electric-purple mt-2 font-bold tracking-widest">{titles[profile.selectedTitle]}</p>)}
-                    {profile.inventory?.activeSpecialTitle && (<p className="text-lg text-purple-400 mt-2 font-bold tracking-widest">{shopItems.find(item => item.id === profile.inventory?.activeSpecialTitle)?.name}</p>)}
+                    {profile.role === 'admin' ? (
+                        <div className="text-center w-full">
+                            <AdminTag name={profile.displayName || 'Anonim'} className="text-4xl md:text-5xl font-heading mt-4" variant="crown" />
+                            <div className="mt-4 flex flex-col sm:flex-row justify-center items-center gap-2 md:gap-4">
+                                <span className="px-4 py-2 bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-400/50 rounded-full text-yellow-300 text-sm font-bold animate-admin-pulse">👑 MİMAR</span>
+                                <span className="px-4 py-2 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-400/50 rounded-full text-purple-300 text-sm font-bold animate-admin-float">⚡ SİSTEM YÖNETİCİSİ</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <h1 className="text-4xl md:text-5xl font-heading mt-4 flex items-center justify-center gap-3">
+                            {profile.displayName || 'Anonim'}
+                            {profile.gender === 'male' && <span title="Erkek" className="text-blue-400 text-2xl">♂</span>}
+                            {profile.gender === 'female' && <span title="Kadın" className="text-pink-400 text-2xl">♀</span>}
+                        </h1>
+                    )}
+                    
+                    {/* Özel unvanı göster */}
+                    {specialTitle && (
+                        <p className="text-lg text-red-500 mt-2 font-bold tracking-widest">{specialTitle}</p>
+                    )}
+                    
+                    {/* Mevcut unvan gösterimi */}
+                    {profile.selectedTitle && titles[profile.selectedTitle] && !specialTitle && (
+                        <p className="text-lg text-electric-purple mt-2 font-bold tracking-widest">{titles[profile.selectedTitle]}</p>
+                    )}
+                    
+                    {/* Mağaza unvanı gösterimi */}
+                    {profile.inventory?.activeSpecialTitle && !specialTitle && (
+                        <p className="text-lg text-purple-400 mt-2 font-bold tracking-widest">
+                            {shopItems.find(item => item.id === profile.inventory?.activeSpecialTitle)?.name}
+                        </p>
+                    )}
+                    
                     <div className="flex items-center justify-center gap-4"><p className="text-3xl md:text-4xl font-mono text-cyber-gray mt-2">{profile.score?.toLocaleString() || 0} SKOR</p><div className="border-l border-cyber-gray/20 pl-4 mt-2"><p className="text-2xl md:text-3xl font-mono text-yellow-400">{profile.highestScore?.toLocaleString() || profile.score?.toLocaleString() || 0}</p><p className="text-xs text-cyber-gray uppercase">En Yüksek Skor</p></div></div>
                     <div className="flex flex-wrap justify-center gap-4 md:gap-8 mt-6 border-t border-cyber-gray/20 pt-6 w-full"><div className="flex flex-col items-center min-w-[80px]"><MessageSquare className="text-electric-purple" /><span className="text-2xl font-bold mt-1">{profile.messageCount || 0}</span><span className="text-xs text-cyber-gray uppercase">Mesaj</span></div><div className="flex flex-col items-center min-w-[80px]"><Flame className="text-electric-purple" /><span className="text-2xl font-bold mt-1">{profile.loginStreak || 0}</span><span className="text-xs text-cyber-gray uppercase">Seri</span></div><div className="flex flex-col items-center min-w-[80px]"><CalendarDays className="text-electric-purple" /><span className="text-xl font-bold mt-1">{profile.joinDate ? profile.joinDate.toDate().toLocaleDateString('tr-TR') : 'N/A'}</span><span className="text-xs text-cyber-gray uppercase">Katılım</span></div></div>
                     {profile.bio && <p className="text-cyber-gray mt-6 max-w-lg italic">"{profile.bio}"</p>}

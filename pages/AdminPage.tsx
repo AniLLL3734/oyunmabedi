@@ -542,9 +542,17 @@ const AdminPage: React.FC = () => {
     // Kullanıcı Yönetim Fonksiyonları
     const handleMuteUser = async (uid: string, durationMs: number) => {
         const userRef = doc(db, 'users', uid);
+        const infractionRef = doc(db, 'infractions', uid);
         try {
             const expiryDate = durationMs > 0 ? Timestamp.fromDate(new Date(Date.now() + durationMs)) : null;
             await updateDoc(userRef, { mutedUntil: expiryDate });
+            
+            // Also update the infractions collection for consistency with chat system
+            await setDoc(infractionRef, {
+                offenseCount: 0,
+                mutedUntil: expiryDate
+            }, { merge: true });
+            
             setUsers(users.map(u => u.uid === uid ? { ...u, mutedUntil: expiryDate || undefined } : u));
             alert(`Kullanıcının susturma durumu güncellendi: ${durationMs > 0 ? (durationMs / 60000) + ' dakika' : 'Susturma kaldırıldı'}.`);
         } catch (error) {

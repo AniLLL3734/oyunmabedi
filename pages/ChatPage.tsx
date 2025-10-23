@@ -42,12 +42,19 @@ interface ActiveUser {
     isAdmin?: boolean; // isAdmin bayrağını da ekleyelim
 }
 
+// SPAM ÖNLEYİCİ YAPISI
+interface MessageTimestamp {
+  timestamp: number;
+}
 
 const MAX_CHAR_LIMIT = 300;
 const PAGE_SIZE = 50;
 // YENİ SABİT: Aktiflik zaman aşımı süresi (dakika)
 const ACTIVITY_TIMEOUT_MINUTES = 2;
 
+// SPAM ÖNLEYİCİ SABİTLERİ
+const SPAM_TIME_WINDOW = 10000; // 10 saniye (milisaniye) - Daha kısa bir zaman dilimi
+const MAX_MESSAGES_PER_WINDOW = 3; // 10 saniyede maksimum 3 mesaj - Daha katı bir sınır
 
 const formatRemainingTime = (endDate: Date) => {
     const totalSeconds = Math.floor((endDate.getTime() - new Date().getTime()) / 1000);
@@ -88,7 +95,9 @@ const ChatPage: React.FC = () => {
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
     const [infractionRecord, setInfractionRecord] = useState<InfractionRecord | null>(null);
-
+    
+    // SPAM ÖNLEYİCİ DURUMU
+    const [userMessageHistory, setUserMessageHistory] = useState<MessageTimestamp[]>([]);
     
     // ===================================================================================
     // *** DÜZELTME ***: GÜVENİLİR HALE GETİRİLMİŞ AKTİF KULLANICI SİSTEMİ
@@ -280,6 +289,17 @@ const ChatPage: React.FC = () => {
             return;
         }
 
+        // SPAM ÖNLEYİCİ KONTROLÜ
+        const now = Date.now();
+        const recentMessages = userMessageHistory.filter(
+            msg => now - msg.timestamp < SPAM_TIME_WINDOW
+        );
+        
+        if (recentMessages.length >= MAX_MESSAGES_PER_WINDOW && !isAdmin) {
+            setChatError(`Spam engellendi! ${Math.ceil(SPAM_TIME_WINDOW / 1000)} saniyede en fazla ${MAX_MESSAGES_PER_WINDOW} mesaj gönderebilirsin.`);
+            return;
+        }
+
         const infractionDocRef = doc(db, 'infractions', user.uid);
         const infractionSnap = await getDoc(infractionDocRef);
         const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
@@ -371,6 +391,12 @@ const ChatPage: React.FC = () => {
                 createdAt: serverTimestamp(),
                 ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
             });
+
+            // SPAM ÖNLEYİCİ - Mesaj geçmişini güncelle
+            setUserMessageHistory(prev => [
+                ...prev.filter(msg => now - msg.timestamp < SPAM_TIME_WINDOW),
+                { timestamp: now }
+            ]);
 
             // 2. Adım: Arka planda moderasyon işlemini başlat
             (async () => {
@@ -475,6 +501,17 @@ const ChatPage: React.FC = () => {
     // ... JSX Kısmında Aktif Kullanıcıları Göster ...
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col h-[calc(100vh-150px)] max-w-4xl mx-auto">
+            {/* DEBUG BÖLÜMÜ - SADECE DEVELOPMENT ORTAMINDA GÖRÜNÜR */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="p-3 mb-2 bg-blue-900/50 border border-blue-700/50 rounded-lg">
+                    <h3 className="font-heading text-blue-300">Debug Bilgileri</h3>
+                    <p className="text-blue-200">Mesaj Geçmişi: {userMessageHistory.length} mesaj</p>
+                    <p className="text-blue-200">Son 10 saniyedeki mesajlar: {
+                        userMessageHistory.filter(msg => Date.now() - msg.timestamp < 10000).length
+                    }</p>
+                </div>
+            )}
+            
             {/* Aktif kullanıcılar bölümü */}
             <div className="p-3 mb-2 bg-dark-gray/80 border border-cyber-gray/50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">

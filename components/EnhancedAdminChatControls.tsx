@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { doc, updateDoc, serverTimestamp, deleteField, addDoc, collection, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, deleteField, addDoc, collection, Timestamp, setDoc } from 'firebase/firestore';
 import { db } from '../src/firebase';
 import { MicOff, UserX, UserCheck, Send, Eye, LoaderCircle, X, Ban, VolumeX, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -51,12 +51,19 @@ const EnhancedAdminChatControls: React.FC<EnhancedAdminChatControlsProps> = ({
   const handleMuteUser = async (durationMinutes: number) => {
     try {
       const userRef = doc(db, 'users', selectedUser.uid);
+      const infractionRef = doc(db, 'infractions', selectedUser.uid);
       const expiryDate = durationMinutes > 0 ? 
         Timestamp.fromDate(new Date(Date.now() + durationMinutes * 60 * 1000)) : null;
       
       await updateDoc(userRef, { 
         mutedUntil: durationMinutes > 0 ? expiryDate : deleteField()
       });
+      
+      // Also update the infractions collection for consistency with chat system
+      await setDoc(infractionRef, {
+        offenseCount: 0,
+        mutedUntil: expiryDate
+      }, { merge: true });
       
       // Update local state
       setUsers(users.map(u => u.uid === selectedUser.uid ? { 
@@ -80,11 +87,18 @@ const EnhancedAdminChatControls: React.FC<EnhancedAdminChatControlsProps> = ({
     
     try {
       const userRef = doc(db, 'users', selectedUser.uid);
+      const infractionRef = doc(db, 'infractions', selectedUser.uid);
       await updateDoc(userRef, { 
         bannedFromChat: true,
         bannedReason: "Yönetici tarafından kalıcı olarak yasaklandı",
         bannedAt: serverTimestamp()
       });
+      
+      // Also update the infractions collection for consistency with chat system
+      await setDoc(infractionRef, {
+        offenseCount: 0,
+        mutedUntil: Timestamp.fromDate(new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000)) // 100 years - effectively permanent
+      }, { merge: true });
       
       // Update local state
       setUsers(users.map(u => u.uid === selectedUser.uid ? { ...u, bannedFromChat: true } : u));
@@ -101,11 +115,18 @@ const EnhancedAdminChatControls: React.FC<EnhancedAdminChatControlsProps> = ({
   const handleUnbanUser = async () => {
     try {
       const userRef = doc(db, 'users', selectedUser.uid);
+      const infractionRef = doc(db, 'infractions', selectedUser.uid);
       await updateDoc(userRef, { 
         bannedFromChat: deleteField(),
         bannedReason: deleteField(),
         bannedAt: deleteField()
       });
+      
+      // Also update the infractions collection for consistency with chat system
+      await setDoc(infractionRef, {
+        offenseCount: 0,
+        mutedUntil: null
+      }, { merge: true });
       
       // Update local state
       setUsers(users.map(u => u.uid === selectedUser.uid ? { ...u, bannedFromChat: undefined } : u));

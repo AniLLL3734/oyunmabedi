@@ -6,9 +6,7 @@ import { db, auth } from '../src/firebase';
 import { doc, setDoc, increment, getDoc } from 'firebase/firestore';
 
 // Ayarlar
-const PASSIVE_SCORE_INTERVAL = 150 * 1000; // 2.5 Dakika
-
-
+const PASSIVE_SCORE_INTERVAL = 300 * 1000; // 5 Dakika (Önce 2.5 idi)
 const AFK_TIMEOUT = 3 * 60 * 60 * 1000; // 3 Saat (3 saat * 60 dakika * 60 saniye * 1000 milisaniye)
 const SCORE_AMOUNT = 125;                     // 125 Skor olarak güncellendi
 // === AUTO CLICKER TESPİT AYARLARI ===
