@@ -1,0 +1,32 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public read access to messages but restrict writes
+    match /messages/{document} {
+      allow read: if true;
+      allow create: if request.auth != null && 
+        request.resource.data.keys().hasOnly(['text', 'uid', 'displayName', 'createdAt', 'replyingTo', 'isAiMessage', 'seenBy']) &&
+        request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    
+    // Allow users to manage their own presence
+    match /chat_presence/{uid} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    // Allow public read access to pinned messages but restrict writes to admins
+    match /chat_meta/{document} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // Allow users to read from the users collection (needed for display names, avatars, etc.)
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
+    }
+  }
+}

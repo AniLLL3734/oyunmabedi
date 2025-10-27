@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow read/write access to all collections for debugging
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // More specific rules for production use
+    // Messages can be read by anyone but only created by authenticated users
+    match /messages/{document} {
+      allow read: if true;
+      allow create: if request.auth != null && 
+        request.resource.data.keys().hasOnly(['text', 'uid', 'displayName', 'createdAt', 'replyingTo', 'isAiMessage', 'seenBy']) &&
+        request.resource.data.uid == request.auth.uid;
+      allow update: if false;
+      allow delete: if request.auth != null && 
+        (request.auth.uid == resource.data.uid || request.auth.token.admin == true);
+    }
+    
+    // Presence can be read by anyone but only modified by the owner
+    match /chat_presence/{uid} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid;
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    // Chat metadata (like pinned messages) - admin only
+    match /chat_meta/{document} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // Users collection - read only
+    match /users/{uid} {
+      allow read: if request.auth != null;
+      allow create, update, delete: if false;
+    }
+    
+    // Infractions - admin only
+    match /infractions/{uid} {
+      allow read, write: if request.auth != null && request.auth.token.admin == true;
+    }
+  }
+}

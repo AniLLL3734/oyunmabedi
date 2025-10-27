@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../src/contexts/AuthContext';
-import { db } from '../src/firebase';
+import { db as mainDb, chatDb } from '../src/firebase';
 import {
     collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc,
     updateDoc, increment, getDocs, limit,
@@ -19,7 +19,7 @@ import {
 import { Link } from 'react-router-dom';
 import { Send, Trash2, LoaderCircle, ShieldAlert, Pin, CornerDownLeft, X, Smile, Bot } from 'lucide-react';
 import { checkAndGrantAchievements } from '../src/utils/achievementService';
-import { analyzeMessageWithAI, chatWithAI, spontaneousCommentWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
+import { analyzeMessageWithAI, chatWithAI, AI_DISPLAY_NAME } from '../src/services/geminiModerator';
 import AdminTag from '../components/AdminTag';
 import { fortressProfanityCheckINTELLIGENCE as fortressModerationCheck } from '../src/utils/fortressProfanityFilterULTRA';
 import ChatJoinRequestPage from './ChatJoinRequestPage';
@@ -75,7 +75,7 @@ const ChatPage: React.FC = () => {
     const [pinnedMessage, setPinnedMessage] = useState<PinnedMessage | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [hasMore, setHasMore] = useState(true);
-    const [disclaimerTimer, setDisclaimerTimer] = useState(10);
+    const [disclaimerTimer, setDisclaimerTimer] = useState(0);
     const [showDisclaimer, setShowDisclaimer] = useState(true);
     const [isSending, setIsSending] = useState(false);
     const [isAiResponding, setIsAiResponding] = useState(false);
@@ -84,7 +84,7 @@ const ChatPage: React.FC = () => {
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [chatSettings, setChatSettings] = useState<{
         chatPaused: boolean; chatPauseReason: string; slowMode: boolean; slowModeDelay: number; isChatInvitationless: boolean;
-    }>({ chatPaused: false, chatPauseReason: '', slowMode: false, slowModeDelay: 0, isChatInvitationless: false });
+    }>({ chatPaused: false, chatPauseReason: '', slowMode: false, slowModeDelay: 0, isChatInvitationless: true });
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
     const [infractionRecord, setInfractionRecord] = useState<InfractionRecord | null>(null);
@@ -97,7 +97,8 @@ const ChatPage: React.FC = () => {
         // Sadece kullanıcı oturum açtığında çalış
         if (!user) return;
 
-        const presenceRef = doc(db, 'chat_presence', user.uid);
+        const currentUserForCleanup = user; // Capture the current user object
+        const presenceRef = doc(chatDb, 'chat_presence', currentUserForCleanup.uid);
 
         // Bağlantı kurulduğunda veya profil güncellendiğinde bu fonksiyon çalışır.
         const setOnline = async () => {
@@ -118,19 +119,21 @@ const ChatPage: React.FC = () => {
             }
         };
 
-        // Component ilk yüklendiğinde ve profil bilgisi değiştiğinde kullanıcıyı online yap
+        // Component ilk yüklendiğinde ve profil bilisi değiştiğinde kullanıcıyı online yap
         setOnline();
 
         // Kalp Atışı: Kullanıcı aktif olduğu sürece 'lastSeen'i günceller
         const heartbeatInterval = setInterval(() => {
             if (document.hasFocus()) { // Sadece sekme odaktaysa güncelle, verimlilik için.
-                updateDoc(presenceRef, { lastSeen: serverTimestamp() }).catch(console.error);
+                updateDoc(presenceRef, { lastSeen: serverTimestamp() }).catch((error) => {
+                    console.error("Kalp atışı güncellenirken hata:", error);
+                });
             }
         }, 60 * 1000); // 1 dakika
 
         // Kullanıcı sayfadan ayrıldığında (sekme/tarayıcı kapatma) kendini siler
-        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-             deleteDoc(presenceRef);
+        const handleBeforeUnload = () => {
+             deleteDoc(presenceRef).catch(console.error);
         };
         window.addEventListener('beforeunload', handleBeforeUnload);
 
@@ -139,7 +142,10 @@ const ChatPage: React.FC = () => {
             clearInterval(heartbeatInterval);
             window.removeEventListener('beforeunload', handleBeforeUnload);
             // Anlık olarak kendini siler, hayalet kullanıcı kalmaz.
-            deleteDoc(presenceRef);
+            // Use the captured object for a safe cleanup, even if the user state has changed
+            if (currentUserForCleanup?.uid) {
+                deleteDoc(doc(chatDb, 'chat_presence', currentUserForCleanup.uid)).catch(console.error);
+            }
         };
     }, [user, userProfile?.displayName, userProfile?.avatarUrl]); // userProfile'dan spesifik alanlara bağımlı
 
@@ -150,7 +156,7 @@ const ChatPage: React.FC = () => {
         const timeoutTimestamp = Timestamp.fromDate(timeout);
 
         const q = query(
-            collection(db, 'chat_presence'), 
+            collection(chatDb, 'chat_presence'), 
             where('lastSeen', '>', timeoutTimestamp)
         );
 
@@ -181,7 +187,7 @@ const ChatPage: React.FC = () => {
     // ===================================================================================
     useEffect(() => {
         const fetchUsers = async () => {
-            const usersSnap = await getDocs(collection(db, 'users'));
+            const usersSnap = await getDocs(collection(mainDb, 'users'));
             const usersMap = new Map<string, UserProfile>(); // Tip düzeltmesi
             usersSnap.forEach(doc => usersMap.set(doc.id, { ...(doc.data() as UserProfile), uid: doc.id }));
             setAllUsers(usersMap);
@@ -192,7 +198,7 @@ const ChatPage: React.FC = () => {
 
     useEffect(() => {
         if (!user || showDisclaimer) return;
-        const q = query(collection(db, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const q = query(collection(chatDb, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         
         const unsubscribe = onSnapshot(q, (snapshot) => {
             setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)).reverse());
@@ -202,7 +208,9 @@ const ChatPage: React.FC = () => {
             }
         }, (error) => {
             console.error("onSnapshot hatası:", error);
-            setChatError("Sohbet frekansında bir kesinti yaşandı.");
+            console.error("Error code:", error.code);
+            console.error("Error message:", error.message);
+            setChatError("Sohbet frekansında bir kesinti yaşandı. Lütfen sayfayı yenileyin.");
         });
         return () => unsubscribe();
     }, [user, showDisclaimer]);
@@ -215,12 +223,12 @@ const ChatPage: React.FC = () => {
         if (!user) return;
         const checkDisclaimer = async () => {
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                const userDoc = await getDoc(doc(mainDb, 'users', user.uid));
                 if (userDoc.exists() && userDoc.data()?.hasAcceptedChatDisclaimer) {
                     setShowDisclaimer(false);
                 } else {
                     setShowDisclaimer(true);
-                    setDisclaimerTimer(10);
+                    setDisclaimerTimer(0);
                 }
             } catch (error) {
                 console.error("Disclaimer kontrol hatası", error);
@@ -230,17 +238,10 @@ const ChatPage: React.FC = () => {
         checkDisclaimer();
     }, [user]);
 
-    // Zamanlayıcı
-    useEffect(() => {
-        if (!showDisclaimer || disclaimerTimer <= 0) return;
-        const timerId = setInterval(() => { setDisclaimerTimer(prev => prev - 1); }, 1000);
-        return () => clearInterval(timerId);
-    }, [showDisclaimer, disclaimerTimer]);
-
     const handleAcceptDisclaimer = async () => {
-        if (!user || disclaimerTimer > 0) return;
+        if (!user) return;
         try {
-            await updateDoc(doc(db, 'users', user.uid), { hasAcceptedChatDisclaimer: true, disclaimerAcceptedAt: serverTimestamp() });
+            await updateDoc(doc(mainDb, 'users', user.uid), { hasAcceptedChatDisclaimer: true, disclaimerAcceptedAt: serverTimestamp() });
             setShowDisclaimer(false);
         } catch (error) { console.error("Disclaimer kabul edilirken hata:", error); }
     };
@@ -251,7 +252,7 @@ const ChatPage: React.FC = () => {
 
         if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
         
-        const infractionDocRef = doc(db, 'infractions', user.uid);
+        const infractionDocRef = doc(mainDb, 'infractions', user.uid);
         const infractionSnap = await getDoc(infractionDocRef);
         const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
 
@@ -265,17 +266,17 @@ const ChatPage: React.FC = () => {
 
         if (analysis.action !== 'NONE' && analysis.warningMessage) {
             if (isAdmin) {
-                const tempMessageRef = await addDoc(collection(db, 'messages'), {
+                const tempMessageRef = await addDoc(collection(chatDb, 'messages'), {
                     text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
                     createdAt: serverTimestamp(),
                 });
                 await deleteDoc(tempMessageRef);
-                await addDoc(collection(db, 'messages'), {
+                await addDoc(collection(chatDb, 'messages'), {
                     uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
                     text: analysis.warningMessage, createdAt: serverTimestamp(),
                 });
             } else {
-                await addDoc(collection(db, 'messages'), {
+                await addDoc(collection(chatDb, 'messages'), {
                     uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
                     text: analysis.warningMessage, createdAt: serverTimestamp(),
                 });
@@ -325,7 +326,7 @@ const ChatPage: React.FC = () => {
             setNewMessage('');
             lastAiCallTimestamp.current = now;
 
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(chatDb, 'messages'), {
                 text: messageText,
                 uid: user.uid,
                 displayName: userProfile?.displayName || 'Anonim',
@@ -337,7 +338,7 @@ const ChatPage: React.FC = () => {
 
                 if (userProfile?.displayName === 'FaTaLRhymeR37' && aiResponse.startsWith('[ADMIN_COMMAND]UNBAN:')) {
                     const targetUsername = aiResponse.replace('[ADMIN_COMMAND]UNBAN:', '');
-                    const usersSnap = await getDocs(collection(db, 'users'));
+                    const usersSnap = await getDocs(collection(mainDb, 'users'));
                     let targetUid = null;
                     usersSnap.forEach(doc => {
                         if (doc.data().displayName === targetUsername) {
@@ -345,24 +346,24 @@ const ChatPage: React.FC = () => {
                         }
                     });
                     if (targetUid) {
-                        const infractionRef = doc(db, 'infractions', targetUid);
+                        const infractionRef = doc(mainDb, 'infractions', targetUid);
                         await setDoc(infractionRef, {
                             offenseCount: 0,
                             mutedUntil: null,
                             lastOffenseReason: null
                         }, { merge: true });
-                        await addDoc(collection(db, 'messages'), {
+                        await addDoc(collection(chatDb, 'messages'), {
                             uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
                             text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısının banı kaldırıldı.`, createdAt: serverTimestamp(),
                         });
                     } else {
-                        await addDoc(collection(db, 'messages'), {
+                        await addDoc(collection(chatDb, 'messages'), {
                             uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
                             text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısı bulunamadı.`, createdAt: serverTimestamp(),
                         });
                     }
                 } else {
-                    await addDoc(collection(db, 'messages'), {
+                    await addDoc(collection(chatDb, 'messages'), {
                         uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
                         text: aiResponse, createdAt: serverTimestamp(),
                     });
@@ -386,30 +387,16 @@ const ChatPage: React.FC = () => {
         handleCancelReply();
 
         try {
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(chatDb, 'messages'), {
                 text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
                 createdAt: serverTimestamp(),
                 ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
             });
 
-            await updateDoc(doc(db, 'users', user.uid), { messageCount: increment(1) });
+            await updateDoc(doc(mainDb, 'users', user.uid), { messageCount: increment(1) });
             
             setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
 
-            if (Math.random() < 0.15) {
-                try {
-                    const aiComment = await spontaneousCommentWithAI(userProfile?.displayName || 'Anonim', messageText);
-                    if (aiComment) {
-                        await addDoc(collection(db, 'messages'), {
-                            uid: user.uid,
-                            isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                            text: aiComment, createdAt: serverTimestamp(),
-                        });
-                    }
-                } catch (error) {
-                    console.error("Spontane AI yorum hatası:", error);
-                }
-            }
         } catch (error) {
             console.error("Mesaj gönderme sırasında hata:", error);
         } finally {
@@ -419,7 +406,7 @@ const ChatPage: React.FC = () => {
 
     const handleDeleteMessage = async (message: Message) => {
         if (!user || !(isAdmin || message.uid === user.uid)) return;
-        try { await deleteDoc(doc(db, 'messages', message.id)); } 
+        try { await deleteDoc(doc(chatDb, 'messages', message.id)); } 
         catch (error) { console.error("Mesaj silinirken hata:", error); setChatError("Mesaj silinemedi."); }
     };
     
@@ -427,7 +414,7 @@ const ChatPage: React.FC = () => {
         if (loadingMore || !hasMore || messages.length === 0) return;
         setLoadingMore(true);
         const oldestMessage = messages[0];
-        const q = query(collection(db, 'messages'), where('createdAt', '<', oldestMessage.createdAt), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
+        const q = query(collection(chatDb, 'messages'), where('createdAt', '<', oldestMessage.createdAt), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
         try {
             const snapshot = await getDocs(q);
             const olderMsgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message)).reverse();
@@ -439,8 +426,8 @@ const ChatPage: React.FC = () => {
     
     const handleStartReply = (message: Message) => setReplyingToMessage(message);
     const handleCancelReply = () => setReplyingToMessage(null);
-    const handlePinMessage = async (message: Message) => { if (!isAdmin || !user) return; await setDoc(doc(db, 'chat_meta', 'pinned_message'), { ...message, pinnedBy: userProfile?.displayName || 'Admin' }); };
-    const handleUnpinMessage = async () => { if (!isAdmin) return; await deleteDoc(doc(db, 'chat_meta', 'pinned_message')); };
+    const handlePinMessage = async (message: Message) => { if (!isAdmin || !user) return; await setDoc(doc(chatDb, 'chat_meta', 'pinned_message'), { ...message, pinnedBy: userProfile?.displayName || 'Admin' }); };
+    const handleUnpinMessage = async () => { if (!isAdmin) return; await deleteDoc(doc(chatDb, 'chat_meta', 'pinned_message')); };
     useEffect(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages.length]);
     useEffect(() => { if (chatError) { const timer = setTimeout(() => setChatError(null), 4000); return () => clearTimeout(timer); } }, [chatError]);
     const getCharCountColor = () => { if (newMessage.length >= MAX_CHAR_LIMIT) return 'text-red-500'; if (newMessage.length > MAX_CHAR_LIMIT * 0.9) return 'text-yellow-400'; return 'text-cyber-gray'; };
@@ -449,8 +436,7 @@ const ChatPage: React.FC = () => {
     
     if (authLoading) return <div className="flex justify-center items-center h-screen"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>;
     if (!user) return <div className="text-center py-20"><h1 className="text-4xl font-heading">Erişim Reddedildi</h1><p className="mt-4 text-cyber-gray">Giriş yapmalısın.</p><Link to="/login" className="mt-8 inline-block bg-electric-purple text-ghost-white font-bold py-2 px-4 rounded hover:bg-opacity-80 transition-all">Giriş Yap</Link></div>;
-    if (!isAdmin && !userProfile?.chatAccessGranted && !chatSettings.isChatInvitationless) return <ChatJoinRequestPage />;
-    if (showDisclaimer) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"><motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-lg shadow-2xl shadow-electric-purple/20"><h2 className="text-2xl font-heading text-electric-purple mb-4 flex items-center gap-3"><ShieldAlert size={28}/> FREKANSA BAĞLANMADAN ÖNCE...</h2><div className="space-y-4 text-ghost-white"><p className="text-yellow-400 font-semibold">Bu sinyale katılarak, aşağıdaki temel yasaları kabul etmiş olursun:</p><ul className="list-none pl-2 space-y-3 text-cyber-gray border-l-2 border-electric-purple/50"><li className="pl-4"><span className="font-bold text-ghost-white">KURAL I:</span> Kişisel veri paylaşımı ve reklam yapmak yasaktır.</li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL II:</span> Ailevi, şahsi ve kutsal değerlere hakaret veya tehdit <span className="font-bold text-red-500">yasaktır.</span></li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL III:</span> Gönderdiğin her sinyalin tek sorumlusu sensin.</li></ul></div><div className="mt-6 flex items-center justify-end gap-4"><span className="text-cyber-gray font-mono tracking-widest">{disclaimerTimer < 10 ? `0${disclaimerTimer}`: disclaimerTimer}</span><button onClick={handleAcceptDisclaimer} disabled={disclaimerTimer > 0} className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all ${disclaimerTimer > 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-80'}`}>Anladım, Sorumluluğu Alıyorum</button></div></motion.div></div>;
+    if (showDisclaimer) return <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm"><motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-dark-gray p-6 rounded-lg border border-cyber-gray/50 w-full max-w-lg shadow-2xl shadow-electric-purple/20"><h2 className="text-2xl font-heading text-electric-purple mb-4 flex items-center gap-3"><ShieldAlert size={28}/> FREKANSA BAĞLANMADAN ÖNCE...</h2><div className="space-y-4 text-ghost-white"><p className="text-yellow-400 font-semibold">Bu sinyale katılarak, aşağıdaki temel yasaları kabul etmiş olursun:</p><ul className="list-none pl-2 space-y-3 text-cyber-gray border-l-2 border-electric-purple/50"><li className="pl-4"><span className="font-bold text-ghost-white">KURAL I:</span> Kişisel veri paylaşımı ve reklam yapmak yasaktır.</li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL II:</span> Ailevi, şahsi ve kutsal değerlere hakaret veya tehdit <span className="font-bold text-red-500">yasaktır.</span></li><li className="pl-4"><span className="font-bold text-ghost-white">KURAL III:</span> Gönderdiğin her sinyalin tek sorumlusu sensin.</li></ul></div><div className="mt-6 flex items-center justify-end gap-4"><span className="text-cyber-gray font-mono tracking-widest">{disclaimerTimer < 10 ? `0${disclaimerTimer}`: disclaimerTimer}</span><button onClick={handleAcceptDisclaimer} className={`px-6 py-3 bg-electric-purple text-white font-bold rounded-lg transition-all hover:bg-opacity-80`}>Anladım, Sorumluluğu Alıyorum</button></div></motion.div></div>;
     
     // ... JSX Kısmında Aktif Kullanıcıları Göster ...
     return (
@@ -517,7 +503,7 @@ const ChatPage: React.FC = () => {
                                     </ProfileAnimation>
                                 </Link>
                             )}
-                            <motion.div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+                            <motion.div className={`p-3 rounded-lg max-w-xs md:max-w-lg break-words ${senderIsAdmin ? 'border-2 border-yellow-400' : messageIsFromCurrentUser ? 'bg-electric-purple text-white' : 'bg-space-black'}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} >
                                 {!messageIsFromCurrentUser && (senderIsAdmin ? <AdminTag name={msg.displayName} /> : <Link to={`/profile/${msg.uid}`} className="font-bold text-sm text-electric-purple/80 hover:underline">{msg.displayName}</Link>)}
                                 {msg.replyingTo && (<div className="mb-2 p-2 border-l-2 bg-black/20 text-xs opacity-80"><p className="font-bold">{msg.replyingTo.displayName}</p><p className="truncate">{msg.replyingTo.text}</p></div>)}
                                 <p className="text-ghost-white" style={{whiteSpace: "pre-wrap"}}>{msg.text}</p>

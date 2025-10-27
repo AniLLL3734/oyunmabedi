@@ -1,4 +1,4 @@
-    import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GoogleGenerativeAIFetchError } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GoogleGenerativeAIFetchError } from "@google/generative-ai";
 
 // ====================================================================================
 // === YENİ BÖLÜM: KENDİNİ ONARAN API ANAHTAR YÖNETİCİSİ (API KEY POOL) ===
@@ -257,23 +257,5 @@ export const chatWithAI = async (senderDisplayName: string, question: string): P
     } catch (error) {
         console.error("Gemini AI sohbet yanıtında hata oluştu, bir anlık dalgınlığına geldi:", error);
         return `@${senderDisplayName}, devreler yandı bir an... Sinyaller gidip geliyor, sorunu bir daha alayım aslanım?`;
-    }
-};
-
-export const spontaneousCommentWithAI = async (lastMessageSender: string, lastMessageText: string): Promise<string | null> => {
-    // Spontane yorumun olasılık ve bekleme süresi mantığı aynı kalmalı,
-    // ama içindeki API çağrısı da fallback sistemini kullanmalı.
-    // Şimdilik basitleştirerek gösteriyorum:
-    if (!isAiActive) return null;
-
-    const prompt = `Sen ${AI_DISPLAY_NAME}'sın, sohbeti dinleyip canı istediğinde konuşan dijital bir bilgesin... (Prompt'un devamı aynı)`;
-
-    try {
-        const responseText = (await generateContentWithFallback(prompt)).trim(); // <--- DEĞİŞİKLİK BURADA
-        if (!responseText || responseText.toLowerCase() === 'null') return null;
-        return responseText;
-    } catch (error) {
-        console.error("Gemini AI spontane yorum yapacaktı ama nazar değdi:", error);
-        return null;
     }
 };

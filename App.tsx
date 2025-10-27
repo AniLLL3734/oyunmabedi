@@ -108,6 +108,7 @@ const App: React.FC = () => {
   const { isBlocked } = useScoreSystem(); 
   usePresence();
   useDailyRewards();
+  useScoreSystem();
 
   return (
     <>

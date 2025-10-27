@@ -24,10 +24,17 @@ const Header: React.FC = () => {
         if (signOutAndSetCooldown) {
             await signOutAndSetCooldown();
         } else {
+            // Fallback: use Firebase signOut directly
+            await auth.signOut();
             localStorage.setItem('accountCreationCooldown', Date.now().toString());
         }
+        // Always navigate to home after logout
         navigate('/');
-    } catch(error) { console.error("Çıkış hatası:", error); }
+    } catch(error) { 
+        console.error("Çıkış hatası:", error);
+        // Even if there's an error, still try to navigate to home
+        navigate('/');
+    }
   };
 
   useEffect(() => {
@@ -321,7 +328,16 @@ const Header: React.FC = () => {
           
           {user && userProfile ? (
             <li className="flex items-center gap-3">
-              <button onClick={handleLogout} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">{t('nav.logout')}</button>
+              <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleLogout();
+                }} 
+                className="text-sm text-cyber-gray hover:text-red-500 transition-colors"
+              >
+                {t('nav.logout')}
+              </button>
               <Link to={`/profile/${user.uid}`} title="Profilini Görüntüle">
                 <div className="relative">
                   <img 
@@ -444,7 +460,17 @@ const Header: React.FC = () => {
                     />
                     <span className="hover:text-electric-purple transition-colors">Profil</span>
                   </Link>
-                  <button onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }} className="text-sm text-cyber-gray hover:text-red-500 transition-colors">{t('nav.logout')}</button>
+                  <button 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleLogout();
+                      setIsMobileMenuOpen(false);
+                    }} 
+                    className="text-sm text-cyber-gray hover:text-red-500 transition-colors"
+                  >
+                    {t('nav.logout')}
+                  </button>
                 </div>
               </li>
             ) : (
