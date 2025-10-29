@@ -193,8 +193,20 @@ const ChatPage: React.FC = () => {
             setAllUsers(usersMap);
         };
         fetchUsers();
-        //... diğer onSnapshot'lar aynı ...
     }, [user]);
+
+    // Pinned message listener
+    useEffect(() => {
+        const pinnedMessageRef = doc(chatDb, 'chat_meta', 'pinned_message');
+        const unsubscribe = onSnapshot(pinnedMessageRef, (doc) => {
+            if (doc.exists()) {
+                setPinnedMessage({ ...doc.data(), id: doc.id } as PinnedMessage);
+            } else {
+                setPinnedMessage(null);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
 
     useEffect(() => {
         if (!user || showDisclaimer) return;
@@ -251,129 +263,22 @@ const ChatPage: React.FC = () => {
         const messageText = newMessage.trim();
 
         if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
-        
-        const infractionDocRef = doc(mainDb, 'infractions', user.uid);
-        const infractionSnap = await getDoc(infractionDocRef);
-        const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
 
-        if (currentInfraction?.mutedUntil && currentInfraction.mutedUntil.toDate() > new Date()) {
-            const remainingTime = formatRemainingTime(currentInfraction.mutedUntil.toDate());
+        // Admin panelinden susturma kontrolü (users koleksiyonu)
+        if (userProfile.mutedUntil && userProfile.mutedUntil.toDate() > new Date()) {
+            const remainingTime = formatRemainingTime(userProfile.mutedUntil.toDate());
             setChatError(`Susturuldun. Kalan süre: ${remainingTime}.`);
             return;
         }
 
-        const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+        // AI moderasyonundan susturma kontrolü (infractions koleksiyonu)
+        const infractionDocRef = doc(mainDb, 'infractions', user.uid);
+        const infractionSnap = await getDoc(infractionDocRef);
+        const currentInfraction = infractionSnap.exists() ? infractionSnap.data() as InfractionRecord : null;
 
-        if (analysis.action !== 'NONE' && analysis.warningMessage) {
-            if (isAdmin) {
-                const tempMessageRef = await addDoc(collection(chatDb, 'messages'), {
-                    text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
-                    createdAt: serverTimestamp(),
-                });
-                await deleteDoc(tempMessageRef);
-                await addDoc(collection(chatDb, 'messages'), {
-                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                    text: analysis.warningMessage, createdAt: serverTimestamp(),
-                });
-            } else {
-                await addDoc(collection(chatDb, 'messages'), {
-                    uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                    text: analysis.warningMessage, createdAt: serverTimestamp(),
-                });
-
-                let muteUntil: Timestamp | null = null;
-                const now = new Date();
-
-                switch (analysis.action) {
-                    case 'DELETE_AND_MUTE_5M':
-                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
-                        break;
-                    case 'DELETE_AND_MUTE_1H':
-                        muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
-                        break;
-                    case 'DELETE_AND_PERMANENT_BAN':
-                        muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
-                        break;
-                }
-
-                if (muteUntil) {
-                    await setDoc(infractionDocRef, {
-                        offenseCount: increment(1),
-                        mutedUntil: muteUntil,
-                        lastOffenseReason: analysis.warningMessage
-                    }, { merge: true });
-                }
-            }
-            console.log(`Moderasyon uygulandı: ${analysis.action}`);
-            return;
-        }
-
-        if (messageText.toLowerCase().startsWith('/ai ')) {
-            const now = Date.now();
-            const timeSinceLastCall = (now - lastAiCallTimestamp.current) / 1000;
-            if (timeSinceLastCall < AI_COOLDOWN_SECONDS) {
-                setChatError(`Sakin ol şampiyon! AI ile konuşmak için ${Math.ceil(AI_COOLDOWN_SECONDS - timeSinceLastCall)} saniye daha beklemelisin.`);
-                return;
-            }
-
-            const question = messageText.substring(4).trim();
-            if (question === '') {
-                setChatError("AI'ya bir soru sormalısın. Örneğin: /ai en iyi oyun hangisi?");
-                return;
-            }
-
-            setIsAiResponding(true);
-            setNewMessage('');
-            lastAiCallTimestamp.current = now;
-
-            await addDoc(collection(chatDb, 'messages'), {
-                text: messageText,
-                uid: user.uid,
-                displayName: userProfile?.displayName || 'Anonim',
-                createdAt: serverTimestamp(),
-            });
-
-            try {
-                const aiResponse = await chatWithAI(userProfile?.displayName || 'Anonim', question);
-
-                if (userProfile?.displayName === 'FaTaLRhymeR37' && aiResponse.startsWith('[ADMIN_COMMAND]UNBAN:')) {
-                    const targetUsername = aiResponse.replace('[ADMIN_COMMAND]UNBAN:', '');
-                    const usersSnap = await getDocs(collection(mainDb, 'users'));
-                    let targetUid = null;
-                    usersSnap.forEach(doc => {
-                        if (doc.data().displayName === targetUsername) {
-                            targetUid = doc.id;
-                        }
-                    });
-                    if (targetUid) {
-                        const infractionRef = doc(mainDb, 'infractions', targetUid);
-                        await setDoc(infractionRef, {
-                            offenseCount: 0,
-                            mutedUntil: null,
-                            lastOffenseReason: null
-                        }, { merge: true });
-                        await addDoc(collection(chatDb, 'messages'), {
-                            uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                            text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısının banı kaldırıldı.`, createdAt: serverTimestamp(),
-                        });
-                    } else {
-                        await addDoc(collection(chatDb, 'messages'), {
-                            uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                            text: `@FaTaLRhymeR37, ${targetUsername} kullanıcısı bulunamadı.`, createdAt: serverTimestamp(),
-                        });
-                    }
-                } else {
-                    await addDoc(collection(chatDb, 'messages'), {
-                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                        text: aiResponse, createdAt: serverTimestamp(),
-                    });
-                }
-            } catch (error) {
-                setChatError("AI yanıt verirken bir sorunla karşılaştı.");
-            } finally {
-                setIsAiResponding(false);
-                setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
-            }
+        if (currentInfraction && currentInfraction.mutedUntil && currentInfraction.mutedUntil.seconds * 1000 > Date.now()) {
+            const remainingTime = formatRemainingTime(currentInfraction.mutedUntil.toDate());
+            setChatError(`Susturuldun. Kalan süre: ${remainingTime}.`);
             return;
         }
 
@@ -387,16 +292,63 @@ const ChatPage: React.FC = () => {
         handleCancelReply();
 
         try {
-            await addDoc(collection(chatDb, 'messages'), {
+            // Send message first
+            const messageRef = await addDoc(collection(chatDb, 'messages'), {
                 text: messageText, uid: user.uid, displayName: userProfile?.displayName || 'Anonim',
                 createdAt: serverTimestamp(),
                 ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
             });
 
             await updateDoc(doc(mainDb, 'users', user.uid), { messageCount: increment(1) });
-            
+
             setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
 
+            // Now analyze with AI
+            const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+
+            if (analysis.action !== 'NONE' && analysis.warningMessage) {
+                // Delete the message
+                await deleteDoc(messageRef);
+
+                if (isAdmin) {
+                    // For admin, just send warning without penalty
+                    await addDoc(collection(chatDb, 'messages'), {
+                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                        text: analysis.warningMessage, createdAt: serverTimestamp(),
+                    });
+                } else {
+                    // Send warning
+                    await addDoc(collection(chatDb, 'messages'), {
+                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                        text: analysis.warningMessage, createdAt: serverTimestamp(),
+                    });
+
+                    // Apply penalty
+                    let muteUntil: Timestamp | null = null;
+                    const now = new Date();
+
+                    switch (analysis.action) {
+                        case 'DELETE_AND_MUTE_5M':
+                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
+                            break;
+                        case 'DELETE_AND_MUTE_1H':
+                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
+                            break;
+                        case 'DELETE_AND_PERMANENT_BAN':
+                            muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
+                            break;
+                    }
+
+                    if (muteUntil) {
+                        await setDoc(infractionDocRef, {
+                            offenseCount: increment(1),
+                            mutedUntil: muteUntil,
+                            lastOffenseReason: analysis.warningMessage
+                        }, { merge: true });
+                    }
+                }
+                console.log(`Moderasyon uygulandı: ${analysis.action}`);
+            }
         } catch (error) {
             console.error("Mesaj gönderme sırasında hata:", error);
         } finally {

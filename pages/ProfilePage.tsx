@@ -40,6 +40,9 @@ interface UserProfile {
         activeSpecialTitle?: string;
         activeProfileBackground?: string;
     };
+    hometown?: string;
+    age?: number;
+    grade?: string;
 }
 
 const titles: { [key: string]: string } = {
@@ -159,6 +162,33 @@ const ProfilePage: React.FC = () => {
                     <div className="flex items-center justify-center gap-4"><p className="text-3xl md:text-4xl font-mono text-cyber-gray mt-2">{profile.score?.toLocaleString() || 0} SKOR</p><div className="border-l border-cyber-gray/20 pl-4 mt-2"><p className="text-2xl md:text-3xl font-mono text-yellow-400">{profile.highestScore?.toLocaleString() || profile.score?.toLocaleString() || 0}</p><p className="text-xs text-cyber-gray uppercase">En Yüksek Skor</p></div></div>
                     <div className="flex flex-wrap justify-center gap-4 md:gap-8 mt-6 border-t border-cyber-gray/20 pt-6 w-full"><div className="flex flex-col items-center min-w-[80px]"><MessageSquare className="text-electric-purple" /><span className="text-2xl font-bold mt-1">{profile.messageCount || 0}</span><span className="text-xs text-cyber-gray uppercase">Mesaj</span></div><div className="flex flex-col items-center min-w-[80px]"><Flame className="text-electric-purple" /><span className="text-2xl font-bold mt-1">{profile.loginStreak || 0}</span><span className="text-xs text-cyber-gray uppercase">Seri</span></div><div className="flex flex-col items-center min-w-[80px]"><CalendarDays className="text-electric-purple" /><span className="text-xl font-bold mt-1">{profile.joinDate ? profile.joinDate.toDate().toLocaleDateString('tr-TR') : 'N/A'}</span><span className="text-xs text-cyber-gray uppercase">Katılım</span></div></div>
                     {profile.bio && <p className="text-cyber-gray mt-6 max-w-lg italic">"{profile.bio}"</p>}
+
+                    {/* Kişisel Bilgiler Bölümü */}
+                    {(profile.hometown || profile.age || profile.grade) && (
+                        <div className="mt-6 w-full max-w-lg mx-auto">
+                            <h3 className="text-xl font-bold text-ghost-white mb-4 text-center">Kişisel Bilgiler</h3>
+                            <div className="bg-dark-gray/30 border border-cyber-gray/30 rounded-lg p-4 space-y-2">
+                                {profile.hometown && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-cyber-gray font-medium">Memleket:</span>
+                                        <span className="text-ghost-white">{profile.hometown}</span>
+                                    </div>
+                                )}
+                                {profile.age && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-cyber-gray font-medium">Yaş:</span>
+                                        <span className="text-ghost-white">{profile.age}</span>
+                                    </div>
+                                )}
+                                {profile.grade && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-cyber-gray font-medium">Sınıf:</span>
+                                        <span className="text-ghost-white">{profile.grade}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     
                     {/* DÜZELTİLDİ: En Çok Oynanan Oyunlar Bölümü Tam Haliyle Eklendi */}
                     <div className="mt-8 w-full">

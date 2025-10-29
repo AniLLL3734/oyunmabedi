@@ -1,21 +1,10 @@
-# TODO: Kozmik Fısıltı Feature Implementation
+# Chat Moderation and Admin Fixes
 
-## Completed Tasks
-- [x] Add `spontaneousCommentWithAI` function to `src/services/geminiModerator.ts`
-- [x] Import `spontaneousCommentWithAI` in `pages/ChatPage.tsx`
-- [x] Integrate random AI comment logic in `sendMessage` function (15% chance after moderation passes)
-- [x] Remove Coin Flip, Investment, and Dock Plunder games from BettingPage
-- [x] Keep only Slot Machine game in BettingPage
-- [x] Update BettingPage to use client-side anti-cheat versions of games
-- [x] Add AdvancedDiceGame to BettingPage
-- [x] Remove unbalanced shop items "Hız Canavarı (24 Saat)" and "Zaman Lordu (29 Saat)"
-- [x] Remove AFK system completely
+## Tasks
+- [ ] Modify ChatPage.tsx sendMessage function: send message first, then analyze with AI, delete if inappropriate and apply penalty
+- [ ] Add pinnedMessage listener in ChatPage.tsx for chat_meta/pinned_message
+- [ ] Fix AdminPage.tsx mute system to write to infractions collection instead of users
+- [ ] Test message sending, AI moderation, pinning, and muting functionality
 
-## Followup Steps
-- [ ] Test the chat to ensure AI comments appear randomly on clean messages without disrupting normal flow
-- [ ] Verify that violations prevent any AI comments
-- [ ] Monitor for any performance issues or errors in production
-- [ ] Test Slot Machine game to ensure anti-cheat measures are working properly
-- [ ] Verify that only Slot Machine game is accessible in BettingPage
-- [ ] Test AdvancedDiceGame functionality and anti-cheat measures
-- [ ] Run the remove_unbalanced_items.js script to clean up existing user inventories
+## Progress
+- Started working on ChatPage.tsx modifications

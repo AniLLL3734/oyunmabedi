@@ -168,7 +168,7 @@ const AdvancedDiceGame: React.FC<DiceGameProps> = ({ userScore, onGameUpdate }) 
         <div className='p-6 bg-gray-900/70 backdrop-blur-sm rounded-xl border border-gray-700 w-full max-w-md mx-auto'>
             <div className="text-center mb-6">
                 <h3 className="text-2xl font-bold text-white flex items-center justify-center gap-2"><Dices/> Şans Zarı</h3>
-                {cheaterFlag.current 
+                {cheaterFlag.current
                     ? <p className='text-red-500 font-bold mt-1 flex items-center justify-center gap-1'><ShieldX size={16}/> Güvenlik İhlali Algılandı</p>
                     : <p className='text-green-400 mt-1 flex items-center justify-center gap-1'><ShieldCheck size={16}/> Sistem Güvenli</p>
                 }

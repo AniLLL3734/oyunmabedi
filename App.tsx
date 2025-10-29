@@ -92,15 +92,7 @@ const AfkWarning = ({ onUserActive }: { onUserActive: () => void }) => {
   );
 };
 
-const BlockedWarning = () => (
-    <div 
-        className="fixed inset-0 bg-red-900/90 backdrop-blur-md flex flex-col items-center justify-center text-center p-8 z-[9999]"
-    >
-        <Ban size={72} className="text-red-400 mb-6" />
-        <h2 className="text-5xl font-black font-heading text-red-300 mb-3">Anomali Tespit Edildi</h2>
-        <p className="text-xl text-red-200 max-w-lg">Sistem, adil olmayan bir avantaj elde etmeye yönelik bir aktivite algıladı. Bu oturum için tüm dinamik özellikler durduruldu. Sayfayı yenilemek gerekebilir.</p>
-    </div>
-);
+
 
 
 const App: React.FC = () => {
@@ -147,9 +139,7 @@ const App: React.FC = () => {
             </Suspense> 
         </Layout>
         
-        <AnimatePresence>
-            {isBlocked && <BlockedWarning />}
-        </AnimatePresence>
+
     </>
   );
 };
