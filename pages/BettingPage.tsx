@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth, db } from '../src/firebase';
-import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp, where, query, getDocs } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, increment, collection, addDoc, serverTimestamp, where, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 // OLUŞTURDUĞUMUZ YENİ COMPONENTLERİ IMPORT EDİYORUZ
@@ -32,6 +32,16 @@ interface AnimationState {
     result: 'won' | 'lost';
     payout: number;
     betAmount: number;
+}
+
+// Yeni eklenen arayüz
+interface LeaderboardUser {
+  uid: string;
+  displayName: string;
+  score: number;
+  avatarUrl: string;
+  profit?: number; // For investment leaderboard
+  loss?: number;   // For biggest losers
 }
 
 const bettingGames: Game[] = [
@@ -101,6 +111,10 @@ const BettingPage: React.FC = () => {
       isActive: false, game: null, result: 'lost', payout: 0, betAmount: 0
   });
 
+  // Yeni eklenen state'ler
+  const [leaderboardFilter, setLeaderboardFilter] = useState<'richest' | 'topEarners' | 'biggestLosers'>('richest');
+  const [leaderboardUsers, setLeaderboardUsers] = useState<LeaderboardUser[]>([]);
+
   const navigate = useNavigate();
 
   const fetchUserScore = useCallback(async (userId: string) => {
@@ -168,6 +182,113 @@ const BettingPage: React.FC = () => {
     }
   };
 
+  // Yeni eklenen useEffect for fetching leaderboard data
+  useEffect(() => {
+    const fetchLeaderboardData = async () => {
+      try {
+        let usersQuery;
+        
+        switch (leaderboardFilter) {
+          case 'richest':
+            // En zenginler - users collection'ından ilk 5 kişi
+            usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(5));
+            break;
+            
+          case 'topEarners':
+            // En çok kazanan - investment_profits collection'ından (bu koleksiyonu oluşturmak gerek)
+            try {
+              usersQuery = query(collection(db, 'investment_profits'), orderBy('totalProfit', 'desc'), limit(5));
+            } catch (e) {
+              // Fallback to richest if collection doesn't exist
+              usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(5));
+            }
+            break;
+            
+          case 'biggestLosers':
+            // En çok kaybeden - investment_losses collection'ından (bu koleksiyonu oluşturmak gerek)
+            try {
+              usersQuery = query(collection(db, 'investment_losses'), orderBy('totalLoss', 'desc'), limit(5));
+            } catch (e) {
+              // Fallback to richest if collection doesn't exist
+              usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(5));
+            }
+            break;
+            
+          default:
+            usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(5));
+        }
+        
+        const usersSnapshot = await getDocs(usersQuery);
+        const leaderboardData: LeaderboardUser[] = [];
+        
+        if (leaderboardFilter === 'richest') {
+          // En zenginler için
+          usersSnapshot.forEach((doc) => {
+            const data = doc.data();
+            leaderboardData.push({
+              uid: doc.id,
+              displayName: data.displayName || 'Anonim',
+              score: data.score || 0,
+              avatarUrl: data.avatarUrl || '',
+            });
+          });
+        } else if (leaderboardFilter === 'topEarners') {
+          // En çok kazananlar için
+          usersSnapshot.forEach((doc) => {
+            const data = doc.data();
+            leaderboardData.push({
+              uid: data.userId || doc.id,
+              displayName: data.displayName || 'Anonim',
+              score: data.totalProfit || 0,
+              avatarUrl: data.avatarUrl || '',
+              profit: data.totalProfit || 0,
+            });
+          });
+        } else if (leaderboardFilter === 'biggestLosers') {
+          // En çok kaybedenler için
+          usersSnapshot.forEach((doc) => {
+            const data = doc.data();
+            leaderboardData.push({
+              uid: data.userId || doc.id,
+              displayName: data.displayName || 'Anonim',
+              score: data.totalLoss || 0,
+              avatarUrl: data.avatarUrl || '',
+              loss: data.totalLoss || 0,
+            });
+          });
+        }
+        
+        setLeaderboardUsers(leaderboardData);
+      } catch (error) {
+        console.error('Liderlik tablosu çekilirken hata:', error);
+        // Fallback to richest users if there's an error
+        if (leaderboardFilter !== 'richest') {
+          try {
+            const usersQuery = query(collection(db, 'users'), orderBy('score', 'desc'), limit(5));
+            const usersSnapshot = await getDocs(usersQuery);
+            const leaderboardData: LeaderboardUser[] = [];
+            
+            usersSnapshot.forEach((doc) => {
+              const data = doc.data();
+              leaderboardData.push({
+                uid: doc.id,
+                displayName: data.displayName || 'Anonim',
+                score: data.score || 0,
+                avatarUrl: data.avatarUrl || '',
+              });
+            });
+            
+            setLeaderboardUsers(leaderboardData);
+          } catch (fallbackError) {
+            console.error('Fallback liderlik tablosu çekilirken hata:', fallbackError);
+          }
+        }
+      }
+    };
+    
+    fetchLeaderboardData();
+  }, [leaderboardFilter]);
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6 lg:p-8 font-sans">
         <div className="max-w-4xl mx-auto">
@@ -186,6 +307,93 @@ const BettingPage: React.FC = () => {
                  <h2 className="text-2xl font-bold flex items-center gap-3"><Wallet className="text-cyan-400" /> Bakiyeniz</h2>
                  <p className="text-3xl font-mono text-cyan-400">{userScore.toLocaleString()}</p>
             </motion.div>
+
+            {/* Liderlik Tablosu Filtresi */}
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold mb-4">Bahis Liderlik Tablosu</h2>
+              <p className="text-gray-400 mb-4">
+                {leaderboardFilter === 'richest' && 'Platformdaki en zengin oyuncular'}
+                {leaderboardFilter === 'topEarners' && 'Yatırımlarından en çok kâr eden oyuncular'}
+                {leaderboardFilter === 'biggestLosers' && 'Yatırımlarında en çok kaybeden oyuncular'}
+              </p>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button 
+                  onClick={() => setLeaderboardFilter('richest')}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    leaderboardFilter === 'richest' 
+                      ? 'bg-cyan-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  En Zenginler
+                </button>
+                <button 
+                  onClick={() => setLeaderboardFilter('topEarners')}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    leaderboardFilter === 'topEarners' 
+                      ? 'bg-green-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  En Çok Kazananlar
+                </button>
+                <button 
+                  onClick={() => setLeaderboardFilter('biggestLosers')}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    leaderboardFilter === 'biggestLosers' 
+                      ? 'bg-red-600 text-white' 
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  En Çok Kaybedenler
+                </button>
+              </div>
+
+              {/* Liderlik Tablosu */}
+              <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl p-4 border border-purple-500/30">
+                <div className="space-y-3">
+                  {leaderboardUsers.length > 0 ? (
+                    leaderboardUsers.map((player, index) => (
+                      <div 
+                        key={player.uid} 
+                        className="flex items-center p-3 bg-gray-900/50 rounded-lg"
+                      >
+                        <div className="w-8 text-center font-bold text-cyan-400">
+                          {index + 1}.
+                        </div>
+                        <img 
+                          src={player.avatarUrl || '/default-avatar.png'} 
+                          alt={player.displayName} 
+                          className="w-10 h-10 rounded-full mx-3 object-cover"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.src = '/default-avatar.png';
+                          }}
+                        />
+                        <div className="flex-grow">
+                          <span className="font-medium">{player.displayName}</span>
+                        </div>
+                        <div className="text-right">
+                          {leaderboardFilter === 'richest' && (
+                            <span className="font-mono text-cyan-400">{player.score?.toLocaleString() || 0} Puan</span>
+                          )}
+                          {leaderboardFilter === 'topEarners' && (
+                            <span className="font-mono text-green-400">+{player.profit?.toLocaleString() || 0} Puan</span>
+                          )}
+                          {leaderboardFilter === 'biggestLosers' && (
+                            <span className="font-mono text-red-400">-{player.loss?.toLocaleString() || 0} Puan</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-gray-400">
+                      Veri bulunamadı. İlk yatırım yapan sen ol!
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
 
             {/* Oyun Seçimi */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

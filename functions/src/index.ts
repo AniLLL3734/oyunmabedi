@@ -378,13 +378,15 @@ export const manageInvestment = functions.https.onCall(async (data: any, context
 
     const { action, companyTicker, amount, investmentId } = data;
     const userRef = db.doc(`users/${uid}`);
+    const userDoc = await userRef.get();
+    const userData: any = userDoc.data();
+    const userDisplayName = userData?.displayName || 'Anonim';
+    const userAvatarUrl = userData?.avatarUrl || '';
 
     if (action === "buy") {
         const company = companiesData.find(c => c.ticker === companyTicker);
         if (!company) throw new functions.https.HttpsError("not-found", "Şirket bulunamadı.");
         
-        const userDoc = await userRef.get();
-        const userData: any = userDoc.data();
         if (!userDoc.exists || userData.score < amount) {
             throw new functions.https.HttpsError("failed-precondition", "Yetersiz bakiye.");
         }
@@ -425,11 +427,58 @@ export const manageInvestment = functions.https.onCall(async (data: any, context
         const finalPrice = Math.max(1, company.basePrice + priceChange);
         
         const payout = Math.floor((finalPrice / investment.purchasePrice) * investment.investedAmount);
+        const profit = payout - investment.investedAmount;
 
         await userRef.update({ score: admin.firestore.FieldValue.increment(payout) });
         await invRef.update({ status: "resolved", finalPrice, payout });
         
-        return { success: true, payout, investedAmount: investment.investedAmount };
+        // Update investment profit/loss tracking
+        if (profit > 0) {
+            // Update top earners collection
+            const profitRef = db.collection('investment_profits').doc(uid);
+            const profitDoc = await profitRef.get();
+            
+            if (profitDoc.exists) {
+                await profitRef.update({
+                    totalProfit: admin.firestore.FieldValue.increment(profit),
+                    displayName: userDisplayName,
+                    avatarUrl: userAvatarUrl,
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                await profitRef.set({
+                    userId: uid,
+                    displayName: userDisplayName,
+                    avatarUrl: userAvatarUrl,
+                    totalProfit: profit,
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        } else if (profit < 0) {
+            // Update biggest losers collection
+            const lossRef = db.collection('investment_losses').doc(uid);
+            const lossDoc = await lossRef.get();
+            const lossAmount = Math.abs(profit);
+            
+            if (lossDoc.exists) {
+                await lossRef.update({
+                    totalLoss: admin.firestore.FieldValue.increment(lossAmount),
+                    displayName: userDisplayName,
+                    avatarUrl: userAvatarUrl,
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                await lossRef.set({
+                    userId: uid,
+                    displayName: userDisplayName,
+                    avatarUrl: userAvatarUrl,
+                    totalLoss: lossAmount,
+                    lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+        }
+        
+        return { success: true, payout, investedAmount: investment.investedAmount, profit };
     }
 
     throw new functions.https.HttpsError("invalid-argument", "Geçersiz işlem.");
