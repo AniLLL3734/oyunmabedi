@@ -1,4 +1,4 @@
-﻿﻿rules_version = '2';
+﻿﻿﻿﻿rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -55,7 +55,13 @@ service cloud.firestore {
 
       // (update): Kullanıcı kendi profilini (rol hariç) güncelleyebilir veya admin güncelleyebilir.
       // AI bot'a susturma ve banlama için update izni
-      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+      // KRİTİK GÜVENLİK: Skor alanları (score, highestScore, lastScoreGrantedAt) tamamen sunucu kontrolü altında!
+      // Kullanıcılar bu alanları ASLA doğrudan değiştiremez - sadece Cloud Functions değiştirebilir
+      allow update: if (request.auth.uid == userId &&
+                       request.resource.data.role == resource.data.role &&
+                       request.resource.data.score == resource.data.score &&
+                       request.resource.data.highestScore == resource.data.highestScore &&
+                       !('lastScoreGrantedAt' in request.resource.data))
                       || isAdmin() || request.auth.uid == "oyunmabedi-ai-bot-v1";
 
       // (delete): Sadece admin kullanıcı silebilir.

@@ -111,6 +111,7 @@ const SignupPage: React.FC = () => {
                 hometown: data.hometown || null,
                 age: data.age || null,
                 grade: data.grade || null,
+                instagram: data.instagram || null,
                 // --- YENİ ALANLARIN SONU ---
                 messageCount: 0,
                 joinDate: serverTimestamp(),
@@ -321,6 +322,17 @@ const SignupPage: React.FC = () => {
                         </select>
                         {errors.grade && <p className="text-red-500 text-xs mt-1">{errors.grade.message as string}</p>}
                         <p className="text-xs text-cyber-gray/70 mt-1">Zorunlu. Profilinizde görünecektir.</p>
+                    </div>
+
+                    <div>
+                        <label className="text-sm font-bold text-cyber-gray block mb-2">Instagram</label>
+                        <input {...register('instagram', {
+                            pattern: { value: /^@?[a-zA-Z0-9._]+$/, message: 'Geçersiz Instagram kullanıcı adı' }
+                        })}
+                         placeholder="@kullaniciadi"
+                         className="w-full p-3 bg-space-black text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
+                        {errors.instagram && <p className="text-red-500 text-xs mt-1">{errors.instagram.message as string}</p>}
+                        <p className="text-xs text-cyber-gray/70 mt-1">İsteğe bağlı. Profilinizde görünecektir.</p>
                     </div>
                     {/* --- YENİ EKLENEN ALANLARIN SONU --- */}
                     

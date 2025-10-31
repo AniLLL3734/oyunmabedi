@@ -22,6 +22,10 @@ export interface UserProfileData {
     clanId?: string;
     clanRole?: 'leader' | 'elder' | 'officer' | 'member';
     lastLogoutTime?: Date; // Yeni eklenen alan
+    age?: number;
+    grade?: string;
+    hometown?: string;
+    instagram?: string;
     [key:string]: any;
 }
 

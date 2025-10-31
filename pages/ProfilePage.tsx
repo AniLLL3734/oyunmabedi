@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { db } from '../src/firebase';
 import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield, ShoppingBag, Crown, Palette, Star, Clock, MessageSquare as MessageSquareIcon, Gamepad2 } from 'lucide-react';
+import { LoaderCircle, Award, ArrowLeft, Edit, MessageSquare, Flame, CalendarDays, Shield, ShoppingBag, Crown, Palette, Star, Clock, MessageSquare as MessageSquareIcon, Gamepad2, X, Instagram } from 'lucide-react';
 import { achievementsList, adminTitle } from '../data/achievements';
 import { shopItems } from '../data/shopItems';
 import { games } from '../data/games';
@@ -63,6 +63,9 @@ const ProfilePage: React.FC = () => {
     const { user: currentUser, loading: authLoading } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showInfoModal, setShowInfoModal] = useState(false);
+    const [infoForm, setInfoForm] = useState({ age: '', grade: '', hometown: '' });
+    const [isUpdatingInfo, setIsUpdatingInfo] = useState(false);
 
     useEffect(() => {
         if (authLoading || !userId) return;
@@ -74,7 +77,18 @@ const ProfilePage: React.FC = () => {
                 const userRef = doc(db, 'users', userId);
                 const userSnap = await getDoc(userRef);
                 if (isMounted && userSnap.exists()) {
-                    setProfile(userSnap.data() as UserProfile);
+                    const profileData = userSnap.data() as UserProfile;
+                    setProfile(profileData);
+
+                    // Eğer kendi profilimizse ve yaş/sınıf bilgisi eksikse modalı göster
+                    if (currentUser && currentUser.uid === userId && (!profileData.age || !profileData.grade)) {
+                        setShowInfoModal(true);
+                        setInfoForm({
+                            age: profileData.age?.toString() || '',
+                            grade: profileData.grade || '',
+                            hometown: profileData.hometown || ''
+                        });
+                    }
                 } else if (isMounted) {
                     setProfile(null);
                 }
@@ -88,7 +102,7 @@ const ProfilePage: React.FC = () => {
 
         fetchProfile();
         return () => { isMounted = false; };
-    }, [userId, authLoading]);
+    }, [userId, authLoading, currentUser]);
 
     const handleSelectTitle = async (achievementId: string) => {
         if (!currentUser || currentUser.uid !== userId) return;
@@ -127,6 +141,38 @@ const ProfilePage: React.FC = () => {
         } catch (error) { console.error("Ürün kaldırılırken hata:", error); }
     };
 
+    // Bilgi güncelleme fonksiyonu
+    const handleUpdateInfo = async () => {
+        if (!currentUser || currentUser.uid !== userId) return;
+        if (!infoForm.age.trim() || !infoForm.grade.trim()) {
+            alert("Yaş ve sınıf zorunludur!");
+            return;
+        }
+
+        setIsUpdatingInfo(true);
+        try {
+            const userRef = doc(db, 'users', userId);
+            await updateDoc(userRef, {
+                age: parseInt(infoForm.age),
+                grade: infoForm.grade,
+                hometown: infoForm.hometown || null
+            });
+            setProfile(prev => prev ? {
+                ...prev,
+                age: parseInt(infoForm.age),
+                grade: infoForm.grade,
+                hometown: infoForm.hometown || undefined
+            } : null);
+            setShowInfoModal(false);
+            alert("Bilgileriniz başarıyla güncellendi!");
+        } catch (error) {
+            console.error("Bilgi güncellenirken hata:", error);
+            alert("Bilgi güncellenirken bir hata oluştu.");
+        } finally {
+            setIsUpdatingInfo(false);
+        }
+    };
+
     if (isLoading || authLoading) {
         return <div className="flex justify-center items-center h-full py-20"><LoaderCircle className="animate-spin text-electric-purple" size={48} /></div>;
     }
@@ -143,6 +189,165 @@ const ProfilePage: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            {/* Bilgi Güncelleme Modalı */}
+            {showInfoModal && (
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-md"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-2xl font-heading text-electric-purple">Profil Bilgilerini Tamamla</h3>
+                            <button onClick={() => setShowInfoModal(false)} className="text-cyber-gray hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <p className="text-cyber-gray mb-6">
+                            Profilinizde görünmesi için yaş ve sınıf bilgilerinizi doldurun. Memleket isteğe bağlıdır.
+                        </p>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-cyber-gray mb-2">Yaş <span className="text-red-500">*</span></label>
+                                <input
+                                    type="number"
+                                    value={infoForm.age}
+                                    onChange={(e) => setInfoForm(prev => ({ ...prev, age: e.target.value }))}
+                                    placeholder="Örn: 18"
+                                    className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                                    min="13"
+                                    max="100"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-cyber-gray mb-2">Sınıf <span className="text-red-500">*</span></label>
+                                <select
+                                    value={infoForm.grade}
+                                    onChange={(e) => setInfoForm(prev => ({ ...prev, grade: e.target.value }))}
+                                    className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                >
+                                    <option value="">Sınıf Seçiniz...</option>
+                                    <option value="Mezun">Mezun</option>
+                                    <option value="Üniversite">Üniversite</option>
+                                    <option value="12. Sınıf">12. Sınıf</option>
+                                    <option value="11. Sınıf">11. Sınıf</option>
+                                    <option value="10. Sınıf">10. Sınıf</option>
+                                    <option value="9. Sınıf">9. Sınıf</option>
+                                    <option value="Diğer">Diğer</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-cyber-gray mb-2">Memleket</label>
+                                <select
+                                    value={infoForm.hometown}
+                                    onChange={(e) => setInfoForm(prev => ({ ...prev, hometown: e.target.value }))}
+                                    className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                >
+                                    <option value="">Seçiniz...</option>
+                                    <option value="Adana">Adana</option>
+                                    <option value="Adıyaman">Adıyaman</option>
+                                    <option value="Afyonkarahisar">Afyonkarahisar</option>
+                                    <option value="Ağrı">Ağrı</option>
+                                    <option value="Aksaray">Aksaray</option>
+                                    <option value="Amasya">Amasya</option>
+                                    <option value="Ankara">Ankara</option>
+                                    <option value="Antalya">Antalya</option>
+                                    <option value="Ardahan">Ardahan</option>
+                                    <option value="Artvin">Artvin</option>
+                                    <option value="Aydın">Aydın</option>
+                                    <option value="Balıkesir">Balıkesir</option>
+                                    <option value="Bartın">Bartın</option>
+                                    <option value="Batman">Batman</option>
+                                    <option value="Bayburt">Bayburt</option>
+                                    <option value="Bilecik">Bilecik</option>
+                                    <option value="Bingöl">Bingöl</option>
+                                    <option value="Bitlis">Bitlis</option>
+                                    <option value="Bolu">Bolu</option>
+                                    <option value="Burdur">Burdur</option>
+                                    <option value="Bursa">Bursa</option>
+                                    <option value="Çanakkale">Çanakkale</option>
+                                    <option value="Çankırı">Çankırı</option>
+                                    <option value="Çorum">Çorum</option>
+                                    <option value="Denizli">Denizli</option>
+                                    <option value="Diyarbakır">Diyarbakır</option>
+                                    <option value="Düzce">Düzce</option>
+                                    <option value="Edirne">Edirne</option>
+                                    <option value="Elazığ">Elazığ</option>
+                                    <option value="Erzincan">Erzincan</option>
+                                    <option value="Erzurum">Erzurum</option>
+                                    <option value="Eskişehir">Eskişehir</option>
+                                    <option value="Gaziantep">Gaziantep</option>
+                                    <option value="Giresun">Giresun</option>
+                                    <option value="Gümüşhane">Gümüşhane</option>
+                                    <option value="Hakkâri">Hakkâri</option>
+                                    <option value="Hatay">Hatay</option>
+                                    <option value="Iğdır">Iğdır</option>
+                                    <option value="Isparta">Isparta</option>
+                                    <option value="İstanbul">İstanbul</option>
+                                    <option value="İzmir">İzmir</option>
+                                    <option value="Kahramanmaraş">Kahramanmaraş</option>
+                                    <option value="Karabük">Karabük</option>
+                                    <option value="Karaman">Karaman</option>
+                                    <option value="Kars">Kars</option>
+                                    <option value="Kastamonu">Kastamonu</option>
+                                    <option value="Kayseri">Kayseri</option>
+                                    <option value="Kırıkkale">Kırıkkale</option>
+                                    <option value="Kırklareli">Kırklareli</option>
+                                    <option value="Kırşehir">Kırşehir</option>
+                                    <option value="Kilis">Kilis</option>
+                                    <option value="Kocaeli">Kocaeli</option>
+                                    <option value="Konya">Konya</option>
+                                    <option value="Kütahya">Kütahya</option>
+                                    <option value="Malatya">Malatya</option>
+                                    <option value="Manisa">Manisa</option>
+                                    <option value="Mardin">Mardin</option>
+                                    <option value="Mersin">Mersin</option>
+                                    <option value="Muğla">Muğla</option>
+                                    <option value="Muş">Muş</option>
+                                    <option value="Nevşehir">Nevşehir</option>
+                                    <option value="Niğde">Niğde</option>
+                                    <option value="Ordu">Ordu</option>
+                                    <option value="Osmaniye">Osmaniye</option>
+                                    <option value="Rize">Rize</option>
+                                    <option value="Sakarya">Sakarya</option>
+                                    <option value="Samsun">Samsun</option>
+                                    <option value="Siirt">Siirt</option>
+                                    <option value="Sinop">Sinop</option>
+                                    <option value="Sivas">Sivas</option>
+                                    <option value="Şanlıurfa">Şanlıurfa</option>
+                                    <option value="Şırnak">Şırnak</option>
+                                    <option value="Tekirdağ">Tekirdağ</option>
+                                    <option value="Tokat">Tokat</option>
+                                    <option value="Trabzon">Trabzon</option>
+                                    <option value="Tunceli">Tunceli</option>
+                                    <option value="Uşak">Uşak</option>
+                                    <option value="Van">Van</option>
+                                    <option value="Yalova">Yalova</option>
+                                    <option value="Yozgat">Yozgat</option>
+                                    <option value="Zonguldak">Zonguldak</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="flex gap-4 mt-6">
+                            <button
+                                onClick={handleUpdateInfo}
+                                disabled={isUpdatingInfo}
+                                className="flex-1 px-4 py-2 bg-electric-purple hover:bg-electric-purple/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors"
+                            >
+                                {isUpdatingInfo ? 'Güncelleniyor...' : 'Kaydet'}
+                            </button>
+                            <button
+                                onClick={() => setShowInfoModal(false)}
+                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+                            >
+                                İptal
+                            </button>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
+
             <Link to="/leaderboard" className="inline-flex items-center gap-2 text-cyber-gray hover:text-electric-purple mb-8 transition-colors">
                 <ArrowLeft size={20} /><span>Liderlik Tablosuna Dön</span>
             </Link>
@@ -184,6 +389,15 @@ const ProfilePage: React.FC = () => {
                                     <div className="flex justify-between items-center">
                                         <span className="text-cyber-gray font-medium">Sınıf:</span>
                                         <span className="text-ghost-white">{profile.grade}</span>
+                                    </div>
+                                )}
+                                {profile.instagram && (
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-cyber-gray font-medium">Instagram:</span>
+                                        <a href={`https://instagram.com/${profile.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-pink-400 hover:text-pink-300 flex items-center gap-1">
+                                            <Instagram size={16} />
+                                            {profile.instagram}
+                                        </a>
                                     </div>
                                 )}
                             </div>

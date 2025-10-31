@@ -1,2 +1,7 @@
 [functions]
   node_bundler = "esbuild"
+
+[[headers]]
+  for = "/assets/*.js"
+  [headers.values]
+    Content-Type = "text/javascript"

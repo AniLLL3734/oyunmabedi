@@ -66,7 +66,7 @@ const formatRemainingTime = (endDate: Date) => {
 const ChatPage: React.FC = () => {
     const { user, userProfile, isAdmin, loading: authLoading } = useAuth();
     const [messages, setMessages] = useState<Message[]>([]);
-    
+
     const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
     const [allUsers, setAllUsers] = useState<Map<string, UserProfile>>(new Map());
     const [newMessage, setNewMessage] = useState('');
@@ -88,6 +88,8 @@ const ChatPage: React.FC = () => {
     const [chatError, setChatError] = useState<string | null>(null);
     const initialLoadDone = useRef(false);
     const [infractionRecord, setInfractionRecord] = useState<InfractionRecord | null>(null);
+    const lastMessageTime = useRef(0);
+    const MESSAGE_COOLDOWN_MS = 5000; // 5 seconds spam protection
 
     
     // ===================================================================================
@@ -208,6 +210,25 @@ const ChatPage: React.FC = () => {
         return () => unsubscribe();
     }, []);
 
+    // Chat settings listener
+    useEffect(() => {
+        const settingsRef = doc(chatDb, 'chat_meta', 'settings');
+        const unsubscribe = onSnapshot(settingsRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                setChatSettings(prev => ({
+                    ...prev,
+                    chatPaused: data.chatPaused || false,
+                    chatPauseReason: data.chatPauseReason || '',
+                    slowMode: data.slowMode || false,
+                    slowModeDelay: data.slowModeDelay || 0,
+                    isChatInvitationless: data.isChatInvitationless || false
+                }));
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         if (!user || showDisclaimer) return;
         const q = query(collection(chatDb, 'messages'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
@@ -261,8 +282,15 @@ const ChatPage: React.FC = () => {
     const sendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         const messageText = newMessage.trim();
+        const now = Date.now();
 
         if (messageText === '' || !user || !userProfile || isSending || isAiResponding) return;
+
+        // Spam protection: Check if user is sending messages too quickly
+        if (now - lastMessageTime.current < MESSAGE_COOLDOWN_MS) {
+            setChatError(`Spam koruması aktif. Lütfen ${Math.ceil((MESSAGE_COOLDOWN_MS - (now - lastMessageTime.current)) / 1000)} saniye bekleyin.`);
+            return;
+        }
 
         // Admin panelinden susturma kontrolü (users koleksiyonu)
         if (userProfile.mutedUntil && userProfile.mutedUntil.toDate() > new Date()) {
@@ -287,6 +315,9 @@ const ChatPage: React.FC = () => {
             return;
         }
 
+        // Check for AI trigger
+        const isAiTrigger = messageText.toLowerCase().startsWith('/ai ');
+
         setIsSending(true);
         setNewMessage('');
         handleCancelReply();
@@ -299,55 +330,83 @@ const ChatPage: React.FC = () => {
                 ...(replyingToMessage && { replyingTo: { uid: replyingToMessage.uid, displayName: replyingToMessage.displayName, text: replyingToMessage.text } })
             });
 
+            // Update last message time for spam protection
+            lastMessageTime.current = now;
+
             await updateDoc(doc(mainDb, 'users', user.uid), { messageCount: increment(1) });
 
             setTimeout(() => { dummy.current?.scrollIntoView({ behavior: 'smooth' }); }, 100);
 
-            // Now analyze with AI
-            const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
-
-            if (analysis.action !== 'NONE' && analysis.warningMessage) {
-                // Delete the message
-                await deleteDoc(messageRef);
-
-                if (isAdmin) {
-                    // For admin, just send warning without penalty
-                    await addDoc(collection(chatDb, 'messages'), {
-                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                        text: analysis.warningMessage, createdAt: serverTimestamp(),
-                    });
-                } else {
-                    // Send warning
-                    await addDoc(collection(chatDb, 'messages'), {
-                        uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
-                        text: analysis.warningMessage, createdAt: serverTimestamp(),
-                    });
-
-                    // Apply penalty
-                    let muteUntil: Timestamp | null = null;
-                    const now = new Date();
-
-                    switch (analysis.action) {
-                        case 'DELETE_AND_MUTE_5M':
-                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
-                            break;
-                        case 'DELETE_AND_MUTE_1H':
-                            muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
-                            break;
-                        case 'DELETE_AND_PERMANENT_BAN':
-                            muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
-                            break;
-                    }
-
-                    if (muteUntil) {
-                        await setDoc(infractionDocRef, {
-                            offenseCount: increment(1),
-                            mutedUntil: muteUntil,
-                            lastOffenseReason: analysis.warningMessage
-                        }, { merge: true });
+            // Handle AI chat if triggered
+            if (isAiTrigger) {
+                const aiPrompt = messageText.slice(4).trim(); // Remove '/ai ' prefix
+                if (aiPrompt) {
+                    setIsAiResponding(true);
+                    try {
+                        const aiResponse = await chatWithAI(userProfile?.displayName || 'Anonim', aiPrompt);
+                        if (aiResponse) {
+                            await addDoc(collection(chatDb, 'messages'), {
+                                uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                                text: aiResponse, createdAt: serverTimestamp(),
+                            });
+                        }
+                    } catch (aiError) {
+                        console.error("AI yanıt hatası:", aiError);
+                        await addDoc(collection(chatDb, 'messages'), {
+                            uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                            text: "Üzgünüm, şu anda AI yanıt veremiyorum. Lütfen daha sonra tekrar deneyin.", createdAt: serverTimestamp(),
+                        });
+                    } finally {
+                        setIsAiResponding(false);
                     }
                 }
-                console.log(`Moderasyon uygulandı: ${analysis.action}`);
+            } else {
+                // Now analyze with AI for moderation
+                const analysis = await analyzeMessageWithAI(userProfile?.displayName || 'Anonim', messageText);
+
+                if (analysis.action !== 'NONE' && analysis.warningMessage) {
+                    // Delete the message
+                    await deleteDoc(messageRef);
+
+                    if (isAdmin) {
+                        // For admin, just send warning without penalty
+                        await addDoc(collection(chatDb, 'messages'), {
+                            uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                            text: analysis.warningMessage, createdAt: serverTimestamp(),
+                        });
+                    } else {
+                        // Send warning
+                        await addDoc(collection(chatDb, 'messages'), {
+                            uid: user.uid, isAiMessage: true, displayName: AI_DISPLAY_NAME,
+                            text: analysis.warningMessage, createdAt: serverTimestamp(),
+                        });
+
+                        // Apply penalty
+                        let muteUntil: Timestamp | null = null;
+                        const now = new Date();
+
+                        switch (analysis.action) {
+                            case 'DELETE_AND_MUTE_5M':
+                                muteUntil = Timestamp.fromDate(new Date(now.getTime() + 5 * 60 * 1000));
+                                break;
+                            case 'DELETE_AND_MUTE_1H':
+                                muteUntil = Timestamp.fromDate(new Date(now.getTime() + 60 * 60 * 1000));
+                                break;
+                            case 'DELETE_AND_PERMANENT_BAN':
+                                muteUntil = Timestamp.fromDate(new Date(now.setFullYear(now.getFullYear() + 100)));
+                                break;
+                        }
+
+                        if (muteUntil) {
+                            await setDoc(infractionDocRef, {
+                                offenseCount: increment(1),
+                                mutedUntil: muteUntil,
+                                lastOffenseReason: analysis.warningMessage
+                            }, { merge: true });
+                        }
+                    }
+                    console.log(`Moderasyon uygulandı: ${analysis.action}`);
+                }
             }
         } catch (error) {
             console.error("Mesaj gönderme sırasında hata:", error);

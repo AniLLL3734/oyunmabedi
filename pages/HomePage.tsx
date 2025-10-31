@@ -39,7 +39,7 @@ const HomePage: React.FC = () => {
   // YENİ: Sadece tek ve en güncel admin notunu tutmak için state
   const [adminNote, setAdminNote] = useState<AdminNote | null>(null);
   
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const navigate = useNavigate();
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -47,6 +47,9 @@ const HomePage: React.FC = () => {
   const [feedbackError, setFeedbackError] = useState('');
   const [showAdminMessagePopup, setShowAdminMessagePopup] = useState(false);
   const [showGuestWarning, setShowGuestWarning] = useState(false);
+  const [showProfileCompletionModal, setShowProfileCompletionModal] = useState(false);
+  const [profileCompletionForm, setProfileCompletionForm] = useState({ age: '', grade: '', hometown: '', instagram: '' });
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
 
   // <-- YENİ: Yeni ürünler modal'ını kontrol etmek için state.
   const [showNewItemsModal, setShowNewItemsModal] = useState(false);
@@ -100,6 +103,21 @@ const HomePage: React.FC = () => {
       const timer = setTimeout(() => {
         setShowNewItemsModal(true);
       }, 2000); // 2 saniye sonra göster
+      return () => clearTimeout(timer);
+    }
+
+    // Giriş yapan kullanıcılar için profil tamamlama kontrolü
+    if (user && userProfile && (!userProfile.age || !userProfile.grade || !userProfile.instagram)) {
+      const timer = setTimeout(() => {
+        setShowProfileCompletionModal(true);
+        setProfileCompletionForm({
+          age: userProfile.age?.toString() || '',
+          grade: userProfile.grade || '',
+          hometown: userProfile.hometown || '',
+          instagram: userProfile.instagram || ''
+        });
+      }, 2000); // 2 saniye sonra modal göster
+
       return () => clearTimeout(timer);
     }
 
@@ -184,6 +202,32 @@ const HomePage: React.FC = () => {
     localStorage.setItem('hasSeenHeritageModal', 'true');
   };
 
+  // Profil tamamlama fonksiyonu
+  const handleUpdateProfileCompletion = async () => {
+    if (!user || !profileCompletionForm.age.trim() || !profileCompletionForm.grade.trim()) {
+      alert("Yaş ve sınıf zorunludur!");
+      return;
+    }
+
+    setIsUpdatingProfile(true);
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      await updateDoc(userDocRef, {
+        age: parseInt(profileCompletionForm.age),
+        grade: profileCompletionForm.grade,
+        hometown: profileCompletionForm.hometown || null,
+        instagram: profileCompletionForm.instagram || null
+      });
+      setShowProfileCompletionModal(false);
+      alert("Profil bilgileriniz başarıyla güncellendi!");
+    } catch (error) {
+      console.error("Profil güncellenirken hata:", error);
+      alert("Profil güncellenirken bir hata oluştu.");
+    } finally {
+      setIsUpdatingProfile(false);
+    }
+  };
+
   const filteredGames = shuffledGames.filter(game => {
     const matchesCategory = selectedCategory ? game.category === selectedCategory : true;
     const isSearchQueryActive = searchQuery.trim().toLowerCase();
@@ -196,6 +240,185 @@ const HomePage: React.FC = () => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
+
+            {/* ================================================================ */}
+            {/* PROFIL TAMAMLAMA MODAL'I                                       */}
+            {/* ================================================================ */}
+            <AnimatePresence>
+                {showProfileCompletionModal && (
+                    <motion.div
+                        className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-space-black p-6 rounded-lg border border-cyber-gray/50 w-full max-w-md"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="text-2xl font-heading text-electric-purple">Profil Bilgilerini Tamamla</h3>
+                                <button onClick={() => setShowProfileCompletionModal(false)} className="text-cyber-gray hover:text-white">
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <p className="text-cyber-gray mb-6">
+                                Profilinizde görünmesi için yaş, sınıf ve Instagram bilgilerinizi doldurun. Memleket isteğe bağlıdır.
+                            </p>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold text-cyber-gray mb-2">Yaş <span className="text-red-500">*</span></label>
+                                    <input
+                                        type="number"
+                                        value={profileCompletionForm.age}
+                                        onChange={(e) => setProfileCompletionForm(prev => ({ ...prev, age: e.target.value }))}
+                                        placeholder="Örn: 18"
+                                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                                        min="13"
+                                        max="100"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-cyber-gray mb-2">Sınıf <span className="text-red-500">*</span></label>
+                                    <select
+                                        value={profileCompletionForm.grade}
+                                        onChange={(e) => setProfileCompletionForm(prev => ({ ...prev, grade: e.target.value }))}
+                                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                    >
+                                        <option value="">Sınıf Seçiniz...</option>
+                                        <option value="Mezun">Mezun</option>
+                                        <option value="Üniversite">Üniversite</option>
+                                        <option value="12. Sınıf">12. Sınıf</option>
+                                        <option value="11. Sınıf">11. Sınıf</option>
+                                        <option value="10. Sınıf">10. Sınıf</option>
+                                        <option value="9. Sınıf">9. Sınıf</option>
+                                        <option value="Diğer">Diğer</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-cyber-gray mb-2">Memleket</label>
+                                    <select
+                                        value={profileCompletionForm.hometown}
+                                        onChange={(e) => setProfileCompletionForm(prev => ({ ...prev, hometown: e.target.value }))}
+                                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white"
+                                    >
+                                        <option value="">Seçiniz...</option>
+                                        <option value="Adana">Adana</option>
+                                        <option value="Adıyaman">Adıyaman</option>
+                                        <option value="Afyonkarahisar">Afyonkarahisar</option>
+                                        <option value="Ağrı">Ağrı</option>
+                                        <option value="Aksaray">Aksaray</option>
+                                        <option value="Amasya">Amasya</option>
+                                        <option value="Ankara">Ankara</option>
+                                        <option value="Antalya">Antalya</option>
+                                        <option value="Ardahan">Ardahan</option>
+                                        <option value="Artvin">Artvin</option>
+                                        <option value="Aydın">Aydın</option>
+                                        <option value="Balıkesir">Balıkesir</option>
+                                        <option value="Bartın">Bartın</option>
+                                        <option value="Batman">Batman</option>
+                                        <option value="Bayburt">Bayburt</option>
+                                        <option value="Bilecik">Bilecik</option>
+                                        <option value="Bingöl">Bingöl</option>
+                                        <option value="Bitlis">Bitlis</option>
+                                        <option value="Bolu">Bolu</option>
+                                        <option value="Burdur">Burdur</option>
+                                        <option value="Bursa">Bursa</option>
+                                        <option value="Çanakkale">Çanakkale</option>
+                                        <option value="Çankırı">Çankırı</option>
+                                        <option value="Çorum">Çorum</option>
+                                        <option value="Denizli">Denizli</option>
+                                        <option value="Diyarbakır">Diyarbakır</option>
+                                        <option value="Düzce">Düzce</option>
+                                        <option value="Edirne">Edirne</option>
+                                        <option value="Elazığ">Elazığ</option>
+                                        <option value="Erzincan">Erzincan</option>
+                                        <option value="Erzurum">Erzurum</option>
+                                        <option value="Eskişehir">Eskişehir</option>
+                                        <option value="Gaziantep">Gaziantep</option>
+                                        <option value="Giresun">Giresun</option>
+                                        <option value="Gümüşhane">Gümüşhane</option>
+                                        <option value="Hakkâri">Hakkâri</option>
+                                        <option value="Hatay">Hatay</option>
+                                        <option value="Iğdır">Iğdır</option>
+                                        <option value="Isparta">Isparta</option>
+                                        <option value="İstanbul">İstanbul</option>
+                                        <option value="İzmir">İzmir</option>
+                                        <option value="Kahramanmaraş">Kahramanmaraş</option>
+                                        <option value="Karabük">Karabük</option>
+                                        <option value="Karaman">Karaman</option>
+                                        <option value="Kars">Kars</option>
+                                        <option value="Kastamonu">Kastamonu</option>
+                                        <option value="Kayseri">Kayseri</option>
+                                        <option value="Kırıkkale">Kırıkkale</option>
+                                        <option value="Kırklareli">Kırklareli</option>
+                                        <option value="Kırşehir">Kırşehir</option>
+                                        <option value="Kilis">Kilis</option>
+                                        <option value="Kocaeli">Kocaeli</option>
+                                        <option value="Konya">Konya</option>
+                                        <option value="Kütahya">Kütahya</option>
+                                        <option value="Malatya">Malatya</option>
+                                        <option value="Manisa">Manisa</option>
+                                        <option value="Mardin">Mardin</option>
+                                        <option value="Mersin">Mersin</option>
+                                        <option value="Muğla">Muğla</option>
+                                        <option value="Muş">Muş</option>
+                                        <option value="Nevşehir">Nevşehir</option>
+                                        <option value="Niğde">Niğde</option>
+                                        <option value="Ordu">Ordu</option>
+                                        <option value="Osmaniye">Osmaniye</option>
+                                        <option value="Rize">Rize</option>
+                                        <option value="Sakarya">Sakarya</option>
+                                        <option value="Samsun">Samsun</option>
+                                        <option value="Siirt">Siirt</option>
+                                        <option value="Sinop">Sinop</option>
+                                        <option value="Sivas">Sivas</option>
+                                        <option value="Şanlıurfa">Şanlıurfa</option>
+                                        <option value="Şırnak">Şırnak</option>
+                                        <option value="Tekirdağ">Tekirdağ</option>
+                                        <option value="Tokat">Tokat</option>
+                                        <option value="Trabzon">Trabzon</option>
+                                        <option value="Tunceli">Tunceli</option>
+                                        <option value="Uşak">Uşak</option>
+                                        <option value="Van">Van</option>
+                                        <option value="Yalova">Yalova</option>
+                                        <option value="Yozgat">Yozgat</option>
+                                        <option value="Zonguldak">Zonguldak</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-bold text-cyber-gray mb-2">Instagram</label>
+                                    <input
+                                        type="text"
+                                        value={profileCompletionForm.instagram}
+                                        onChange={(e) => setProfileCompletionForm(prev => ({ ...prev, instagram: e.target.value }))}
+                                        placeholder="@kullaniciadi"
+                                        className="w-full p-3 bg-dark-gray border border-cyber-gray/50 rounded-lg text-ghost-white placeholder-cyber-gray"
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex gap-4 mt-6">
+                                <button
+                                    onClick={handleUpdateProfileCompletion}
+                                    disabled={isUpdatingProfile}
+                                    className="flex-1 px-4 py-2 bg-electric-purple hover:bg-electric-purple/80 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold rounded-lg transition-colors"
+                                >
+                                    {isUpdatingProfile ? 'Güncelleniyor...' : 'Kaydet'}
+                                </button>
+                                <button
+                                    onClick={() => setShowProfileCompletionModal(false)}
+                                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors"
+                                >
+                                    Daha Sonra
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ================================================================ */}
             {/* <-- YENİ: YENİ ÜRÜNLER DUYURU MODAL'I                           */}

@@ -21,7 +21,8 @@ const EditProfilePage: React.FC = () => {
         defaultValues: {
             displayName: userProfile?.displayName || '',
             bio: userProfile?.bio || '',
-            gender: userProfile?.gender || ''
+            gender: userProfile?.gender || '',
+            instagram: userProfile?.instagram || ''
         }
     });
 
@@ -31,12 +32,13 @@ const EditProfilePage: React.FC = () => {
             setValue('bio', userProfile.bio || '');
             setSelectedAvatarUrl(userProfile.avatarUrl || '');
             setValue('gender', (userProfile as any).gender || '');
+            setValue('instagram', userProfile.instagram || '');
         }
     }, [userProfile, setValue]);
 
-    const onSubmit = async (data: { displayName: string; bio: string; gender?: string }) => {
+    const onSubmit = async (data: { displayName: string; bio: string; gender?: string; instagram?: string }) => {
         if (!user) return;
-        
+
         const userDocRef = doc(db, 'users', user.uid);
         const updatePromises = [];
 
@@ -48,11 +50,12 @@ const EditProfilePage: React.FC = () => {
             displayName: data.displayName,
             bio: data.bio,
             avatarUrl: selectedAvatarUrl,
-            gender: data.gender || null
+            gender: data.gender || null,
+            instagram: data.instagram || null
         };
-        
+
         updatePromises.push(updateDoc(userDocRef, updatedData));
-        
+
         try {
             await Promise.all(updatePromises);
             toast.success("Profilin başarıyla güncellendi!");
@@ -120,6 +123,11 @@ const EditProfilePage: React.FC = () => {
                             <span>Belirtmek istemiyorum</span>
                         </label>
                     </div>
+                </div>
+                <div>
+                    <label className="text-sm font-bold text-cyber-gray block mb-2">Instagram (İsteğe bağlı)</label>
+                    <input {...register('instagram', { pattern: { value: /^@?[a-zA-Z0-9._]+$/, message: 'Geçersiz Instagram kullanıcı adı' } })} placeholder="@kullaniciadi" className="w-full p-3 bg-dark-gray text-ghost-white rounded-md border border-cyber-gray/50 focus:ring-2 focus:ring-electric-purple focus:outline-none"/>
+                    {errors.instagram && <p className="text-red-500 text-xs mt-1">{errors.instagram.message as string}</p>}
                 </div>
                 <button type="submit" disabled={isSubmitting} className="w-full py-3 px-4 flex items-center justify-center gap-2 bg-electric-purple text-white font-bold rounded-md hover:bg-opacity-80 transition-all disabled:bg-cyber-gray">
                     <Save size={20} />

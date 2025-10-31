@@ -1,3 +1,4 @@
+// DOSYA: functions/.eslintrc.js (KESİN ÇÖZÜM)
 module.exports = {
   root: true,
   env: {
@@ -16,10 +17,11 @@ module.exports = {
   parserOptions: {
     project: ["tsconfig.json", "tsconfig.dev.json"],
     sourceType: "module",
+    ecmaVersion: 2020,
   },
   ignorePatterns: [
-    "/lib/**/*", // Ignore built files.
-    "/generated/**/*", // Ignore generated files.
+    "/lib/**/*",
+    "/generated/**/*",
   ],
   plugins: [
     "@typescript-eslint",
@@ -29,5 +31,10 @@ module.exports = {
     "quotes": ["error", "double"],
     "import/no-unresolved": 0,
     "indent": ["error", 2],
+    "linebreak-style": "off",
+    "max-len": "off",
+    "object-curly-spacing": ["error", "always"], // DOĞRUSU BUYMUŞ
+    "require-jsdoc": "off",
+    "comma-dangle": ["error", "always-multiline"],
   },
 };

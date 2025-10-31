@@ -1,10 +1,21 @@
-# Chat Moderation and Admin Fixes
+# Güvenlik Önlemleri Uygulama Planı
 
-## Tasks
-- [ ] Modify ChatPage.tsx sendMessage function: send message first, then analyze with AI, delete if inappropriate and apply penalty
-- [ ] Add pinnedMessage listener in ChatPage.tsx for chat_meta/pinned_message
-- [ ] Fix AdminPage.tsx mute system to write to infractions collection instead of users
-- [ ] Test message sending, AI moderation, pinning, and muting functionality
+## Tamamlanan Görevler
+- [x] Kod analizi yapıldı - Skor sistemi istemci tarafında çalışıyor ve hileye açık
+- [x] grantPassiveScore Cloud Function eklendi
+- [x] Firestore kuralları sıkılaştırıldı - Skor alanları tamamen sunucu kontrolü altına alındı
+- [x] useScoreSystem hook'u güncellendi - Skor hesaplaması kaldırıldı, sadece Cloud Function çağrısı
 
-## Progress
-- Started working on ChatPage.tsx modifications
+## Devam Eden Görevler
+- [ ] Cloud Function deploy etmek
+- [ ] Kuralları test etmek
+- [ ] Hook'u test etmek
+- [ ] Bahis oyunlarını sunucu fonksiyonlarına taşımak (placeBet, playSlots vb.)
+- [ ] İstemci tarafında rate limiting ve güçlü anti-cheat eklemek
+- [ ] Loglama sistemi eklemek
+- [ ] Admin kontrol paneli eklemek
+
+## Takip Adımları
+- [ ] Sunucu fonksiyonlarını entegre etmek
+- [ ] Kuralları test etmek
+- [ ] Anti-cheat test etmek

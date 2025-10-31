@@ -1,278 +1,222 @@
-// DOSYA: hooks/useScoreSystem.ts (ANTI-CHEAT + LİDER SEKME)
+// hooks/useScoreSystem.ts
 
 import { useEffect, useRef, useState } from 'react';
-import { useAuth } from '../src/contexts/AuthContext';
-import { db, auth } from '../src/firebase';
-import { doc, setDoc, increment, getDoc } from 'firebase/firestore';
+import { useAuth } from '../src/contexts/AuthContext'; // AuthContext yolun doğru olduğundan emin ol
+import { db } from '../src/firebase'; // firebase config yolun doğru olduğundan emin ol
+import { updateDoc, increment, serverTimestamp, doc } from 'firebase/firestore';
 
 // Ayarlar
-const PASSIVE_SCORE_INTERVAL = 300 * 1000; // 5 Dakika
+const PASSIVE_SCORE_INTERVAL = 5 * 60 * 1000;  // 5 Dakika (İstemci tarafı zamanlayıcı)
+const SCORE_AMOUNT = 125;                     // Verilecek temel skor miktarı
+const MAX_CLICKS_PER_SECOND = 100;            // Basit tıklama koruması
+const PERFECT_INTERVAL_STREAK_LIMIT = 10;     // Basit makro koruması
 
+// Sekmeler arası iletişim için Broadcast Channel
+// Bu, kullanıcının 10 sekme açıp 10 katı skor almasını engeller.
+const leaderChannel = new BroadcastChannel('score_system_leader');
 
-const AFK_TIMEOUT = 3 * 60 * 60 * 1000; // 3 Saat (3 saat * 60 dakika * 60 saniye * 1000 milisaniye)
-const SCORE_AMOUNT = 125;                     // 125 Skor olarak güncellendi
-// === AUTO CLICKER TESPİT AYARLARI ===
-const MAX_CLICKS_PER_SECOND = 100;        // Saniyede izin verGilen maksimum tıklama
-const PERFECT_INTERVAL_STREAK_LIMIT = 10; // Makro tespiti için mükemmel aralıklı tıklama serisi limiti
-
-// Sekmeler arası iletişim için kanal
-const leaderChannel = new BroadcastChannel('score_system_leader_channel');
-
+/**
+ * Pasif skor kazanma, hile koruması ve sekmeler arası liderlik sistemini yöneten hook.
+ * Yalnızca tek bir tarayıcı sekmesi "lider" olarak skor güncelleme isteklerini gönderir.
+ * @returns { isBlocked: boolean } - Kullanıcının istemci tarafı hile tespitiyle engellenip engellenmediğini belirtir.
+ */
 export const useScoreSystem = (): { isBlocked: boolean } => {
-  const { user } = useAuth();
+  const { user, userData } = useAuth(); // userData'yı da context'ten alıyoruz
   const [isLeader, setIsLeader] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
-  
+
+  // Referanslar (re-render tetiklemez)
   const scoreIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const leaderPingRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Her sekmeye benzersiz bir kimlik ata
-  const tabId = useRef(Math.random().toString(36).substring(2, 9));
-  
-  // Anti-cheat için tıklama zaman damgalarını tut
+  const tabId = useRef(Date.now().toString(36) + Math.random().toString(36).substring(2)); // Daha benzersiz bir ID
+
+  // Basit hile tespiti için referanslar
   const clickTimestamps = useRef<number[]>([]);
   const lastClickInfo = useRef({ time: 0, interval: 0, streak: 0 });
 
-  // Tüm zamanlayıcıları temizleyen merkezi fonksiyon
-  const stopScoreAndAfkTimers = (reason: string) => {
-    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
-    scoreIntervalRef.current = null;
-    console.log(`[Sekme ID: ${tabId.current}] Skor ve AFK sayaçları durduruldu. Sebep: ${reason}`);
-  };
-  
-  // Hile tespit edildiğinde kullanıcıyı engelle ve tüm sistemi durdur
-  const blockUserAndStopSystem = (reason: string) => {
-    console.error(`HİLE TESPİT EDİLDİ! Sebep: ${reason}. Sistem kullanıcı için tamamen durduruluyor.`);
-    setIsBlocked(true);
-    abdicateLeadership("Hile tespit edildi");
-    leaderChannel.close(); // Bu sekmenin diğer sekmelerle iletişimini tamamen kes
-  };
-
-  // Geçici başarımları kontrol et ve skor çarpanını hesapla
-  const getScoreMultiplier = async (): Promise<number> => {
-    if (!user) return 1;
-    
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) return 1;
-      
-      const userData = userSnap.data();
-      const inventory = userData.inventory || {};
-      const tempAchievements = inventory.temporaryAchievements || [];
-      
-      let multiplier = 1;
-      const now = new Date();
-      
-      // Aktif geçici başarımları kontrol et
-      for (const achievement of tempAchievements) {
-        const expiresAt = achievement.expiresAt?.toDate ? achievement.expiresAt.toDate() : new Date(achievement.expiresAt);
-        
-        if (expiresAt > now) {
-          switch (achievement.id) {
-            // Removed speed_demon_24h and time_lord_29h cases as they were causing imbalance
-            case 'time_lord_7d':
-              multiplier = Math.max(multiplier, 3); // 3x çarpan
-              break;
-          }
-        }
-      }
-      
-      return multiplier;
-    } catch (error) {
-      console.error("Skor çarpanı hesaplanırken hata:", error);
-      return 1;
-    }
-  };
-
-  // AFK süresini hesapla (geçici başarımlara göre)
-  const getAfkTimeout = async (): Promise<number> => {
-    if (!user) return AFK_TIMEOUT;
-    
-    try {
-      const userRef = doc(db, 'users', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) return AFK_TIMEOUT;
-      
-      const userData = userSnap.data();
-      const inventory = userData.inventory || {};
-      const tempAchievements = inventory.temporaryAchievements || [];
-      
-      let timeout = AFK_TIMEOUT; // Varsayılan 3 saat
-      const now = new Date();
-      
-      // Aktif geçici başarımları kontrol et
-      for (const achievement of tempAchievements) {
-        const expiresAt = achievement.expiresAt?.toDate ? achievement.expiresAt.toDate() : new Date(achievement.expiresAt);
-        
-        if (expiresAt > now && achievement.id === 'afk_master_24h') {
-          timeout = 3 * 60 * 60 * 1000; // 3 saat
-          break;
-        }
-      }
-      
-      return timeout;
-    } catch (error) {
-      console.error("AFK süresi hesaplanırken hata:", error);
-      return AFK_TIMEOUT;
-    }
-  };
-
-  // Pasif skor kazandıran interval'i başlatan fonksiyon
-  const startScoreInterval = () => {
-    if (scoreIntervalRef.current) return; // Zaten çalışıyorsa tekrar başlatma
-
-    console.log(`[Sekme ID: ${tabId.current}] Skor sayacı başladı. Her ${PASSIVE_SCORE_INTERVAL / 60000} dakikada bir skor verilecek.`);
-
-    scoreIntervalRef.current = setInterval(async () => {
-      if (!auth.currentUser) {
-        stopScoreAndAfkTimers("Kullanıcı çıkış yapmış.");
-        return;
-      }
-      
-      const userRef = doc(db, 'users', auth.currentUser.uid);
-      try {
-        // Skor çarpanını hesapla
-        const multiplier = await getScoreMultiplier();
-        const finalScoreAmount = SCORE_AMOUNT * multiplier;
-
-        // Mevcut skoru ve en yüksek skoru kontrol et
-        const userDoc = await getDoc(userRef);
-        const userData = userDoc.data();
-        const currentScore = (userData?.score || 0) + finalScoreAmount;
-        
-        // Güncellenecek verileri hazırla
-        const updateData: any = { score: increment(finalScoreAmount) };
-        
-        // En yüksek skor güncellenmesi gerekiyorsa
-        if (!userData?.highestScore || currentScore > userData.highestScore) {
-          updateData.highestScore = currentScore;
-        }
-        
-        await setDoc(userRef, updateData, { merge: true });
-        
-        if (multiplier > 1) {
-          console.log(`%c[Sekme ID: ${tabId.current}] ${finalScoreAmount} skor verildi (${multiplier}x çarpan aktif).`, "color: #25D366;");
-        } else {
-          console.log(`%c[Sekme ID: ${tabId.current}] ${finalScoreAmount} skor verildi.`, "color: #25D366;");
-        }
-      } catch (error) {
-        console.error("Skor güncellenirken hata:", error);
-      }
-    }, PASSIVE_SCORE_INTERVAL);
-  };
-  
-  // Kullanıcı aktivitesini dinleyip AFK sayacını sıfırlayan fonksiyon
-  const resetAfkTimer = (event?: Event) => {
-    if (isBlocked) return;
-
-    // Anti-Cheat: Tıklama aktivitesini analiz et
-    if (event && event.type === 'mousedown') {
-      const now = Date.now();
-      // Son 1 saniyedeki tıklamaları tut
-      clickTimestamps.current = [...clickTimestamps.current, now].filter(t => now - t < 1000);
-
-      // CPS (Click Per Second) kontrolü
-      if (clickTimestamps.current.length > MAX_CLICKS_PER_SECOND) {
-        blockUserAndStopSystem(`Anormal tıklama sıklığı (CPS > ${MAX_CLICKS_PER_SECOND}).`);
-        return;
-      }
-
-      // Mükemmel aralıklı tıklama kontrolü (auto-clicker/macro tespiti)
-      const newInterval = now - lastClickInfo.current.time;
-      if (newInterval > 0 && newInterval < 100 && newInterval === lastClickInfo.current.interval) {
-        lastClickInfo.current.streak++;
-      } else {
-        lastClickInfo.current.streak = 0;
-      }
-      lastClickInfo.current = { time: now, interval: newInterval, streak: lastClickInfo.current.streak };
-
-      if (lastClickInfo.current.streak >= PERFECT_INTERVAL_STREAK_LIMIT) {
-        blockUserAndStopSystem("Mükemmel tıklama aralığı serisi (Makro şüphesi).");
-        return;
-      }
-    }
-    
-    // AFK süresini dinamik olarak hesapla
-    getAfkTimeout().then(timeout => {
-      // AFK timeout implementation would go here if needed
-    });
-  };
-  
-  // Liderlikten çekilme fonksiyonu
+  // Liderlikten çekilme ve tüm zamanlayıcıları temizleme
   const abdicateLeadership = (reason: string) => {
     if (!isLeader) return;
-    setIsLeader(false);
-    stopScoreAndAfkTimers(reason); // Liderliği bırakınca sayaçları durdur
+    
+    // Zamanlayıcıları temizle
+    if (scoreIntervalRef.current) clearInterval(scoreIntervalRef.current);
     if (leaderPingRef.current) clearInterval(leaderPingRef.current);
+    scoreIntervalRef.current = null;
     leaderPingRef.current = null;
 
-    // Lider olmadığı için aktivite dinleyicilerini kaldır
-    const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-    activityEvents.forEach(event => window.removeEventListener(event as any, resetAfkTimer));
+    // Liderlik durumunu sıfırla
+    setIsLeader(false);
     
+    // Aktivite dinleyicilerini kaldır
+    window.removeEventListener('mousedown', handleUserActivity);
+
     console.warn(`[Sekme ID: ${tabId.current}] Liderlikten çekildi. Sebep: ${reason}`);
   };
 
-  // Lider olma fonksiyonu
-  const becomeLeader = () => {
-    if (isLeader || isBlocked) return;
-    setIsLeader(true);
-    console.log(`%c[Sekme ID: ${tabId.current}] Bu sekme lider oldu!`, "background: #222; color: #bada55");
+  // Skor güncelleme isteğini Firestore'a gönderen fonksiyon
+  const requestScoreUpdate = async () => {
+    // Kullanıcı yoksa veya bu sekme lider değilse işlemi anında iptal et
+    if (!user || !isLeader) {
+      stopScoreSystem("Kullanıcı veya liderlik durumu geçersiz.");
+      return;
+    }
 
-    // Skor sayacını hemen başlat
-    startScoreInterval();
+    try {
+      console.log(`%c[LİDER SEKME] Firestore'a skor güncellemesi gönderiliyor...`, "color: #007bff;");
+      
+      const userRef = doc(db, 'users', user.uid);
+      
+      // Firestore kuralının beklediği tüm alanları içeren payload
+      const payload = {
+        score: increment(SCORE_AMOUNT), // Skor artışı
+        lastScoreGrantedAt: serverTimestamp() // Zaman damgası (kural bu alanı kontrol ediyor)
+      };
 
-    // Diğer sekmelere lider olduğunu bildirmek için periyodik "ping" gönder
-    leaderPingRef.current = setInterval(() => {
-      leaderChannel.postMessage({ type: 'ping', id: tabId.current });
-    }, 2000);
-    
-    // Aktivite dinleyicilerini ekle
-    const activityEvents: (keyof WindowEventMap)[] = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
-    activityEvents.forEach(event => window.addEventListener(event as any, resetAfkTimer));
-    
-    resetAfkTimer(); // AFK sayacını başlat
-  };
+      await updateDoc(userRef, payload);
 
-  // Başka bir sekmeden mesaj geldiğinde çalışacak fonksiyon
-  const handleChannelMessage = (event: MessageEvent) => {
-    // Eğer bu sekme lider değilse ve bir lider seçme çağrısı varsa (ki burada yok, sadece ping var)
-    // ya da bu sekme liderse ve başka bir liderden ping gelirse
-    if (event.data.type === 'ping' && event.data.id !== tabId.current && isLeader) {
-      abdicateLeadership("Başka bir aktif lider algılandı");
+      console.log(`%c[LİDER SEKME] Skor başarıyla güncellendi.`, "color: #25D366;");
+
+    } catch (error: any) {
+      console.error("[LİDER SEKME] Skor güncellenirken bir hata oluştu:", error.message);
+      
+      // Eğer hata "permission-denied" ise, bu Firestore kuralının bizi engellediği anlamına gelir.
+      // Bu durum, kullanıcının başka bir cihazda veya hileyle zamanından önce skor almaya
+      // çalıştığını gösterir. Bu sekmenin liderlikten çekilmesi en doğrusu olur.
+      if (error.code === 'permission-denied') {
+        abdicateLeadership("Anti-hile kuralları tarafından engellendi. Başka bir sekme/cihaz lider olabilir.");
+      }
     }
   };
-  
-  // Yeni bir lider seçmek için rastgele bir gecikme sonrası tekrar deneme mantığı
-  const tryToBecomeLeader = () => {
-    // Lider yoksa veya mevcut liderden 3 saniyedir haber alınamıyorsa lider olmaya çalış
-    const leadershipTimeout = setTimeout(becomeLeader, 3000 + Math.random() * 1000);
+
+  // Skor kazanma interval'ini başlatan fonksiyon
+  const startScoreInterval = () => {
+    // Zaten çalışan bir interval varsa veya kullanıcı yoksa başlatma
+    if (scoreIntervalRef.current || !user) return;
+
+    console.log(`[LİDER SEKME] Skor sayacı başladı. Her ${PASSIVE_SCORE_INTERVAL / 60000} dakikada bir skor istenecek.`);
     
-    leaderChannel.onmessage = (event) => {
-      // Liderlik denemesi sırasında başka bir liderden ping gelirse denemeyi iptal et
-      if (event.data.type === 'ping') {
-        clearTimeout(leadershipTimeout);
-        // Ve bir sonraki denemeyi planla
-        tryToBecomeLeader();
-      }
-    };
+    // Önce bir kez hemen dene, sonra interval başlat
+    requestScoreUpdate(); 
+    scoreIntervalRef.current = setInterval(requestScoreUpdate, PASSIVE_SCORE_INTERVAL);
   };
 
-  // İlk başta lider olmaya çalış
-  tryToBecomeLeader();
-  leaderChannel.addEventListener('message', handleChannelMessage);
+  // Tüm skor sistemini durduran ana fonksiyon
+  const stopScoreSystem = (reason: string) => {
+    if (scoreIntervalRef.current) {
+      clearInterval(scoreIntervalRef.current);
+      scoreIntervalRef.current = null;
+      console.log(`[Sekme ID: ${tabId.current}] Skor sistemi durduruldu. Sebep: ${reason}`);
+    }
+  };
 
-  // Component unmount olduğunda (sekme kapandığında vb.) tüm dinleyicileri ve zamanlayıcıları temizle
+  // Hile tespitinde sistemi kilitleyen ve liderlikten çeken fonksiyon
+  const blockUserAndStopSystem = (reason: string) => {
+    console.error(`İSTEMCİ TARAFLI HİLE TESPİTİ! Sebep: ${reason}. Sistem kilitlendi.`);
+    setIsBlocked(true);
+    if (isLeader) {
+      abdicateLeadership("Hile tespit edildi");
+    } else {
+      stopScoreSystem("Hile tespit edildi");
+    }
+    // Hile yapan sekmenin diğer sekmelerle iletişimini kes
+    leaderChannel.close();
+  };
+
+  // Basit düzeyde istemci tarafı aktivite denetimi
+  const handleUserActivity = (event: MouseEvent) => {
+    if (isBlocked) return;
+
+    const now = Date.now();
+
+    // 1. Anormal tıklama sıklığı kontrolü (CPS)
+    clickTimestamps.current = [...clickTimestamps.current, now].filter(t => now - t < 1000);
+    if (clickTimestamps.current.length > MAX_CLICKS_PER_SECOND) {
+      blockUserAndStopSystem(`Anormal tıklama sıklığı (CPS > ${MAX_CLICKS_PER_SECOND}).`);
+      return;
+    }
+
+    // 2. Mükemmel tıklama aralığı kontrolü (Makro/Auto-clicker şüphesi)
+    const newInterval = now - lastClickInfo.current.time;
+    if (newInterval > 0 && newInterval < 100 && newInterval === lastClickInfo.current.interval) {
+      lastClickInfo.current.streak++;
+    } else {
+      lastClickInfo.current.streak = 0;
+    }
+    lastClickInfo.current = { time: now, interval: newInterval, streak: lastClickInfo.current.streak };
+
+    if (lastClickInfo.current.streak >= PERFECT_INTERVAL_STREAK_LIMIT) {
+      blockUserAndStopSystem("Mükemmel tıklama aralığı serisi (Makro şüphesi).");
+    }
+  };
+
+
+  // --- LİDER SEÇME ve SİSTEMİ BAŞLATMA MEKANİZMASI ---
   useEffect(() => {
-    return () => {
-      abdicateLeadership("Component temizleniyor");
-      leaderChannel.removeEventListener('message', handleChannelMessage);
-      leaderChannel.onmessage = null; // Eski stil dinleyiciyi de temizle
+    // Kullanıcı giriş yapmadıysa veya sistem kilitlendiyse hiçbir şey yapma
+    if (!user || isBlocked) {
+      abdicateLeadership("Kullanıcı yok veya sistem kilitli.");
+      return;
+    }
+    
+    let leadershipTimeout: NodeJS.Timeout | null = null;
+    
+    // Bu sekme lider olabilir mi diye kontrol edip liderliği devralır
+    const tryToBecomeLeader = () => {
+      // Rastgele bir gecikmeyle lider olmaya çalışarak yarış durumunu engelle
+      leadershipTimeout = setTimeout(() => {
+        setIsLeader(true);
+      }, 1000 + Math.random() * 1500);
     };
-  }, []);
+
+    // Diğer sekmelerden gelen mesajları dinle
+    const handleChannelMessage = (event: MessageEvent) => {
+      if (event.data.type === 'ping') {
+        // Eğer bu sekme liderse VE ping başka bir sekmeden geliyorsa, liderlikten çekil
+        if (isLeader && event.data.id !== tabId.current) {
+          abdicateLeadership("Başka bir aktif lider algılandı.");
+        }
+        // Lider olmaya çalışıyorduk ama başka lider ping attı, lider olma denemesini iptal et
+        if (leadershipTimeout) {
+          clearTimeout(leadershipTimeout);
+          leadershipTimeout = null;
+        }
+      }
+    };
+    
+    leaderChannel.addEventListener('message', handleChannelMessage);
+    tryToBecomeLeader(); // Lider olma sürecini başlat
+
+    // Component unmount edildiğinde temizlik yap
+    return () => {
+      abdicateLeadership("Component temizleniyor.");
+      leaderChannel.removeEventListener('message', handleChannelMessage);
+      if (leadershipTimeout) clearTimeout(leadershipTimeout);
+    };
+  }, [user, isBlocked]); // Sadece kullanıcı veya blok durumu değiştiğinde bu mantığı yeniden çalıştır
+
+  // Liderlik durumu değiştiğinde sistemin durumunu yönet
+  useEffect(() => {
+    if (isLeader) {
+      console.log(`%c[Sekme ID: ${tabId.current}] Bu sekme lider oldu! Skor sistemi aktif.`, "background: #222; color: #bada55");
+      startScoreInterval(); // Skor sayacını başlat
+      
+      // Lider olduğunu diğer sekmelere düzenli olarak bildir
+      leaderPingRef.current = setInterval(() => {
+        leaderChannel.postMessage({ type: 'ping', id: tabId.current });
+      }, 2000);
+
+      // Lider sekme, hile tespiti için kullanıcı aktivitelerini dinler
+      window.addEventListener('mousedown', handleUserActivity);
+
+    } else {
+      // Lider değilse, tüm sistemleri durdur ve dinleyicileri kaldır
+      stopScoreSystem("Bu sekme lider değil.");
+      if (leaderPingRef.current) clearInterval(leaderPingRef.current);
+      leaderPingRef.current = null;
+      window.removeEventListener('mousedown', handleUserActivity);
+    }
+  }, [isLeader]); // Sadece liderlik durumu değiştiğinde bu mantığı çalıştır
+
 
   return { isBlocked };
 };
